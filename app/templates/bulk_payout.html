@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Bulk payouts from CSV</h1>
+<p>Upload a CSV to send many payouts at once. Useful for payroll, supplier payments, mass refunds.</p>
+
+<div style="background:#fafaf7; padding:1rem 1.25rem; border-radius:4px; margin-bottom:1.5rem;">
+  <div style="font-size:0.78rem; color:#666; text-transform:uppercase; letter-spacing:0.06em;">Available balance</div>
+  <div style="font-size:1.5rem; font-weight:600;">UGX {{ "{:,}".format(available) }}</div>
+</div>
+
+<h3>CSV format</h3>
+<p>Your CSV must have a header row with these columns: <code>name</code>, <code>phone</code>, <code>amount</code>.</p>
+<pre style="background:#f0f0f0; padding:1rem; border-radius:4px; font-size:0.85rem; overflow:auto;">name,phone,amount
+Jane Doe,256780000001,50000
+John Smith,256770111222,25000
+Mary Apio,256750555666,75000</pre>
+
+<p>Save this in Excel as "CSV UTF-8 (Comma delimited)" or in Google Sheets via File → Download → CSV.</p>
+
+<form method="post" enctype="multipart/form-data" style="max-width:480px; margin-top:1.5rem;">
+  <div style="margin-bottom: 1.5rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.5rem;">CSV file</label>
+    <input type="file" name="csv" accept=".csv" required style="font-size:1rem;">
+  </div>
+
+  {% if error %}
+    <div style="color:#c1303a; margin-bottom:1rem; white-space:pre-line;">{{ error }}</div>
+  {% endif %}
+
+  <button type="submit"
+          style="padding:0.8rem 1.5rem; background:#1a1814; color:white; border:none; border-radius:3px; font-size:1rem; cursor:pointer;">
+    Upload and send
+  </button>
+  <a href="{{ url_for('dashboard.merchant_detail', merchant_id=merchant.id) }}"
+     style="margin-left:1rem; color:#666;">Cancel</a>
+</form>
+
+<div style="margin-top:2rem; padding:1rem; background:#fff8dc; border-left:3px solid #b88600; font-size:0.9rem;">
+  <strong>Note:</strong> in this demo, payouts are processed synchronously in the dashboard request. For large batches (100+ rows) in production, this would queue to a background worker (Celery) and you'd see progress updates instead of waiting.
+</div>
+{% endblock %}

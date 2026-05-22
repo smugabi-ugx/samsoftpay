@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pay {{ merchant.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #faf8f4;
+      --ink: #1a1814;
+      --muted: #6b665d;
+      --line: #e6e1d6;
+      --accent: #c44536;
+      --accent-deep: #8a2f24;
+      --ok: #1a7f37;
+      --warn: #b88600;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      line-height: 1.5;
+    }
+    .card {
+      max-width: 460px;
+      width: 100%;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 2.5rem 2.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(26,24,20,0.06);
+    }
+    .brand {
+      font-family: 'Fraunces', serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 2rem;
+    }
+    .amount {
+      font-family: 'Fraunces', serif;
+      font-size: 2.75rem;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin: 0 0 0.4rem 0;
+    }
+    .amount .currency {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-right: 0.4rem;
+      letter-spacing: 0.05em;
+    }
+    .merchant {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin: 0 0 0.4rem 0;
+    }
+    .merchant strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+    .description {
+      color: var(--ink);
+      font-size: 0.95rem;
+      margin: 0 0 2rem 0;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+    .label {
+      display: block;
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 1.5rem 0 0.5rem 0;
+      font-weight: 600;
+    }
+    .channels {
+      display: grid;
+      gap: 0.5rem;
+    }
+    .channel {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      cursor: pointer;
+      background: white;
+      transition: border-color 0.15s, background 0.15s;
+      font-size: 0.95rem;
+    }
+    .channel:hover { border-color: var(--ink); background: #fafaf7; }
+    .channel input[type="radio"] {
+      accent-color: var(--accent);
+      margin: 0;
+    }
+    .channel.selected {
+      border-color: var(--accent);
+      background: #fff5f3;
+    }
+    .channel-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.7rem;
+      color: white;
+      letter-spacing: -0.02em;
+    }
+    .channel-icon.mtn { background: #ffcb05; color: #003566; }
+    .channel-icon.airtel { background: #e60000; color: white; }
+    .channel-icon.card { background: var(--ink); color: white; }
+    input[type="text"], input[type="email"], input[type="tel"] {
+      display: block;
+      width: 100%;
+      padding: 0.75rem 0.9rem;
+      font: inherit;
+      font-size: 1rem;
+      border: 1px solid var(--line);
+      border-radius: 3px;
+      background: white;
+      color: var(--ink);
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, input[type="email"]:focus, input[type="tel"]:focus {
+      outline: none;
+      border-color: var(--ink);
+    }
+    button.pay {
+      display: block;
+      width: 100%;
+      margin-top: 1.5rem;
+      padding: 1rem;
+      font: inherit;
+      font-weight: 600;
+      font-size: 1rem;
+      background: var(--ink);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: background 0.15s, transform 0.05s;
+    }
+    button.pay:hover { background: #000; }
+    button.pay:active { transform: scale(0.99); }
+    .error {
+      background: #fff0ee;
+      border: 1px solid var(--accent);
+      color: var(--accent-deep);
+      padding: 0.6rem 0.9rem;
+      border-radius: 3px;
+      margin: 1rem 0 0 0;
+      font-size: 0.9rem;
+    }
+    .footer {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 1.5rem;
+      text-align: center;
+      letter-spacing: 0.04em;
+    }
+    .footer strong { color: var(--ink); font-weight: 600; }
+    .lock {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      vertical-align: -1px;
+      margin-right: 4px;
+    }
+    /* Hide card fields unless card chosen */
+    .card-fields { display: none; }
+    .card-fields.active { display: block; }
+    .phone-fields { display: none; }
+    .phone-fields.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">Samsoftpay</div>
+
+    <p class="merchant">Pay to <strong>{{ merchant.name }}</strong></p>
+    <h1 class="amount">
+      <span class="currency">{{ link.currency }}</span>{{ "{:,}".format(link.amount) }}
+    </h1>
+
+    {% if link.description %}
+      <p class="description">{{ link.description }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('checkout.checkout_submit', public_id=link.public_id) }}">
+      <span class="label">Payment method</span>
+      <div class="channels">
+        {% for ch_key, ch_label, ch_kind in channels %}
+          <label class="channel{% if selected_channel == ch_key %} selected{% endif %}" data-kind="{{ ch_kind }}">
+            <input type="radio" name="channel" value="{{ ch_key }}" {% if selected_channel == ch_key %}checked{% endif %} required>
+            {% if ch_key == 'mtn_momo' %}
+              <span class="channel-icon mtn">MTN</span>
+            {% elif ch_key == 'airtel_money' %}
+              <span class="channel-icon airtel">A</span>
+            {% else %}
+              <span class="channel-icon card">CC</span>
+            {% endif %}
+            <span>{{ ch_label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+
+      <div class="phone-fields {% if selected_channel in ('mtn_momo', 'airtel_money') %}active{% endif %}">
+        <label for="phone" class="label">Phone number</label>
+        <input type="tel" id="phone" name="phone" placeholder="256780000001"
+               value="{{ request.form.phone or '' }}">
+      </div>
+
+      <div class="card-fields {% if selected_channel == 'card' %}active{% endif %}">
+        <label for="card-number" class="label">Card number (demo — any digits)</label>
+        <input type="text" id="card-number" name="card_number" placeholder="4242 4242 4242 4242"
+               autocomplete="off">
+      </div>
+
+      <label for="email" class="label">Email (optional, for receipt)</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com"
+             value="{{ request.form.email or '' }}">
+
+      {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+      <button type="submit" class="pay">
+        Pay {{ link.currency }} {{ "{:,}".format(link.amount) }}
+      </button>
+    </form>
+
+    <p class="footer">
+      <svg class="lock" viewBox="0 0 12 12" fill="currentColor">
+        <path d="M3 5V3.5a3 3 0 016 0V5h.5a.5.5 0 01.5.5v5a.5.5 0 01-.5.5h-7a.5.5 0 01-.5-.5v-5a.5.5 0 01.5-.5H3zm1 0h4V3.5a2 2 0 00-4 0V5z"/>
+      </svg>
+      Secured by <strong>Samsoftpay</strong>
+    </p>
+  </div>
+
+  <script>
+    // Toggle phone vs card fields based on channel choice
+    const radios = document.querySelectorAll('input[name="channel"]');
+    const labels = document.querySelectorAll('label.channel');
+    const phoneFields = document.querySelector('.phone-fields');
+    const cardFields = document.querySelector('.card-fields');
+
+    function update() {
+      const selected = document.querySelector('input[name="channel"]:checked');
+      labels.forEach(l => l.classList.remove('selected'));
+      if (!selected) return;
+      const label = selected.closest('label.channel');
+      label.classList.add('selected');
+      const kind = label.dataset.kind;
+      phoneFields.classList.toggle('active', kind === 'phone');
+      cardFields.classList.toggle('active', kind === 'card');
+    }
+    radios.forEach(r => r.addEventListener('change', update));
+    update();
+  </script>
+</body>
+</html>

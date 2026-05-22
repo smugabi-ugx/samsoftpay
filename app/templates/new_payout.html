@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Send a payout</h1>
+<p>Send money from your available balance to a recipient's MTN MoMo wallet.</p>
+
+<div style="background:#fafaf7; padding:1rem 1.25rem; border-radius:4px; margin-bottom:1.5rem;">
+  <div style="font-size:0.78rem; color:#666; text-transform:uppercase; letter-spacing:0.06em;">Available balance</div>
+  <div style="font-size:1.5rem; font-weight:600;">UGX {{ "{:,}".format(available) }}</div>
+</div>
+
+<form method="post" style="max-width: 480px;">
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Recipient name (optional)</label>
+    <input type="text" name="recipient_name" placeholder="Jane Doe"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Phone number (MTN MoMo)</label>
+    <input type="tel" name="phone" required placeholder="256780000001"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  <div style="margin-bottom: 1.5rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Amount (UGX)</label>
+    <input type="number" name="amount" required min="1" placeholder="10000"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  {% if error %}<div style="color:#c1303a; margin-bottom:1rem;">{{ error }}</div>{% endif %}
+
+  <button type="submit"
+          style="padding:0.8rem 1.5rem; background:#1a1814; color:white; border:none; border-radius:3px; font-size:1rem; cursor:pointer;">
+    Send payout
+  </button>
+  <a href="{{ url_for('dashboard.merchant_detail', merchant_id=merchant.id) }}"
+     style="margin-left:1rem; color:#666;">Cancel</a>
+</form>
+{% endblock %}

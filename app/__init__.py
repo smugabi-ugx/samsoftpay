@@ -57,10 +57,12 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes.api import bp as api_bp
     from .routes.dashboard import bp as dash_bp
     from .routes.webhooks_inbound import bp as inbound_bp
+    from .routes.checkout import bp as checkout_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(dash_bp)
     app.register_blueprint(inbound_bp)
+    app.register_blueprint(checkout_bp)
 
     from . import cli  # noqa: F401
     cli.register(app)

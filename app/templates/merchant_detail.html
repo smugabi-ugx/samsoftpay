@@ -3,6 +3,21 @@
 <h1>{{ merchant.name }}</h1>
 <p><code>public_key={{ merchant.public_key }}</code> &middot; <code>secret_key={{ merchant.secret_key }}</code></p>
 
+<p>
+  <a href="{{ url_for('dashboard.new_link_form', merchant_id=merchant.id) }}"
+     style="display:inline-block; padding:0.5rem 1rem; background:#1a1814; color:white; border-radius:3px; text-decoration:none; margin-right:0.5rem;">
+    + Payment link
+  </a>
+  <a href="{{ url_for('dashboard.new_payout_form', merchant_id=merchant.id) }}"
+     style="display:inline-block; padding:0.5rem 1rem; background:#1a7f37; color:white; border-radius:3px; text-decoration:none; margin-right:0.5rem;">
+    Send payout
+  </a>
+  <a href="{{ url_for('dashboard.bulk_payout_form', merchant_id=merchant.id) }}"
+     style="display:inline-block; padding:0.5rem 1rem; background:#0a66c2; color:white; border-radius:3px; text-decoration:none;">
+    Bulk payouts (CSV)
+  </a>
+</p>
+
 <div class="card">
   <div>Pending balance</div>
   <div class="balance">{{ "{:,}".format(pending_balance) }} {{ "UGX" }}</div>
@@ -39,6 +54,28 @@
       <td>{{ p.channel.value }}</td>
       <td>{{ p.recipient_phone }}</td>
       <td class="status-{{ p.status.value }}">{{ p.status.value }}</td>
+    </tr>
+  {% endfor %}
+</table>
+
+<h2>Payment links</h2>
+<table>
+  <tr><th>Link ID</th><th>Amount</th><th>Description</th><th>Status</th><th>URL</th></tr>
+  {% for l in links %}
+    <tr>
+      <td><code>{{ l.public_id }}</code></td>
+      <td>{{ "{:,}".format(l.amount) }} {{ l.currency }}</td>
+      <td>{{ l.description or "—" }}</td>
+      <td>
+        {% if l.transaction_id %}
+          paid
+        {% elif not l.is_active %}
+          inactive
+        {% else %}
+          open
+        {% endif %}
+      </td>
+      <td><a href="{{ url_for('checkout.checkout_page', public_id=l.public_id) }}" target="_blank">open</a></td>
     </tr>
   {% endfor %}
 </table>

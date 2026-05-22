@@ -58,6 +58,8 @@ def main():
         print(f"[1] Collection: {txn.public_id} succeeded, fee={txn.fee_amount}")
 
         # ---------- 2. SWEEP: move pending -> available ----------
+        # Re-read pending account to avoid stale-data race vs. the rail callback.
+        db.session.expire_all()
         pending = Account.query.filter_by(
             merchant_id=m.id, type=AccountType.MERCHANT_PENDING
         ).one()

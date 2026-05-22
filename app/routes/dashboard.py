@@ -2,10 +2,19 @@
 
 A real dashboard has login, MFA, RBAC, audit logs, etc.
 """
-from flask import Blueprint, abort, render_template
+import uuid
+
+from flask import Blueprint, abort, redirect, render_template, request, url_for
 
 from ..extensions import db
-from ..models import Account, AccountType, Merchant, Transaction, WebhookDelivery
+from ..models import (
+    Account,
+    AccountType,
+    Merchant,
+    PaymentLink,
+    Transaction,
+    WebhookDelivery,
+)
 from ..services.reconciliation import run_reconciliation
 
 bp = Blueprint("dashboard", __name__)
@@ -39,6 +48,12 @@ def merchant_detail(merchant_id: int):
         .limit(50)
         .all()
     )
+    links = (
+        PaymentLink.query.filter_by(merchant_id=merchant_id)
+        .order_by(PaymentLink.created_at.desc())
+        .limit(20)
+        .all()
+    )
     pending = Account.query.filter_by(
         merchant_id=merchant_id, type=AccountType.MERCHANT_PENDING
     ).first()
@@ -56,10 +71,219 @@ def merchant_detail(merchant_id: int):
         merchant=merchant,
         txns=txns,
         payouts=payouts,
+        links=links,
         pending_balance=-pending.cached_balance if pending else 0,
         available_balance=-available.cached_balance if available else 0,
         webhooks=webhooks,
     )
+
+
+@bp.get("/dashboard/<int:merchant_id>/new-link")
+def new_link_form(merchant_id: int):
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    return render_template("new_link.html", merchant=merchant)
+
+
+@bp.post("/dashboard/<int:merchant_id>/new-link")
+def new_link_submit(merchant_id: int):
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    try:
+        amount = int(request.form["amount"])
+    except (KeyError, ValueError):
+        return render_template(
+            "new_link.html", merchant=merchant, error="Amount must be a number."
+        )
+    if amount <= 0:
+        return render_template(
+            "new_link.html", merchant=merchant, error="Amount must be positive."
+        )
+    link = PaymentLink(
+        public_id=f"lnk_{uuid.uuid4().hex[:16]}",
+        merchant_id=merchant.id,
+        amount=amount,
+        currency=request.form.get("currency", "UGX"),
+        description=request.form.get("description") or None,
+        reference=request.form.get("reference") or None,
+        success_url=request.form.get("success_url") or None,
+        cancel_url=request.form.get("cancel_url") or None,
+        allow_multiple_uses=bool(request.form.get("allow_multiple_uses")),
+    )
+    db.session.add(link)
+    db.session.commit()
+    return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant.id))
+
+
+# ---------- Payout dashboard routes (single + bulk CSV) ----------
+
+@bp.get("/dashboard/<int:merchant_id>/new-payout")
+def new_payout_form(merchant_id: int):
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    # Show current available balance so the merchant knows what they can spend.
+    avail = Account.query.filter_by(
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+    ).first()
+    available = -avail.cached_balance if avail else 0
+    return render_template(
+        "new_payout.html", merchant=merchant, available=available
+    )
+
+
+@bp.post("/dashboard/<int:merchant_id>/new-payout")
+def new_payout_submit(merchant_id: int):
+    from ..models import Channel as _Channel
+    from ..services.payouts import PayoutError, create_payout
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    avail = Account.query.filter_by(
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+    ).first()
+    available = -avail.cached_balance if avail else 0
+
+    try:
+        amount = int(request.form["amount"])
+        phone = request.form["phone"].strip()
+        name = request.form.get("recipient_name") or None
+    except (KeyError, ValueError):
+        return render_template(
+            "new_payout.html", merchant=merchant, available=available,
+            error="Amount and phone are required.",
+        )
+    try:
+        create_payout(
+            merchant=merchant, amount=amount, currency="UGX",
+            recipient_phone=phone, recipient_name=name,
+            channel=_Channel.MTN_MOMO,
+        )
+    except PayoutError as exc:
+        return render_template(
+            "new_payout.html", merchant=merchant, available=available,
+            error=str(exc),
+        )
+    return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant.id))
+
+
+@bp.get("/dashboard/<int:merchant_id>/bulk-payout")
+def bulk_payout_form(merchant_id: int):
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    avail = Account.query.filter_by(
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+    ).first()
+    available = -avail.cached_balance if avail else 0
+    return render_template(
+        "bulk_payout.html", merchant=merchant, available=available
+    )
+
+
+@bp.post("/dashboard/<int:merchant_id>/bulk-payout")
+def bulk_payout_submit(merchant_id: int):
+    """Parse a CSV (name, phone, amount), validate, then create payouts for each row.
+
+    CSV format: header row required. Columns: name, phone, amount.
+    Phone numbers can be in any common format; we normalize.
+    """
+    import csv
+    import io as _io
+    from ..models import Channel as _Channel, PayoutBatch
+    from ..services.payouts import PayoutError, create_payout
+
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    avail = Account.query.filter_by(
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+    ).first()
+    available = -avail.cached_balance if avail else 0
+
+    f = request.files.get("csv")
+    if not f or not f.filename:
+        return render_template(
+            "bulk_payout.html", merchant=merchant, available=available,
+            error="Please choose a CSV file.",
+        )
+
+    # Read & parse the CSV
+    try:
+        text = f.read().decode("utf-8-sig")  # strip BOM if Excel saved it
+    except UnicodeDecodeError:
+        return render_template(
+            "bulk_payout.html", merchant=merchant, available=available,
+            error="CSV must be UTF-8 encoded.",
+        )
+    reader = csv.DictReader(_io.StringIO(text))
+    rows = []
+    errors = []
+    line_num = 1
+    for row in reader:
+        line_num += 1
+        name = (row.get("name") or "").strip()
+        phone = (row.get("phone") or "").strip()
+        amount_raw = (row.get("amount") or "").strip()
+        if not phone or not amount_raw:
+            errors.append(f"Line {line_num}: missing phone or amount")
+            continue
+        try:
+            amount = int(amount_raw.replace(",", ""))
+        except ValueError:
+            errors.append(f"Line {line_num}: amount '{amount_raw}' is not a number")
+            continue
+        if amount <= 0:
+            errors.append(f"Line {line_num}: amount must be positive")
+            continue
+        rows.append((name, phone, amount))
+
+    if errors:
+        return render_template(
+            "bulk_payout.html", merchant=merchant, available=available,
+            error="\n".join(errors[:10]),
+        )
+    if not rows:
+        return render_template(
+            "bulk_payout.html", merchant=merchant, available=available,
+            error="No valid rows found in CSV.",
+        )
+
+    total = sum(r[2] for r in rows)
+    if total > available:
+        return render_template(
+            "bulk_payout.html", merchant=merchant, available=available,
+            error=(
+                f"Insufficient funds. Available: UGX {available:,}, "
+                f"CSV total: UGX {total:,} across {len(rows)} payouts."
+            ),
+        )
+
+    # Create the batch record and process each row.
+    # We do this inline for the demo. In production this would go to a job queue
+    # so the dashboard returns immediately and a worker processes the batch.
+    batch = PayoutBatch(
+        public_id=f"pbatch_{uuid.uuid4().hex[:14]}",
+        merchant_id=merchant.id,
+        currency="UGX",
+        total_amount=total,
+        total_count=len(rows),
+        status="running",
+    )
+    db.session.add(batch)
+    db.session.commit()
+
+    created = 0
+    failed = 0
+    for name, phone, amount in rows:
+        try:
+            p = create_payout(
+                merchant=merchant, amount=amount, currency="UGX",
+                recipient_phone=phone, recipient_name=name or None,
+                channel=_Channel.MTN_MOMO,
+            )
+            p.batch_id = batch.id
+            db.session.commit()
+            created += 1
+        except PayoutError as exc:
+            failed += 1
+            continue
+
+    batch.status = "done"
+    batch.failed_count = failed
+    db.session.commit()
+
+    return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant.id))
 
 
 @bp.get("/admin/reconciliation")

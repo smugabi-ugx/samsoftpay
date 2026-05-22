@@ -232,7 +232,65 @@ class Payout(db.Model):
     failure_reason = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     completed_at = Column(DateTime, nullable=True)
+    batch_id = Column(Integer, ForeignKey("payout_batches.id"), nullable=True, index=True)
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_payout_amount_positive"),
     )
+
+
+class PaymentLink(db.Model):
+    """A shareable payment link.
+
+    The merchant creates one with an amount + description. They get back a URL
+    like /pay/lnk_xxx that they send to a customer (via WhatsApp, SMS, email).
+    The customer opens it, picks a channel, enters their phone, pays. Behind
+    the scenes the normal charge flow runs.
+
+    A link is one-shot by default — once it's been paid successfully it can't be
+    reused. allow_multiple_uses lets a merchant reuse the same link for a
+    recurring product page (e.g. "donate here").
+
+    success_url / cancel_url: after payment completes, the customer is offered
+    a "Return to <merchant>" button that navigates them back to the merchant's
+    site. This is how Stripe/Flutterwave/Pesapal close the loop.
+    """
+    __tablename__ = "payment_links"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    amount = Column(BigInteger, nullable=False)
+    currency = Column(String(3), nullable=False, default="UGX")
+    description = Column(String(255), nullable=True)
+    reference = Column(String(120), nullable=True)
+    success_url = Column(String(500), nullable=True)
+    cancel_url = Column(String(500), nullable=True)
+    allow_multiple_uses = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    # FK to a transaction once it's been paid — null until then.
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_link_amount_positive"),
+    )
+
+
+class PayoutBatch(db.Model):
+    """A bulk payout job from a CSV upload.
+
+    The merchant uploads a CSV with rows like (name, phone, amount). We
+    create one Payout per row. The batch tracks overall progress and
+    total amount.
+    """
+    __tablename__ = "payout_batches"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    currency = Column(String(3), nullable=False, default="UGX")
+    total_amount = Column(BigInteger, nullable=False, default=0)
+    total_count = Column(Integer, nullable=False, default=0)
+    succeeded_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), default="pending", nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)

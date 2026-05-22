@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment status — {{ merchant.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #faf8f4;
+      --ink: #1a1814;
+      --muted: #6b665d;
+      --line: #e6e1d6;
+      --ok: #1a7f37;
+      --warn: #b88600;
+      --fail: #c44536;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      max-width: 460px;
+      width: 100%;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 3rem 2.25rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(26,24,20,0.06);
+      text-align: center;
+    }
+    .icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1.5rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .icon.pending { background: #fdf6e3; }
+    .icon.ok { background: #e8f3ec; }
+    .icon.fail { background: #fdebe8; }
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid var(--warn);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .check {
+      width: 28px;
+      height: 28px;
+      stroke: var(--ok);
+      stroke-width: 3;
+      fill: none;
+    }
+    .cross {
+      width: 28px;
+      height: 28px;
+      stroke: var(--fail);
+      stroke-width: 3;
+      fill: none;
+    }
+    h1 {
+      font-family: 'Fraunces', serif;
+      font-weight: 500;
+      font-size: 1.75rem;
+      letter-spacing: -0.01em;
+      margin: 0 0 0.75rem 0;
+    }
+    p { color: var(--muted); margin: 0 0 0.6rem 0; line-height: 1.55; }
+    .amount {
+      font-family: 'Fraunces', serif;
+      font-size: 2rem;
+      color: var(--ink);
+      font-weight: 500;
+      margin: 1.5rem 0 0.4rem;
+    }
+    .merchant-name { color: var(--muted); font-size: 0.9rem; }
+    .detail {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      font-size: 0.85rem;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.35rem 0;
+      color: var(--muted);
+    }
+    .detail-row span:last-child { color: var(--ink); font-family: monospace; }
+    .footer {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 1.5rem;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="icon pending" id="icon">
+      <div class="spinner" id="state-icon"></div>
+    </div>
+    <h1 id="heading">Processing your payment…</h1>
+    <p id="message">Approve the request on your phone if prompted. This usually takes 10–30 seconds.</p>
+
+    <div class="amount">{{ link.currency }} {{ "{:,}".format(link.amount) }}</div>
+    <div class="merchant-name">to {{ merchant.name }}</div>
+
+    <div class="detail">
+      <div class="detail-row"><span>Reference</span><span>{{ txn.public_id }}</span></div>
+      <div class="detail-row"><span>Method</span><span>{{ txn.channel.value }}</span></div>
+      {% if link.reference %}
+      <div class="detail-row"><span>Order</span><span>{{ link.reference }}</span></div>
+      {% endif %}
+    </div>
+
+    <a id="return-btn" href="#" style="display:none; margin-top:1.5rem; padding:0.8rem 1.5rem; background:#1a1814; color:white; text-decoration:none; border-radius:3px; font-weight:600;">Return</a>
+    <div id="countdown" style="display:none; margin-top:0.75rem; color:#6b665d; font-size:0.85rem;"></div>
+
+    <div class="footer">Secured by <strong>Samsoftpay</strong></div>
+  </div>
+
+  <script>
+    const statusUrl = "{{ url_for('checkout.status_json', public_id=link.public_id) }}";
+    const heading = document.getElementById('heading');
+    const message = document.getElementById('message');
+    const icon = document.getElementById('icon');
+    const stateIcon = document.getElementById('state-icon');
+
+    function setSuccess() {
+      icon.className = 'icon ok';
+      stateIcon.outerHTML = '<svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+      heading.textContent = 'Payment successful';
+      message.textContent = 'Your payment has been received.';
+      showReturnButton();
+    }
+    function setFailure(reason) {
+      icon.className = 'icon fail';
+      stateIcon.outerHTML = '<svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      heading.textContent = 'Payment failed';
+      message.textContent = reason ? ('Reason: ' + reason) : 'Please try again.';
+      {% if link.cancel_url %}
+      addReturnLink("{{ link.cancel_url }}", "Return to {{ merchant.name }}");
+      {% endif %}
+    }
+
+    function showReturnButton() {
+      {% if link.success_url %}
+      addReturnLink("{{ link.success_url }}", "Continue to {{ merchant.name }}");
+      // Auto-redirect after 5 seconds
+      let countdown = 5;
+      const cd = document.getElementById('countdown');
+      cd.style.display = 'block';
+      const tick = setInterval(() => {
+        countdown--;
+        cd.textContent = `Redirecting in ${countdown}…`;
+        if (countdown <= 0) {
+          clearInterval(tick);
+          window.location.href = "{{ link.success_url }}";
+        }
+      }, 1000);
+      {% endif %}
+    }
+
+    function addReturnLink(url, label) {
+      const btn = document.getElementById('return-btn');
+      btn.href = url;
+      btn.textContent = label;
+      btn.style.display = 'inline-block';
+    }
+
+    // Initial state from server-rendered status
+    const initial = "{{ txn.status.value }}";
+    if (initial === 'succeeded') setSuccess();
+    else if (initial === 'failed') setFailure("{{ txn.failure_reason or '' }}");
+
+    // Poll until terminal
+    let pollTimer = null;
+    async function poll() {
+      try {
+        const r = await fetch(statusUrl);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.status === 'succeeded') {
+          setSuccess();
+          clearInterval(pollTimer);
+        } else if (data.status === 'failed') {
+          setFailure(data.failure_reason);
+          clearInterval(pollTimer);
+        }
+      } catch (e) { /* ignore transient errors */ }
+    }
+    if (initial !== 'succeeded' && initial !== 'failed') {
+      pollTimer = setInterval(poll, 2500);
+    }
+  </script>
+</body>
+</html>

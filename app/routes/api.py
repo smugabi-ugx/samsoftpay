@@ -182,3 +182,77 @@ def get_payout(public_id: str):
         failure_reason=p.failure_reason,
         completed_at=p.completed_at.isoformat() if p.completed_at else None,
     )
+
+
+@bp.post("/payment-links")
+def create_payment_link():
+    """Create a shareable payment link.
+
+    Returns the link's public_id and a full URL the merchant can share.
+    """
+    import uuid as _uuid
+    from flask import url_for
+    from ..models import PaymentLink
+
+    merchant = _auth()
+    body = request.get_json(silent=True) or {}
+
+    try:
+        amount = int(body["amount"])
+        currency = body.get("currency", "UGX")
+    except (KeyError, ValueError, TypeError) as exc:
+        abort(400, description=f"invalid request: {exc}")
+
+    if amount <= 0:
+        abort(400, description="amount must be positive")
+
+    link = PaymentLink(
+        public_id=f"lnk_{_uuid.uuid4().hex[:16]}",
+        merchant_id=merchant.id,
+        amount=amount,
+        currency=currency,
+        description=body.get("description"),
+        reference=body.get("reference"),
+        success_url=body.get("success_url"),
+        cancel_url=body.get("cancel_url"),
+        allow_multiple_uses=bool(body.get("allow_multiple_uses", False)),
+    )
+    db.session.add(link)
+    db.session.commit()
+
+    return jsonify(
+        id=link.public_id,
+        amount=link.amount,
+        currency=link.currency,
+        description=link.description,
+        reference=link.reference,
+        url=url_for("checkout.checkout_page", public_id=link.public_id, _external=True),
+    ), 201
+
+
+@bp.get("/payment-links/<public_id>")
+def get_payment_link(public_id: str):
+    from flask import url_for
+    from ..models import PaymentLink, Transaction
+    merchant = _auth()
+    link = PaymentLink.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id
+    ).one_or_none()
+    if link is None:
+        abort(404)
+    txn_status = None
+    if link.transaction_id:
+        t = db.session.get(Transaction, link.transaction_id)
+        if t:
+            txn_status = t.status.value
+    return jsonify(
+        id=link.public_id,
+        amount=link.amount,
+        currency=link.currency,
+        description=link.description,
+        reference=link.reference,
+        is_active=link.is_active,
+        allow_multiple_uses=link.allow_multiple_uses,
+        transaction_status=txn_status,
+        url=url_for("checkout.checkout_page", public_id=link.public_id, _external=True),
+    )

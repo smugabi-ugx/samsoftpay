@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New payment link</h1>
+<p>Create a link to send to a customer. They'll see your name, the amount, and choose how to pay.</p>
+
+<form method="post" style="max-width: 480px;">
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Amount (UGX)</label>
+    <input type="number" name="amount" required min="1" placeholder="50000"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Description (what is this for?)</label>
+    <input type="text" name="description" placeholder="School fees — Term 2"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Reference (optional, your internal ID)</label>
+    <input type="text" name="reference" placeholder="ORDER-001"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Success URL (where to send customer after payment)</label>
+    <input type="url" name="success_url" placeholder="https://yourwebsite.com/thank-you"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+    <small style="color:#666;">Optional — customer sees a "Return to your site" button on success.</small>
+  </div>
+
+  <div style="margin-bottom: 1rem;">
+    <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Cancel URL (where to send if payment fails)</label>
+    <input type="url" name="cancel_url" placeholder="https://yourwebsite.com/checkout"
+           style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
+  </div>
+
+  <div style="margin-bottom: 1.5rem;">
+    <label>
+      <input type="checkbox" name="allow_multiple_uses">
+      Allow multiple uses (re-pay the same link more than once)
+    </label>
+  </div>
+
+  {% if error %}<div style="color:#c1303a; margin-bottom:1rem;">{{ error }}</div>{% endif %}
+
+  <button type="submit"
+          style="padding:0.8rem 1.5rem; background:#1a1814; color:white; border:none; border-radius:3px; font-size:1rem; cursor:pointer;">
+    Create link
+  </button>
+  <a href="{{ url_for('dashboard.merchant_detail', merchant_id=merchant.id) }}"
+     style="margin-left:1rem; color:#666;">Cancel</a>
+</form>
+{% endblock %}
