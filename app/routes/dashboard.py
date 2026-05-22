@@ -25,10 +25,17 @@ def list_merchants():
 
 @bp.get("/dashboard/<int:merchant_id>")
 def merchant_detail(merchant_id: int):
+    from ..models import Payout
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     txns = (
         Transaction.query.filter_by(merchant_id=merchant_id)
         .order_by(Transaction.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    payouts = (
+        Payout.query.filter_by(merchant_id=merchant_id)
+        .order_by(Payout.created_at.desc())
         .limit(50)
         .all()
     )
@@ -48,6 +55,7 @@ def merchant_detail(merchant_id: int):
         "merchant_detail.html",
         merchant=merchant,
         txns=txns,
+        payouts=payouts,
         pending_balance=-pending.cached_balance if pending else 0,
         available_balance=-available.cached_balance if available else 0,
         webhooks=webhooks,

@@ -28,6 +28,21 @@
   {% endfor %}
 </table>
 
+<h2>Payouts</h2>
+<table>
+  <tr><th>ID</th><th>When</th><th>Amount</th><th>Channel</th><th>Recipient</th><th>Status</th></tr>
+  {% for p in payouts %}
+    <tr>
+      <td><code>{{ p.public_id }}</code></td>
+      <td>{{ p.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td>{{ "{:,}".format(p.amount) }}</td>
+      <td>{{ p.channel.value }}</td>
+      <td>{{ p.recipient_phone }}</td>
+      <td class="status-{{ p.status.value }}">{{ p.status.value }}</td>
+    </tr>
+  {% endfor %}
+</table>
+
 <h2>Webhook deliveries</h2>
 <table>
   <tr><th>ID</th><th>URL</th><th>Status</th><th>Attempts</th><th>Last code</th></tr>

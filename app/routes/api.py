@@ -106,3 +106,79 @@ def get_charge(public_id: str):
         failure_reason=txn.failure_reason,
         completed_at=txn.completed_at.isoformat() if txn.completed_at else None,
     )
+
+
+@bp.post("/payouts")
+def create_payout_route():
+    from ..models import Payout
+    from ..services.payouts import PayoutError, create_payout
+
+    merchant = _auth()
+
+    idem_key = request.headers.get("Idempotency-Key")
+    if not idem_key:
+        abort(400, description="Idempotency-Key header required")
+
+    body = request.get_json(silent=True) or {}
+    request_hash = idempotency.hash_body(body)
+
+    existing = idempotency.find(merchant.id, idem_key)
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            abort(409, description="idempotency key reused with different request body")
+        return jsonify(json.loads(existing.response_body)), existing.response_status
+
+    try:
+        amount = int(body["amount"])
+        currency = body.get("currency", "UGX")
+        recipient = body.get("recipient") or {}
+        recipient_phone = recipient["phone"]
+        channel = Channel(body.get("channel", "mtn_momo"))
+    except (KeyError, ValueError, TypeError) as exc:
+        abort(400, description=f"invalid request: {exc}")
+
+    try:
+        payout = create_payout(
+            merchant=merchant,
+            amount=amount,
+            currency=currency,
+            recipient_phone=recipient_phone,
+            recipient_name=recipient.get("name"),
+            channel=channel,
+        )
+    except PayoutError as exc:
+        body_out = {"error": str(exc)}
+        idempotency.store(merchant.id, idem_key, request_hash, 400, body_out)
+        return jsonify(body_out), 400
+
+    out = {
+        "id": payout.public_id,
+        "status": payout.status.value,
+        "amount": payout.amount,
+        "currency": payout.currency,
+        "channel": payout.channel.value,
+        "recipient_phone": payout.recipient_phone,
+        "rail_reference": payout.rail_reference,
+    }
+    idempotency.store(merchant.id, idem_key, request_hash, 201, out)
+    return jsonify(out), 201
+
+
+@bp.get("/payouts/<public_id>")
+def get_payout(public_id: str):
+    from ..models import Payout
+    merchant = _auth()
+    p = Payout.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
+    if p is None:
+        abort(404)
+    return jsonify(
+        id=p.public_id,
+        status=p.status.value,
+        amount=p.amount,
+        currency=p.currency,
+        channel=p.channel.value,
+        recipient_phone=p.recipient_phone,
+        rail_reference=p.rail_reference,
+        failure_reason=p.failure_reason,
+        completed_at=p.completed_at.isoformat() if p.completed_at else None,
+    )

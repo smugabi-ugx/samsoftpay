@@ -42,6 +42,12 @@ def create_app(config: dict | None = None) -> Flask:
         MOMO_SUBSCRIPTION_KEY=os.environ.get("MOMO_SUBSCRIPTION_KEY", ""),
         MOMO_API_USER=os.environ.get("MOMO_API_USER", ""),
         MOMO_API_KEY=os.environ.get("MOMO_API_KEY", ""),
+        # ---- MTN MoMo Disbursement (payout) credentials ----
+        MOMO_DISBURSEMENT_SUBSCRIPTION_KEY=os.environ.get(
+            "MOMO_DISBURSEMENT_SUBSCRIPTION_KEY", ""
+        ),
+        MOMO_DISBURSEMENT_API_USER=os.environ.get("MOMO_DISBURSEMENT_API_USER", ""),
+        MOMO_DISBURSEMENT_API_KEY=os.environ.get("MOMO_DISBURSEMENT_API_KEY", ""),
     )
     if config:
         app.config.update(config)

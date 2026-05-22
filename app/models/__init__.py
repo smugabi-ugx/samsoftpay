@@ -40,6 +40,13 @@ class TxnStatus(str, Enum):
     REFUNDED = "refunded"
 
 
+class PayoutStatus(str, Enum):
+    PENDING = "pending"
+    AUTHORIZED = "authorized"   # disbursement accepted by rail
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
 class Channel(str, Enum):
     MTN_MOMO = "mtn_momo"
     AIRTEL_MONEY = "airtel_money"
@@ -203,3 +210,29 @@ class RailEvent(db.Model):
     currency = Column(String(3), nullable=False)
     raw_payload = Column(Text, nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+
+class Payout(db.Model):
+    """A disbursement from the PSP to a merchant (or other recipient).
+
+    In real terms: we're sending the merchant their settled funds via
+    MTN Disbursement -> their MoMo wallet (or eventually their bank).
+    """
+    __tablename__ = "payouts"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    amount = Column(BigInteger, nullable=False)
+    currency = Column(String(3), nullable=False, default="UGX")
+    channel = Column(SAEnum(Channel), nullable=False, default=Channel.MTN_MOMO)
+    status = Column(SAEnum(PayoutStatus), nullable=False, default=PayoutStatus.PENDING, index=True)
+    recipient_phone = Column(String(20), nullable=False)
+    recipient_name = Column(String(200), nullable=True)
+    rail_reference = Column(String(120), nullable=True, index=True)
+    failure_reason = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_payout_amount_positive"),
+    )
