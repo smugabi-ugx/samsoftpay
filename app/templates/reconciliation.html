@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Reconciliation report</h1>
+
+<h2>Internal consistency</h2>
+<div class="card">
+  <p>Journal sum by currency (must be 0 for a balanced ledger):</p>
+  <ul>
+    {% for c, s in report.internal.journal_sum_by_currency.items() %}
+      <li><code>{{ c }}</code>: {{ s }} {% if s == 0 %}&#9989;{% else %}&#10060;{% endif %}</li>
+    {% endfor %}
+  </ul>
+  <p>Cached vs recomputed balance mismatches: {% if not report.internal.balance_mismatches %}none &#9989;{% else %}{{ report.internal.balance_mismatches }}{% endif %}</p>
+</div>
+
+<h2>External consistency (rail events vs. transactions)</h2>
+<table>
+  <tr><th>Channel</th><th>Rail succeeded events</th><th>Txns succeeded</th><th>Match?</th></tr>
+  {% for ch, row in report.external.items() %}
+    <tr>
+      <td>{{ ch }}</td>
+      <td>{{ row.rail_succeeded_events }}</td>
+      <td>{{ row.transactions_succeeded }}</td>
+      <td>{% if row.match %}&#9989;{% else %}&#10060;{% endif %}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% endblock %}

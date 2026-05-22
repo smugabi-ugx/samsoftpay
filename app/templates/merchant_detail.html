@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ merchant.name }}</h1>
+<p><code>public_key={{ merchant.public_key }}</code> &middot; <code>secret_key={{ merchant.secret_key }}</code></p>
+
+<div class="card">
+  <div>Pending balance</div>
+  <div class="balance">{{ "{:,}".format(pending_balance) }} {{ "UGX" }}</div>
+</div>
+<div class="card">
+  <div>Available (settled, awaiting payout)</div>
+  <div class="balance">{{ "{:,}".format(available_balance) }} {{ "UGX" }}</div>
+</div>
+
+<h2>Recent transactions</h2>
+<table>
+  <tr><th>ID</th><th>When</th><th>Amount</th><th>Fee</th><th>Channel</th><th>Status</th><th>Ref</th></tr>
+  {% for t in txns %}
+    <tr>
+      <td><code>{{ t.public_id }}</code></td>
+      <td>{{ t.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+      <td>{{ "{:,}".format(t.amount) }}</td>
+      <td>{{ "{:,}".format(t.fee_amount) }}</td>
+      <td>{{ t.channel.value }}</td>
+      <td class="status-{{ t.status.value }}">{{ t.status.value }}</td>
+      <td>{{ t.merchant_reference or "" }}</td>
+    </tr>
+  {% endfor %}
+</table>
+
+<h2>Webhook deliveries</h2>
+<table>
+  <tr><th>ID</th><th>URL</th><th>Status</th><th>Attempts</th><th>Last code</th></tr>
+  {% for w in webhooks %}
+    <tr>
+      <td>{{ w.id }}</td>
+      <td><code>{{ w.url }}</code></td>
+      <td>{{ w.status }}</td>
+      <td>{{ w.attempts }}</td>
+      <td>{{ w.last_response_code or "-" }}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% endblock %}

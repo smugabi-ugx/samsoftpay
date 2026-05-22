@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Merchants</h1>
+<table>
+  <tr><th>ID</th><th>Name</th><th>Email</th><th>KYC</th><th>Active</th></tr>
+  {% for m in merchants %}
+    <tr>
+      <td><a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}">{{ m.id }}</a></td>
+      <td>{{ m.name }}</td>
+      <td>{{ m.email }}</td>
+      <td>{{ m.kyc_status }}</td>
+      <td>{{ "yes" if m.is_active else "no" }}</td>
+    </tr>
+  {% endfor %}
+</table>
+{% endblock %}

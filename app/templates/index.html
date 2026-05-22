@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>PesaDemo</h1>
+<p>A minimal Flask demo of a payment aggregator. Mock rails only — no real money moves.</p>
+
+<h2>Quick start</h2>
+<pre><code>curl -X POST http://localhost:5000/v1/charges \
+  -H "Authorization: Bearer sk_test_demo123" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "UGX",
+    "channel": "mtn_momo",
+    "customer": {"phone": "+256700123456"},
+    "reference": "order-001"
+  }'</code></pre>
+
+<h2>Merchants ({{ merchants|length }})</h2>
+<ul>
+  {% for m in merchants %}
+    <li><a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}">{{ m.name }}</a> &mdash; <code>{{ m.public_key }}</code></li>
+  {% endfor %}
+</ul>
+{% endblock %}
