@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Sam Soft Pay{% endblock %} | Modern Payment Gateway</title>
+  <title>{% block title %}Samsoftpay{% endblock %} | East Africa Payment Gateway</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -911,18 +912,13 @@
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="logo">
-          <div class="logo-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z"/>
-              <circle cx="12" cy="12" r="3"/>
-            </svg>
-          </div>
+        <a href="/" class="logo" style="text-decoration:none;">
+          <img src="{{ url_for('static', filename='img/logo.png') }}"
+               alt="Samsoftpay" style="width:36px;height:36px;border-radius:9px;object-fit:cover;flex-shrink:0;">
           <div class="logo-text">
-            <span class="logo-text-main">Sam Soft</span>
-            <span class="logo-text-sub">Pay</span>
+            <span class="logo-text-main">Samsoftpay</span>
           </div>
-        </div>
+        </a>
       </div>
 
       <nav class="sidebar-nav">
