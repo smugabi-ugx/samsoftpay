@@ -223,6 +223,7 @@ class Payout(db.Model):
     public_id = Column(String(40), nullable=False, unique=True, index=True)
     merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
     amount = Column(BigInteger, nullable=False)
+    fee_amount = Column(BigInteger, nullable=False, default=0)
     currency = Column(String(3), nullable=False, default="UGX")
     channel = Column(SAEnum(Channel), nullable=False, default=Channel.MTN_MOMO)
     status = Column(SAEnum(PayoutStatus), nullable=False, default=PayoutStatus.PENDING, index=True)

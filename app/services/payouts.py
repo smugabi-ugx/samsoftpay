@@ -47,6 +47,7 @@ from ..models import (
     RailEvent,
 )
 from . import ledger
+from .fees import calculate_payout_fee
 
 
 class PayoutError(Exception):
@@ -69,7 +70,9 @@ def create_payout(
     if not merchant.is_active:
         raise PayoutError("merchant is not active")
 
-    # Check the merchant has enough available balance.
+    fee = calculate_payout_fee(currency=currency)
+
+    # Check the merchant has enough available balance (amount + fee).
     avail_acct = ledger.get_or_create_account(
         type=AccountType.MERCHANT_AVAILABLE,
         merchant_id=merchant.id,
@@ -77,15 +80,17 @@ def create_payout(
     )
     # available is stored as a credit (negative). Convert to positive.
     available_positive = -avail_acct.cached_balance
-    if available_positive < amount:
+    if available_positive < amount + fee:
         raise PayoutError(
-            f"insufficient available balance: have {available_positive}, requested {amount}"
+            f"insufficient available balance: have {available_positive}, "
+            f"need {amount + fee} (amount {amount} + fee {fee})"
         )
 
     payout = Payout(
         public_id=f"pout_{uuid.uuid4().hex[:16]}",
         merchant_id=merchant.id,
         amount=amount,
+        fee_amount=fee,
         currency=currency,
         channel=channel,
         status=PayoutStatus.PENDING,
@@ -95,19 +100,25 @@ def create_payout(
     db.session.add(payout)
     db.session.flush()
 
-    # Earmark: move from available -> payout_in_flight
+    # Earmark payout amount into in-flight; credit fee to PSP revenue immediately.
     in_flight = ledger.get_or_create_account(
-        type=AccountType.SUSPENSE,   # reuse SUSPENSE for in-flight payouts
+        type=AccountType.SUSPENSE,
         merchant_id=merchant.id,
+        currency=currency,
+    )
+    revenue = ledger.get_or_create_account(
+        type=AccountType.PSP_REVENUE,
+        merchant_id=None,
         currency=currency,
     )
     ledger.post(
         [
-            (avail_acct, +amount),
+            (avail_acct, +(amount + fee)),
             (in_flight, -amount),
+            (revenue, -fee),
         ],
         currency=currency,
-        memo=f"payout {payout.public_id} earmarked",
+        memo=f"payout {payout.public_id} earmarked (fee {fee})",
     )
 
     # Pick a disbursement adapter and initiate.
@@ -177,19 +188,25 @@ def complete_payout(
         )
         payout.status = PayoutStatus.SUCCEEDED
     else:
-        # Refund the earmark back to merchant_available.
+        # Reverse both the earmark and the fee — full refund to merchant.
         avail_acct = ledger.get_or_create_account(
             type=AccountType.MERCHANT_AVAILABLE,
             merchant_id=payout.merchant_id,
             currency=payout.currency,
         )
+        psp_revenue = ledger.get_or_create_account(
+            type=AccountType.PSP_REVENUE,
+            merchant_id=None,
+            currency=payout.currency,
+        )
         ledger.post(
             [
                 (in_flight, +payout.amount),
-                (avail_acct, -payout.amount),
+                (psp_revenue, +payout.fee_amount),
+                (avail_acct, -(payout.amount + payout.fee_amount)),
             ],
             currency=payout.currency,
-            memo=f"payout {payout.public_id} failed, refunded to merchant",
+            memo=f"payout {payout.public_id} failed, full refund to merchant",
         )
         payout.status = PayoutStatus.FAILED
         payout.failure_reason = reason or "unknown"
