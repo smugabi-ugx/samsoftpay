@@ -277,6 +277,21 @@ class PaymentLink(db.Model):
     )
 
 
+class AuditLog(db.Model):
+    """Append-only record of every sensitive API action.
+
+    Never update or delete rows — corrections are new entries.
+    """
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True)
+    event = Column(String(80), nullable=False, index=True)  # e.g. charge.created, auth.failed
+    actor_ip = Column(String(45), nullable=True)
+    resource_id = Column(String(40), nullable=True)         # txn/payout public_id
+    detail = Column(Text, nullable=True)                    # JSON extra context
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+
 class PayoutBatch(db.Model):
     """A bulk payout job from a CSV upload.
 

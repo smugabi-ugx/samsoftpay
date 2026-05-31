@@ -54,6 +54,9 @@ def create_app(config: dict | None = None) -> Flask:
 
     db.init_app(app)
 
+    from .extensions import limiter
+    limiter.init_app(app)
+
     from .routes.api import bp as api_bp
     from .routes.dashboard import bp as dash_bp
     from .routes.webhooks_inbound import bp as inbound_bp
