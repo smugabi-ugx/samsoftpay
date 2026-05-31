@@ -307,11 +307,17 @@
               <div class="ch-name">Airtel Money</div>
               <div class="ch-sub">Receive prompt on your phone</div>
             </div>
-          {% else %}
+          {% elif ch_key == 'card' %}
             <div class="ch-logo card">VISA<br>MC</div>
             <div class="ch-info">
-              <div class="ch-name">Card</div>
-              <div class="ch-sub">Visa / Mastercard</div>
+              <div class="ch-name">Visa / Mastercard</div>
+              <div class="ch-sub">Enter card details</div>
+            </div>
+          {% else %}
+            <div class="ch-logo" style="background:linear-gradient(135deg,#f7931a,#e8a020);color:white;font-size:.7rem;font-weight:800;">₿</div>
+            <div class="ch-info">
+              <div class="ch-name">Crypto</div>
+              <div class="ch-sub">BTC · ETH · USDT · BNB</div>
             </div>
           {% endif %}
         </label>
@@ -400,7 +406,13 @@
     });
     updateChannel();
 
-    form.addEventListener('submit', () => {
+    form.addEventListener('submit', e => {
+      const checked = document.querySelector('input[name="channel"]:checked');
+      if (checked && checked.value === 'crypto') {
+        e.preventDefault();
+        window.location.href = '{{ crypto_url }}';
+        return;
+      }
       payBtn.classList.add('loading');
       payBtn.disabled = true;
     });

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}KYC — Directors{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Step 2 of 5 — Directors &amp; Signatories</h1>
+  <p class="page-subtitle">Add all company directors and authorised signatories (minimum 2 required by Bank of Uganda).</p>
+</div>
+
+{% if app.directors %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="users"></i> Added Signatories ({{ app.directors|length }})</h3>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Name</th><th>ID Type</th><th>ID Number</th><th>Phone</th><th>Primary</th><th></th></tr></thead>
+      <tbody>
+        {% for d in app.directors %}
+        <tr>
+          <td><strong>{{ d.full_name }}</strong><br><small class="text-muted">{{ d.nationality or '' }}</small></td>
+          <td>{{ d.id_type.replace('_',' ').title() }}</td>
+          <td><code>{{ d.id_number or '—' }}</code></td>
+          <td>{{ d.contact_phone or '—' }}</td>
+          <td>{% if d.is_primary %}<span class="badge succeeded">Primary</span>{% endif %}</td>
+          <td>
+            <form method="POST" action="{{ url_for('kyc.step2_delete_director', director_id=d.id) }}" onsubmit="return confirm('Remove this director?')">
+              <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;">
+                <i data-feather="trash-2" style="width:14px;height:14px;"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="user-plus"></i> Add Director / Signatory</h3>
+  </div>
+  <form method="POST" action="{{ url_for('kyc.step2_add_director') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Full Legal Name *</label>
+        <input class="form-input" type="text" name="full_name" required placeholder="John Doe Mukasa">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date of Birth</label>
+        <input class="form-input" type="date" name="date_of_birth">
+      </div>
+      <div class="form-group">
+        <label class="form-label">City of Birth</label>
+        <input class="form-input" type="text" name="city_of_birth" placeholder="Kampala">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nationality</label>
+        <input class="form-input" type="text" name="nationality" placeholder="Ugandan">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ID Type *</label>
+        <select class="form-select" name="id_type" required>
+          <option value="national_id">National ID</option>
+          <option value="passport">Passport</option>
+          <option value="refugee_id">Refugee ID</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ID Number *</label>
+        <input class="form-input" type="text" name="id_number" required placeholder="CM9500012345ABCD">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contact Phone</label>
+        <input class="form-input" type="tel" name="contact_phone" placeholder="+256700000000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" name="email" placeholder="director@company.com">
+      </div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="checkbox" name="is_primary" style="width:16px;height:16px;">
+        <span class="form-label" style="margin:0;">Primary authorised signatory</span>
+      </label>
+    </div>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-success"><i data-feather="plus"></i> Add Director</button>
+    </div>
+  </form>
+</div>
+
+<div style="margin-top:1rem;">
+  <form method="POST" action="{{ url_for('kyc.step2_next') }}" style="display:inline;">
+    <button type="submit" class="btn btn-primary" {% if app.directors|length == 0 %}disabled{% endif %}>
+      <i data-feather="arrow-right"></i> Save &amp; Continue
+    </button>
+  </form>
+  <a href="{{ url_for('kyc.step1') }}" class="btn btn-outline" style="margin-left:.5rem;">← Back</a>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}KYC — Bank Details{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Step 4 of 5 — Bank / Settlement Details</h1>
+  <p class="page-subtitle">Where we send your settled funds.</p>
+</div>
+<div class="card">
+  <form method="POST" action="{{ url_for('kyc.step4_save') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Bank Name *</label>
+        <input class="form-input" type="text" name="bank_name" required value="{{ app.bank_name or '' }}" placeholder="Stanbic Bank Uganda">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Branch</label>
+        <input class="form-input" type="text" name="bank_branch" value="{{ app.bank_branch or '' }}" placeholder="Kampala Main Branch">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Number *</label>
+        <input class="form-input" type="text" name="account_number" required value="{{ app.account_number or '' }}" placeholder="9030012345678">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Name *</label>
+        <input class="form-input" type="text" name="account_name" required value="{{ app.account_name or '' }}" placeholder="Acme Traders Ltd">
+      </div>
+    </div>
+    <div class="alert alert-warning" style="margin-bottom:1.5rem;">
+      <i data-feather="alert-triangle" class="alert-icon"></i>
+      <div>The account name must exactly match the registered company name. Mismatches will delay settlement.</div>
+    </div>
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary"><i data-feather="arrow-right"></i> Save &amp; Continue</button>
+      <a href="{{ url_for('kyc.step3') }}" class="btn btn-outline">← Back</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

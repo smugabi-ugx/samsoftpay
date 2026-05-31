@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Review KYC #{{ app.id }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">KYC Review — {{ app.company_name or 'Application #' ~ app.id }}</h1>
+  <p class="page-subtitle">Merchant ID {{ app.merchant_id }} · Status: <strong>{{ app.status.replace('_',' ').title() }}</strong></p>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="briefcase"></i> Business Info</h3></div>
+    <table class="param-table" style="font-size:.875rem;">
+      <tr><td style="color:var(--gray-500);width:40%;">Company</td><td><strong>{{ app.company_name }}</strong></td></tr>
+      <tr><td>TIN</td><td>{{ app.tin }}</td></tr>
+      <tr><td>Reg. No.</td><td>{{ app.registration_number }}</td></tr>
+      <tr><td>Incorporated</td><td>{{ app.date_of_incorporation }}</td></tr>
+      <tr><td>Service Type</td><td>{{ app.service_type }}</td></tr>
+      <tr><td>Phone</td><td>{{ app.contact_phone }}</td></tr>
+      <tr><td>Address</td><td>{{ app.physical_address }}</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="dollar-sign"></i> Bank Details</h3></div>
+    <table class="param-table" style="font-size:.875rem;">
+      <tr><td style="color:var(--gray-500);width:40%;">Bank</td><td>{{ app.bank_name }}</td></tr>
+      <tr><td>Branch</td><td>{{ app.bank_branch }}</td></tr>
+      <tr><td>Account No.</td><td>{{ app.account_number }}</td></tr>
+      <tr><td>Account Name</td><td>{{ app.account_name }}</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="users"></i> Directors ({{ app.directors|length }})</h3></div>
+  {% for d in app.directors %}
+  <div style="padding:.75rem;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:.5rem;font-size:.875rem;">
+    <strong>{{ d.full_name }}</strong> | DOB: {{ d.date_of_birth or '—' }} | {{ d.nationality or '—' }}<br>
+    {{ d.id_type.replace('_',' ').title() }}: <code>{{ d.id_number or '—' }}</code> | Phone: {{ d.contact_phone or '—' }}
+    {% if d.is_primary %}<span class="badge succeeded" style="margin-left:.5rem;">Primary</span>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="folder"></i> Documents ({{ app.documents|length }})</h3></div>
+  {% for doc in app.documents %}
+  <div style="padding:.5rem .75rem;border-bottom:1px solid var(--gray-100);font-size:.875rem;display:flex;justify-content:space-between;">
+    <span><strong>{{ doc_types.get(doc.doc_type, doc.doc_type) }}</strong> — {{ doc.original_filename }}</span>
+    <span style="color:var(--gray-500);">{{ doc.uploaded_at.strftime('%d %b %Y') }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="shield"></i> AML/CFT</h3></div>
+  <table class="param-table" style="font-size:.875rem;">
+    <tr><td style="width:50%;color:var(--gray-500);">Ownership structure</td><td>{{ app.ownership_structure }}</td></tr>
+    <tr><td>Listed on exchange</td><td>{{ 'Yes' if app.is_listed else 'No' }}</td></tr>
+    <tr><td>FATF country exposure</td><td>{{ 'Yes' if app.fatf_country_exposure else 'No' }}</td></tr>
+    <tr><td>Prior investigations</td><td>{{ 'Yes ⚠️' if app.prior_investigations else 'No' }}</td></tr>
+    <tr><td>Compliance officer</td><td>{{ 'Yes' if app.has_compliance_officer else 'No' }}</td></tr>
+  </table>
+  {% if app.aml_notes %}<p style="padding:.75rem;font-size:.875rem;color:var(--gray-700);">{{ app.aml_notes }}</p>{% endif %}
+</div>
+
+{% if app.status in ('submitted', 'under_review') %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="check-square"></i> Decision</h3></div>
+  <form method="POST" action="{{ url_for('kyc.admin_review', app_id=app.id) }}">
+    <div class="form-group">
+      <label class="form-label">Reviewer Notes</label>
+      <textarea class="form-textarea" name="notes" placeholder="Optional notes for the merchant…"></textarea>
+    </div>
+    <div class="btn-group">
+      <button type="submit" name="action" value="approve" class="btn btn-success">
+        <i data-feather="check-circle"></i> Approve
+      </button>
+      <button type="submit" name="action" value="reject" class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);"
+              onclick="return confirm('Reject this application?')">
+        <i data-feather="x-circle"></i> Reject
+      </button>
+    </div>
+  </form>
+</div>
+{% elif app.reviewer_notes %}
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="message-square"></i> Reviewer Notes</h3></div>
+  <p style="padding:.5rem;color:var(--gray-700);">{{ app.reviewer_notes }}</p>
+  {% if app.reviewed_at %}<p style="font-size:.8125rem;color:var(--gray-500);">Reviewed {{ app.reviewed_at.strftime('%d %b %Y %H:%M') }}</p>{% endif %}
+</div>
+{% endif %}
+
+<a href="{{ url_for('kyc.admin_list') }}" class="btn btn-outline" style="margin-bottom:2rem;">← All Applications</a>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

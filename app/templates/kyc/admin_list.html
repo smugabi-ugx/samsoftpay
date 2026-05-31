@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}KYC Applications{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">KYC Applications</h1>
+  <p class="page-subtitle">Review and approve merchant verification submissions.</p>
+</div>
+<div class="card">
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Merchant</th><th>Company</th><th>Submitted</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for a in apps %}
+        <tr>
+          <td>ID {{ a.merchant_id }}</td>
+          <td><strong>{{ a.company_name or '—' }}</strong><br><small>{{ a.tin or '' }}</small></td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ a.submitted_at.strftime('%d %b %Y') if a.submitted_at else '—' }}</td>
+          <td>
+            <span class="badge {% if a.status == 'approved' %}succeeded{% elif a.status == 'rejected' %}failed{% elif a.status == 'submitted' %}pending{% else %}pending{% endif %}">
+              {{ a.status.replace('_',' ').title() }}
+            </span>
+          </td>
+          <td><a href="{{ url_for('kyc.admin_detail', app_id=a.id) }}" class="btn btn-primary" style="padding:.375rem .75rem;font-size:.8125rem;">Review →</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align:center;color:var(--gray-500);padding:2rem;">No applications yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

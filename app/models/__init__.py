@@ -52,6 +52,8 @@ class Channel(str, Enum):
     MTN_MOMO = "mtn_momo"
     AIRTEL_MONEY = "airtel_money"
     CARD = "card"
+    VISA = "visa"
+    CRYPTO = "crypto"
 
 
 class AccountType(str, Enum):
@@ -322,3 +324,151 @@ class PayoutBatch(db.Model):
     failed_count = Column(Integer, nullable=False, default=0)
     status = Column(String(20), default="pending", nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+
+# ──────────────────────────────────────────────────────────────
+# KYC — Merchant Verification
+# ──────────────────────────────────────────────────────────────
+
+class KYCApplication(db.Model):
+    """Merchant KYC/verification application. Mirrors MTN Uganda requirements."""
+    __tablename__ = "kyc_applications"
+    id = Column(Integer, primary_key=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, unique=True)
+    status = Column(String(20), default="draft", nullable=False, index=True)
+    # draft | submitted | under_review | approved | rejected
+
+    # Step 1 — Business info
+    company_name = Column(String(200), nullable=True)
+    tin = Column(String(50), nullable=True)
+    registration_number = Column(String(100), nullable=True)
+    date_of_incorporation = Column(String(20), nullable=True)
+    physical_address = Column(Text, nullable=True)
+    contact_phone = Column(String(30), nullable=True)
+    service_type = Column(String(50), nullable=True)  # collections|disbursements|both
+
+    # Step 4 — Settlement / bank details
+    bank_name = Column(String(100), nullable=True)
+    bank_branch = Column(String(100), nullable=True)
+    account_number = Column(String(50), nullable=True)
+    account_name = Column(String(200), nullable=True)
+
+    # Step 5 — AML/CFT
+    ownership_structure = Column(String(20), nullable=True)   # private | public
+    is_listed = Column(Boolean, default=False, nullable=False)
+    fatf_country_exposure = Column(Boolean, default=False, nullable=False)
+    prior_investigations = Column(Boolean, default=False, nullable=False)
+    has_compliance_officer = Column(Boolean, default=False, nullable=False)
+    aml_notes = Column(Text, nullable=True)
+
+    # Review
+    reviewer_notes = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+    submitted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, nullable=False)
+
+    directors = relationship("KYCDirector", back_populates="application",
+                             cascade="all, delete-orphan")
+    documents = relationship("KYCDocument", back_populates="application",
+                             cascade="all, delete-orphan")
+
+
+class KYCDirector(db.Model):
+    """Director / authorised signatory on a KYC application."""
+    __tablename__ = "kyc_directors"
+    id = Column(Integer, primary_key=True)
+    application_id = Column(Integer, ForeignKey("kyc_applications.id"), nullable=False, index=True)
+    full_name = Column(String(200), nullable=False)
+    date_of_birth = Column(String(20), nullable=True)
+    city_of_birth = Column(String(100), nullable=True)
+    nationality = Column(String(100), nullable=True)
+    id_type = Column(String(30), nullable=True)    # national_id | passport | refugee_id
+    id_number = Column(String(100), nullable=True)
+    contact_phone = Column(String(30), nullable=True)
+    email = Column(String(200), nullable=True)
+    is_primary = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    application = relationship("KYCApplication", back_populates="directors")
+
+
+class KYCDocument(db.Model):
+    """Uploaded supporting document for a KYC application."""
+    __tablename__ = "kyc_documents"
+    id = Column(Integer, primary_key=True)
+    application_id = Column(Integer, ForeignKey("kyc_applications.id"), nullable=False, index=True)
+    doc_type = Column(String(60), nullable=False)
+    # certificate | form7_8 | tin | trade_licence | annual_returns
+    # director_id | aml_questionnaire | financial_statements | other
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False)   # UUID-based safe name
+    uploaded_at = Column(DateTime, default=utcnow, nullable=False)
+    application = relationship("KYCApplication", back_populates="documents")
+
+
+# ──────────────────────────────────────────────────────────────
+# Gift Cards / Vouchers
+# ──────────────────────────────────────────────────────────────
+
+class GiftCard(db.Model):
+    """A redeemable gift card / voucher issued by a merchant."""
+    __tablename__ = "gift_cards"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    code = Column(String(25), nullable=False, unique=True, index=True)  # e.g. SAMF-X4K2-9WQP
+    face_value = Column(BigInteger, nullable=False)   # original value
+    balance = Column(BigInteger, nullable=False)      # remaining balance (partial redemption)
+    currency = Column(String(3), nullable=False, default="UGX")
+    notes = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    redeemed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("face_value > 0", name="ck_giftcard_value_positive"),
+    )
+
+
+# ──────────────────────────────────────────────────────────────
+# Subscriptions
+# ──────────────────────────────────────────────────────────────
+
+class SubscriptionPlan(db.Model):
+    """A recurring billing plan defined by a merchant."""
+    __tablename__ = "subscription_plans"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(String(500), nullable=True)
+    amount = Column(BigInteger, nullable=False)
+    currency = Column(String(3), nullable=False, default="UGX")
+    interval = Column(String(20), nullable=False)   # weekly | monthly | yearly
+    channel = Column(SAEnum(Channel), nullable=False, default=Channel.MTN_MOMO)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    subscriptions = relationship("Subscription", back_populates="plan")
+
+
+class Subscription(db.Model):
+    """An active (or cancelled) subscription of a customer to a plan."""
+    __tablename__ = "subscriptions"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    plan_id = Column(Integer, ForeignKey("subscription_plans.id"), nullable=False, index=True)
+    customer_phone = Column(String(20), nullable=False)
+    customer_email = Column(String(200), nullable=True)
+    status = Column(String(20), nullable=False, default="active", index=True)
+    # active | paused | cancelled | failed
+    current_period_start = Column(DateTime, nullable=False)
+    next_billing_at = Column(DateTime, nullable=False, index=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    failure_reason = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    plan = relationship("SubscriptionPlan", back_populates="subscriptions")

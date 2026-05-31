@@ -950,6 +950,20 @@
           </a>
         </div>
 
+        {% if current_user.is_authenticated %}
+        <div class="nav-section">
+          <div class="nav-section-title">Features</div>
+          <a href="{{ url_for('kyc.kyc_home') }}" class="nav-link {% if 'kyc.' in request.endpoint %}active{% endif %}">
+            <i data-feather="shield"></i>
+            <span>KYC Verification</span>
+          </a>
+          <a href="{{ url_for('giftcards.list_cards') }}" class="nav-link {% if 'giftcards.' in request.endpoint %}active{% endif %}">
+            <i data-feather="gift"></i>
+            <span>Gift Cards</span>
+          </a>
+        </div>
+        {% endif %}
+
         {% if current_user.is_authenticated and current_user.role == 'admin' %}
         <div class="nav-section">
           <div class="nav-section-title">Admin</div>
@@ -964,6 +978,10 @@
           <a href="{{ url_for('dashboard.reconciliation') }}" class="nav-link {% if request.endpoint == 'dashboard.reconciliation' %}active{% endif %}">
             <i data-feather="check-circle"></i>
             <span>Reconciliation</span>
+          </a>
+          <a href="{{ url_for('kyc.admin_list') }}" class="nav-link {% if request.endpoint == 'kyc.admin_list' or request.endpoint == 'kyc.admin_detail' %}active{% endif %}">
+            <i data-feather="user-check"></i>
+            <span>KYC Review</span>
           </a>
         </div>
         {% endif %}

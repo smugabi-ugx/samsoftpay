@@ -88,10 +88,12 @@ def checkout_page(public_id: str):
         link=link,
         merchant=merchant,
         channels=[
-            ("mtn_momo", "MTN Mobile Money", "phone"),
-            ("airtel_money", "Airtel Money", "phone"),
-            ("card", "Card (Visa/Mastercard)", "card"),
+            ("mtn_momo",     "MTN Mobile Money",       "phone"),
+            ("airtel_money", "Airtel Money",            "phone"),
+            ("card",         "Visa / Mastercard",       "card"),
+            ("crypto",       "Crypto (BTC/ETH/USDT…)", "crypto"),
         ],
+        crypto_url=url_for("checkout.crypto_checkout", public_id=link.public_id),
     )
 
 
@@ -193,3 +195,85 @@ def _channel_options():
         ("airtel_money", "Airtel Money", "phone"),
         ("card", "Card (Visa/Mastercard)", "card"),
     ]
+
+
+# ── Crypto checkout (ChangeNow) ────────────────────────────────────────
+
+@bp.get("/pay/<public_id>/crypto")
+def crypto_checkout(public_id: str):
+    from ..services.changenow import SUPPORTED_COINS
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or not link.is_active:
+        abort(404)
+    merchant = db.session.get(Merchant, link.merchant_id)
+    # Check if an exchange is already in progress (stored in session)
+    from flask import session
+    order_data = session.get(f"cn_order_{public_id}")
+    order = type("O", (), order_data)() if order_data else None
+    return render_template(
+        "checkout_crypto.html",
+        link=link, merchant=merchant,
+        coins=SUPPORTED_COINS,
+        order=order,
+    )
+
+
+@bp.post("/pay/<public_id>/crypto/initiate")
+def crypto_initiate(public_id: str):
+    from flask import session
+    from ..services.changenow import create_exchange
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or not link.is_active:
+        abort(404)
+    from_coin = request.form.get("coin", "usdtbsc")
+    result = create_exchange(
+        from_coin=from_coin,
+        amount_ugx=link.amount,
+        public_id=public_id,
+    )
+    if not result.accepted:
+        return redirect(url_for("checkout.checkout_page", public_id=public_id))
+
+    session[f"cn_order_{public_id}"] = {
+        "exchange_id": result.exchange_id,
+        "deposit_address": result.deposit_address,
+        "deposit_coin": result.deposit_coin,
+        "deposit_amount_estimate": result.deposit_amount_estimate,
+    }
+    session[f"cn_status_{public_id}"] = "waiting"
+    return redirect(url_for("checkout.crypto_checkout", public_id=public_id))
+
+
+@bp.get("/pay/<public_id>/crypto/status.json")
+def crypto_status_json(public_id: str):
+    from flask import jsonify, session
+    from ..services.changenow import get_status
+    order_data = session.get(f"cn_order_{public_id}")
+    if not order_data:
+        return jsonify(status="waiting")
+    exchange_id = order_data.get("exchange_id", "")
+    status = get_status(exchange_id)
+    session[f"cn_status_{public_id}"] = status
+    # If finished, create the transaction record
+    if status == "finished" and not session.get(f"cn_settled_{public_id}"):
+        link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+        if link and link.is_active:
+            merchant = db.session.get(Merchant, link.merchant_id)
+            from flask import g
+            g.api_mode = "live"
+            try:
+                txn = create_charge(
+                    merchant=merchant,
+                    amount=link.amount,
+                    currency=link.currency,
+                    channel=__import__("app.models", fromlist=["Channel"]).Channel.CRYPTO,
+                    customer_phone=None,
+                    customer_email=None,
+                    merchant_reference=exchange_id,
+                )
+                link.transaction_id = txn.id
+                db.session.commit()
+                session[f"cn_settled_{public_id}"] = True
+            except Exception:
+                pass
+    return jsonify(status=status)

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}KYC — AML/CFT{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Step 5 of 5 — AML/CFT Questionnaire</h1>
+  <p class="page-subtitle">Anti-Money Laundering &amp; Counter-Financing of Terrorism self-assessment. Required by Bank of Uganda.</p>
+</div>
+<div class="card">
+  <form method="POST" action="{{ url_for('kyc.step5_save') }}">
+
+    <div class="form-group">
+      <label class="form-label">Ownership Structure *</label>
+      <select class="form-select" name="ownership_structure" required>
+        <option value="private" {% if app.ownership_structure == 'private' %}selected{% endif %}>Private Company</option>
+        <option value="public" {% if app.ownership_structure == 'public' %}selected{% endif %}>Public Company</option>
+        <option value="ngo" {% if app.ownership_structure == 'ngo' %}selected{% endif %}>NGO / Non-Profit</option>
+        <option value="sole_trader" {% if app.ownership_structure == 'sole_trader' %}selected{% endif %}>Sole Trader</option>
+        <option value="partnership" {% if app.ownership_structure == 'partnership' %}selected{% endif %}>Partnership</option>
+      </select>
+    </div>
+
+    {% for field, label, hint in [
+      ('is_listed', 'Is the company listed on any stock exchange?', ''),
+      ('fatf_country_exposure', 'Does the business have operations or customers in FATF high-risk countries?', 'e.g. Iran, North Korea, Myanmar'),
+      ('prior_investigations', 'Has the company or any director been subject to AML/CFT investigations or sanctions?', ''),
+      ('has_compliance_officer', 'Does the company have a designated AML Compliance Officer?', ''),
+    ] %}
+    <div class="form-group">
+      <label class="form-label">{{ label }}</label>
+      {% if hint %}<div class="form-hint">{{ hint }}</div>{% endif %}
+      <div style="display:flex;gap:1.5rem;margin-top:.5rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="radio" name="{{ field }}" value="1" {% if app[field] %}checked{% endif %} required> Yes
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="radio" name="{{ field }}" value="" {% if not app[field] %}checked{% endif %}> No
+        </label>
+      </div>
+    </div>
+    {% endfor %}
+
+    <div class="form-group">
+      <label class="form-label">Additional AML Notes / Explanations</label>
+      <textarea class="form-textarea" name="aml_notes" placeholder="Describe your transaction monitoring processes, compliance policies, etc.">{{ app.aml_notes or '' }}</textarea>
+    </div>
+
+    <div class="btn-group">
+      <button type="submit" class="btn btn-primary"><i data-feather="arrow-right"></i> Save &amp; Continue to Review</button>
+      <a href="{{ url_for('kyc.step4') }}" class="btn btn-outline">← Back</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

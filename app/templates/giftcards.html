@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Gift Cards{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Gift Cards &amp; Vouchers</h1>
+  <p class="page-subtitle">Create redeemable codes for your customers.</p>
+</div>
+
+<!-- Create form -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="gift"></i> Create Gift Cards</h3></div>
+  <form method="POST" action="{{ url_for('giftcards.create') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Face Value (UGX) *</label>
+        <input class="form-input" type="number" name="face_value" min="1000" required placeholder="50000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quantity (max 50)</label>
+        <input class="form-input" type="number" name="qty" min="1" max="50" value="1" placeholder="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expiry Date (optional)</label>
+        <input class="form-input" type="date" name="expires_at">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Internal Note (optional)</label>
+        <input class="form-input" type="text" name="notes" placeholder="Christmas promotion 2025">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-feather="plus"></i> Generate</button>
+  </form>
+</div>
+
+<!-- List -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="list"></i> All Gift Cards ({{ cards|length }})</h3>
+  </div>
+  {% if cards %}
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Code</th><th>Face Value</th><th>Balance</th><th>Expires</th><th>Status</th><th>Created</th><th></th></tr></thead>
+      <tbody>
+        {% for c in cards %}
+        <tr>
+          <td><code style="font-size:.9375rem;font-weight:700;letter-spacing:.05em;">{{ c.code }}</code></td>
+          <td>{{ c.currency }} {{ "{:,}".format(c.face_value) }}</td>
+          <td>
+            {% if c.balance == c.face_value %}
+            <span style="color:var(--gray-500);">Unused</span>
+            {% else %}
+            <strong style="color:{% if c.balance == 0 %}var(--danger){% else %}var(--warning){% endif %};">
+              {{ c.currency }} {{ "{:,}".format(c.balance) }}
+            </strong>
+            {% endif %}
+          </td>
+          <td style="font-size:.875rem;">{{ c.expires_at.strftime('%d %b %Y') if c.expires_at else '—' }}</td>
+          <td>
+            {% if not c.is_active %}<span class="badge failed">Deactivated</span>
+            {% elif c.balance == 0 %}<span class="badge failed">Exhausted</span>
+            {% else %}<span class="badge succeeded">Active</span>{% endif %}
+          </td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ c.created_at.strftime('%d %b %Y') }}</td>
+          <td>
+            {% if c.is_active and c.balance > 0 %}
+            <form method="POST" action="{{ url_for('giftcards.deactivate', card_id=c.id) }}"
+                  onsubmit="return confirm('Deactivate this card?')">
+              <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;">
+                <i data-feather="slash" style="width:14px;height:14px;"></i>
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:var(--gray-500);">
+    <i data-feather="gift" style="width:40px;height:40px;margin-bottom:1rem;"></i>
+    <p>No gift cards yet. Create your first one above.</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="info"></i> How Customers Redeem</h3></div>
+  <p style="color:var(--gray-700);line-height:1.7;margin-bottom:0;">
+    At checkout, customers enter the gift card code (e.g. <code>SAMF-X4K2-9WQP</code>) in the
+    coupon/voucher field. The balance is deducted from the payment amount automatically.
+    Partial redemption is supported — remaining balance stays on the card.
+  </p>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

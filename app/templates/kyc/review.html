@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}KYC — Review & Submit{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Review &amp; Submit</h1>
+  <p class="page-subtitle">Check everything before submitting for review.</p>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="briefcase"></i> Business Info</h3>
+      <a href="{{ url_for('kyc.step1') }}" style="font-size:.875rem;color:var(--primary);">Edit</a>
+    </div>
+    <table class="param-table" style="font-size:.9rem;">
+      <tr><td style="color:var(--gray-500);width:40%;">Company</td><td><strong>{{ app.company_name or '—' }}</strong></td></tr>
+      <tr><td>TIN</td><td>{{ app.tin or '—' }}</td></tr>
+      <tr><td>Reg. Number</td><td>{{ app.registration_number or '—' }}</td></tr>
+      <tr><td>Incorporated</td><td>{{ app.date_of_incorporation or '—' }}</td></tr>
+      <tr><td>Address</td><td>{{ app.physical_address or '—' }}</td></tr>
+      <tr><td>Service</td><td>{{ app.service_type or '—' }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="dollar-sign"></i> Bank Details</h3>
+      <a href="{{ url_for('kyc.step4') }}" style="font-size:.875rem;color:var(--primary);">Edit</a>
+    </div>
+    <table class="param-table" style="font-size:.9rem;">
+      <tr><td style="color:var(--gray-500);width:40%;">Bank</td><td>{{ app.bank_name or '—' }}</td></tr>
+      <tr><td>Branch</td><td>{{ app.bank_branch or '—' }}</td></tr>
+      <tr><td>Account No.</td><td>{{ app.account_number or '—' }}</td></tr>
+      <tr><td>Account Name</td><td>{{ app.account_name or '—' }}</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="users"></i> Directors ({{ app.directors|length }})</h3>
+    <a href="{{ url_for('kyc.step2') }}" style="font-size:.875rem;color:var(--primary);">Edit</a>
+  </div>
+  {% for d in app.directors %}
+  <div style="padding:.75rem;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:.5rem;font-size:.9rem;">
+    <strong>{{ d.full_name }}</strong> — {{ d.id_type.replace('_',' ').title() }}: {{ d.id_number or '—' }}
+    {% if d.is_primary %}<span class="badge succeeded" style="margin-left:.5rem;">Primary</span>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="folder"></i> Documents ({{ app.documents|length }})</h3>
+    <a href="{{ url_for('kyc.step3') }}" style="font-size:.875rem;color:var(--primary);">Edit</a>
+  </div>
+  {% for doc in app.documents %}
+  <div style="padding:.5rem .75rem;font-size:.875rem;border-bottom:1px solid var(--gray-100);">
+    <strong>{{ doc_types.get(doc.doc_type, doc.doc_type) }}</strong> — {{ doc.original_filename }}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="shield"></i> Declaration</h3></div>
+  <p style="margin-bottom:1.25rem;color:var(--gray-700);line-height:1.7;">
+    By submitting this application I confirm that all information provided is accurate and complete. I understand that providing false information is a criminal offence under the Anti-Money Laundering Act (Uganda) and may result in account suspension.
+  </p>
+  <form method="POST" action="{{ url_for('kyc.submit') }}">
+    <label style="display:flex;align-items:flex-start;gap:.75rem;cursor:pointer;margin-bottom:1.5rem;">
+      <input type="checkbox" id="declare" style="width:16px;height:16px;margin-top:3px;" required>
+      <span style="font-size:.9rem;">I declare that the information provided is true and correct to the best of my knowledge.</span>
+    </label>
+    <button type="submit" class="btn btn-primary">
+      <i data-feather="send"></i> Submit for Review
+    </button>
+  </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

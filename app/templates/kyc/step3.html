@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}KYC — Documents{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Step 3 of 5 — Document Upload</h1>
+  <p class="page-subtitle">Upload certified copies (PDF, JPG, PNG, DOC). Max 10MB per file.</p>
+</div>
+
+{% if error %}<div class="alert alert-danger mb-3"><i data-feather="alert-circle" class="alert-icon"></i> {{ error }}</div>{% endif %}
+
+<div class="alert alert-info mb-3">
+  <i data-feather="info" class="alert-icon"></i>
+  <div>
+    <strong>Required documents:</strong> Certificate of Incorporation, TIN Certificate, Trade Licence, Form 7/8, at least one Director ID, AML/CFT Questionnaire, Latest Annual Returns.
+  </div>
+</div>
+
+{% if app.documents %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="folder"></i> Uploaded ({{ app.documents|length }})</h3>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Document Type</th><th>Filename</th><th>Uploaded</th><th></th></tr></thead>
+      <tbody>
+        {% for doc in app.documents %}
+        <tr>
+          <td><strong>{{ doc_types.get(doc.doc_type, doc.doc_type) }}</strong></td>
+          <td><code style="font-size:.8125rem;">{{ doc.original_filename }}</code></td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ doc.uploaded_at.strftime('%d %b %Y') }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('kyc.step3_delete', doc_id=doc.id) }}" onsubmit="return confirm('Delete this document?')">
+              <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;">
+                <i data-feather="trash-2" style="width:14px;height:14px;"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="upload"></i> Upload Document</h3></div>
+  <form method="POST" action="{{ url_for('kyc.step3_upload') }}" enctype="multipart/form-data">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Document Type *</label>
+        <select class="form-select" name="doc_type" required>
+          {% for key, label in doc_types %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">File (PDF / JPG / PNG / DOC) *</label>
+        <input class="form-input" type="file" name="document" required accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-success"><i data-feather="upload"></i> Upload</button>
+  </form>
+</div>
+
+<div style="margin-top:1rem;">
+  <form method="POST" action="{{ url_for('kyc.step3_next') }}" style="display:inline;">
+    <button type="submit" class="btn btn-primary" {% if app.documents|length == 0 %}disabled{% endif %}>
+      <i data-feather="arrow-right"></i> Save &amp; Continue
+    </button>
+  </form>
+  <a href="{{ url_for('kyc.step2') }}" class="btn btn-outline" style="margin-left:.5rem;">← Back</a>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

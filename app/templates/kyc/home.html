@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}KYC Verification{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Business Verification (KYC)</h1>
+  <p class="page-subtitle">Complete verification to unlock higher limits and live payouts.</p>
+</div>
+
+{% if not app %}
+<div class="card" style="text-align:center;padding:3rem;">
+  <i data-feather="shield" style="width:56px;height:56px;color:var(--primary);margin-bottom:1rem;"></i>
+  <h2 style="margin-bottom:0.75rem;">Get Verified</h2>
+  <p class="text-muted mb-3">Submit your business documents to unlock full gateway access. Takes about 10 minutes.</p>
+  <a href="{{ url_for('kyc.step1') }}" class="btn btn-primary">
+    <i data-feather="arrow-right"></i> Start Verification
+  </a>
+</div>
+
+{% else %}
+<!-- Status banner -->
+{% set status_map = {'draft':'warning','submitted':'info','under_review':'info','approved':'success','rejected':'danger'} %}
+<div class="alert alert-{{ status_map.get(app.status, 'info') }}" style="margin-bottom:2rem;">
+  <i data-feather="{% if app.status == 'approved' %}check-circle{% elif app.status == 'rejected' %}x-circle{% else %}clock{% endif %}" class="alert-icon"></i>
+  <div>
+    <strong>Status: {{ app.status.replace('_',' ').title() }}</strong>
+    {% if app.status == 'draft' %} — Complete all steps and submit.
+    {% elif app.status == 'submitted' %} — Under review. We'll email you within 2 business days.
+    {% elif app.status == 'under_review' %} — Our compliance team is reviewing your documents.
+    {% elif app.status == 'approved' %} — Your account is fully verified.
+    {% elif app.status == 'rejected' %} — {{ app.reviewer_notes or 'Please contact support.' }}
+    {% endif %}
+  </div>
+</div>
+
+<!-- Progress steps -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="list"></i> Verification Steps</h3>
+    {% if app.status == 'draft' %}
+    <a href="{{ url_for('kyc.step1') }}" class="btn btn-primary" style="font-size:.875rem;padding:.5rem 1rem;">
+      <i data-feather="edit-2"></i> Continue
+    </a>
+    {% endif %}
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:.75rem;">
+    {% set steps = [
+      ('step1','Business Information', app.company_name),
+      ('step2','Directors & Signatories', app.directors|length > 0),
+      ('step3','Document Upload', app.documents|length > 0),
+      ('step4','Bank / Settlement Details', app.bank_name),
+      ('step5','AML/CFT Questionnaire', app.ownership_structure),
+    ] %}
+    {% for step_url, label, done in steps %}
+    <div style="display:flex;align-items:center;gap:1rem;padding:.75rem 1rem;border:1px solid var(--gray-200);border-radius:8px;">
+      <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+        background:{% if done %}rgba(16,185,129,.1){% else %}var(--gray-100){% endif %};
+        color:{% if done %}var(--success){% else %}var(--gray-400){% endif %};">
+        <i data-feather="{% if done %}check{% else %}circle{% endif %}" style="width:16px;height:16px;"></i>
+      </div>
+      <span style="flex:1;font-weight:500;">{{ label }}</span>
+      {% if app.status == 'draft' %}
+      <a href="{{ url_for('kyc.' ~ step_url) }}" style="font-size:.875rem;color:var(--primary);">
+        {{ 'Edit' if done else 'Fill in' }} →
+      </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if app.status == 'draft' %}
+  <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--gray-200);">
+    <form method="POST" action="{{ url_for('kyc.submit') }}">
+      <button type="submit" class="btn btn-primary" {% if not (app.company_name and app.directors|length > 0 and app.documents|length > 0 and app.bank_name and app.ownership_structure) %}disabled{% endif %}>
+        <i data-feather="send"></i> Submit for Review
+      </button>
+      <p class="form-hint" style="margin-top:.5rem;">All 5 steps must be completed before submitting.</p>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

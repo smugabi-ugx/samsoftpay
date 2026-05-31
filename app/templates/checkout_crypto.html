@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Crypto Payment | Samsoftpay</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--primary:#6366f1;--success:#10b981;--warning:#f59e0b;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
+
+    .topbar{background:white;border-bottom:1px solid var(--line);padding:.875rem 1rem;display:flex;align-items:center;gap:.75rem;position:sticky;top:0;z-index:10}
+    .back-btn{width:36px;height:36px;border-radius:8px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--ink);text-decoration:none}
+    .topbar-title{font-size:.9375rem;font-weight:600;flex:1}
+    .secure{margin-left:auto;font-size:.75rem;font-weight:600;color:var(--success);display:flex;align-items:center;gap:.3rem}
+
+    .summary{background:linear-gradient(135deg,#1a0533 0%,#2d1060 100%);padding:1.5rem 1.25rem;color:white;text-align:center}
+    .summary-to{font-size:.8125rem;opacity:.7;margin-bottom:.25rem}
+    .summary-merchant{font-size:1rem;font-weight:600;margin-bottom:.75rem}
+    .summary-amount{font-size:2.5rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+    .summary-cur{font-size:1rem;opacity:.6;margin-right:.25rem}
+
+    .body{flex:1;padding:1.25rem 1rem 5rem;max-width:480px;margin:0 auto;width:100%}
+    .section-title{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.625rem}
+
+    /* coin picker */
+    .coins{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1.25rem}
+    .coin-btn{padding:.75rem .5rem;border:2px solid var(--line);border-radius:10px;background:white;cursor:pointer;text-align:center;transition:all .15s;font-family:inherit}
+    .coin-btn:active{transform:scale(.97)}
+    .coin-btn.selected{border-color:var(--primary);background:rgba(99,102,241,.05)}
+    .coin-icon{font-size:1.5rem;display:block;margin-bottom:.25rem}
+    .coin-name{font-size:.75rem;font-weight:600;color:var(--ink)}
+    .coin-sub{font-size:.6875rem;color:var(--muted)}
+
+    /* estimate */
+    .estimate-card{background:white;border:1px solid var(--line);border-radius:12px;padding:1.125rem;margin-bottom:1.25rem}
+    .est-row{display:flex;justify-content:space-between;align-items:center;font-size:.9rem;margin-bottom:.5rem}
+    .est-row:last-child{margin-bottom:0;font-weight:600}
+    .est-label{color:var(--muted)}
+
+    /* deposit address */
+    .address-card{background:white;border:1px solid var(--line);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem}
+    .address-card h3{font-size:.9375rem;font-weight:600;margin-bottom:.875rem;display:flex;align-items:center;gap:.5rem}
+    .address-wrap{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:.75rem;font-family:monospace;font-size:.8125rem;word-break:break-all;margin-bottom:.75rem;color:var(--ink)}
+    .qr-wrap{text-align:center;margin:.75rem 0}
+    .qr-wrap img{border-radius:8px;border:1px solid var(--line)}
+    .copy-btn{width:100%;padding:.75rem;background:white;border:2px solid var(--line);border-radius:8px;font-size:.9rem;font-weight:600;font-family:inherit;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .copy-btn:active{background:var(--bg)}
+    .copy-btn.copied{border-color:var(--success);color:var(--success)}
+
+    .timer{text-align:center;font-size:.875rem;color:var(--muted);margin-top:.5rem}
+    .timer strong{color:var(--warning)}
+
+    /* status */
+    .status-card{background:white;border:1px solid var(--line);border-radius:12px;padding:1.25rem;text-align:center}
+    .status-icon{font-size:2.5rem;margin-bottom:.75rem}
+    .status-text{font-size:.9375rem;font-weight:600;margin-bottom:.375rem}
+    .status-sub{font-size:.875rem;color:var(--muted)}
+
+    .alert-info{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);color:#1d4ed8;border-radius:10px;padding:.875rem 1rem;font-size:.875rem;margin-bottom:1rem;display:flex;align-items:flex-start;gap:.5rem}
+
+    .pay-footer{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid var(--line);padding:1rem;padding-bottom:max(1rem,env(safe-area-inset-bottom))}
+    .back-link{display:block;text-align:center;color:var(--muted);font-size:.875rem;text-decoration:none;margin-top:.5rem}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-btn" href="{{ url_for('checkout.checkout_page', public_id=link.public_id) }}">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </a>
+  <span class="topbar-title">Pay with Crypto</span>
+  <span class="secure">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    Secure
+  </span>
+</div>
+
+<div class="summary">
+  <div class="summary-to">You are paying</div>
+  <div class="summary-merchant">{{ merchant.name }}</div>
+  <div class="summary-amount">
+    <span class="summary-cur">{{ link.currency }}</span>{{ "{:,}".format(link.amount) }}
+  </div>
+</div>
+
+<div class="body">
+
+  {% if not order %}
+  <!-- ── Step 1: Choose coin ── -->
+  <div class="section-title">Select cryptocurrency</div>
+  <div class="alert-info">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>Powered by ChangeNow. Your crypto is instantly converted — we never hold volatile assets.</span>
+  </div>
+  <form method="POST" action="{{ url_for('checkout.crypto_initiate', public_id=link.public_id) }}">
+    <div class="coins">
+      {% for coin_id, coin_name, coin_ticker in coins %}
+      <label class="coin-btn" id="lbl-{{ coin_id }}">
+        <input type="radio" name="coin" value="{{ coin_id }}" style="display:none;" required>
+        <span class="coin-icon">
+          {% if 'btc' in coin_id %}₿
+          {% elif 'eth' in coin_id %}Ξ
+          {% elif 'usdt' in coin_id %}₮
+          {% elif 'bnb' in coin_id %}🔶
+          {% elif 'sol' in coin_id %}◎
+          {% else %}🪙{% endif %}
+        </span>
+        <span class="coin-name">{{ coin_ticker }}</span>
+        <span class="coin-sub">{{ coin_name }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div class="pay-footer">
+      <button type="submit" style="width:100%;height:52px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:12px;font-size:1rem;font-weight:700;font-family:inherit;cursor:pointer;">
+        Generate Deposit Address
+      </button>
+    </div>
+  </form>
+
+  {% else %}
+  <!-- ── Step 2: Show deposit address ── -->
+  <div class="estimate-card">
+    <div class="est-row"><span class="est-label">You pay (approx.)</span><strong>{{ order.deposit_amount_estimate }} {{ order.deposit_coin }}</strong></div>
+    <div class="est-row"><span class="est-label">Merchant receives</span><strong>{{ link.currency }} {{ "{:,}".format(link.amount) }}</strong></div>
+    <div class="est-row"><span class="est-label">Exchange</span><span>via ChangeNow</span></div>
+  </div>
+
+  <div class="address-card">
+    <h3>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Send exactly {{ order.deposit_amount_estimate }} {{ order.deposit_coin }} to:
+    </h3>
+    <div class="address-wrap" id="dep-address">{{ order.deposit_address }}</div>
+    <div class="qr-wrap">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ order.deposit_address }}"
+           alt="QR code" width="180" height="180">
+    </div>
+    <button class="copy-btn" onclick="copyAddress()" id="copy-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      Copy Address
+    </button>
+    <div class="timer">Rate locked for <strong id="countdown">20:00</strong></div>
+  </div>
+
+  <div class="status-card" id="status-box">
+    <div class="status-icon">⏳</div>
+    <div class="status-text" id="status-text">Waiting for payment</div>
+    <div class="status-sub" id="status-sub">This page auto-updates. Do not close it.</div>
+  </div>
+
+  <div class="alert-info" style="margin-top:1rem;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>Send only <strong>{{ order.deposit_coin }}</strong> to this address. Sending other coins will result in permanent loss.</span>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  // Coin picker highlight
+  document.querySelectorAll('input[name="coin"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('.coin-btn').forEach(b => b.classList.remove('selected'));
+      r.closest('.coin-btn').classList.add('selected');
+    });
+  });
+
+  {% if order %}
+  // Copy address
+  function copyAddress() {
+    const addr = document.getElementById('dep-address').textContent.trim();
+    navigator.clipboard.writeText(addr).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.classList.add('copied');
+      btn.innerHTML = '✓ Copied!';
+      setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Address'; }, 2000);
+    });
+  }
+
+  // Countdown timer (20 min from page load)
+  let secs = 20 * 60;
+  const cd = document.getElementById('countdown');
+  setInterval(() => {
+    if (secs <= 0) { cd.textContent = 'EXPIRED'; return; }
+    secs--;
+    const m = Math.floor(secs / 60), s = secs % 60;
+    cd.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+
+  // Poll status every 8 seconds
+  const exchangeId = '{{ order.exchange_id }}';
+  const statusBox = document.getElementById('status-box');
+  const statusText = document.getElementById('status-text');
+  const statusSub = document.getElementById('status-sub');
+  const statusIcon = document.querySelector('.status-icon');
+
+  const statusLabels = {
+    waiting:    ['⏳', 'Waiting for payment',   'Send crypto to the address above.'],
+    confirming: ['🔍', 'Confirming on chain',   'Your transaction is being confirmed.'],
+    exchanging: ['🔄', 'Exchanging crypto',      'ChangeNow is converting your payment.'],
+    sending:    ['📤', 'Sending to merchant',    'Almost done!'],
+    finished:   ['✅', 'Payment complete!',      'Thank you. You will be redirected.'],
+    failed:     ['❌', 'Payment failed',         'Please try again or use a different method.'],
+    refunded:   ['↩️', 'Refunded',              'Your crypto has been returned.'],
+  };
+
+  function pollStatus() {
+    fetch(`{{ url_for('checkout.crypto_status_json', public_id=link.public_id) }}`)
+      .then(r => r.json())
+      .then(data => {
+        const [icon, title, sub] = statusLabels[data.status] || statusLabels.waiting;
+        statusIcon.textContent = icon;
+        statusText.textContent = title;
+        statusSub.textContent = sub;
+        if (data.status === 'finished') {
+          setTimeout(() => { window.location.href = '{{ url_for("checkout.status_page", public_id=link.public_id) }}'; }, 1500);
+        }
+      }).catch(() => {});
+  }
+  setInterval(pollStatus, 8000);
+  {% endif %}
+</script>
+</body>
+</html>

@@ -54,6 +54,13 @@ def create_app(config: dict | None = None) -> Flask:
         MAIL_USERNAME=os.environ.get("MAIL_USERNAME", ""),
         MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD", ""),
         MAIL_FROM=os.environ.get("MAIL_FROM", "noreply@samsoftpay.com"),
+        # ---- Visa / Card (Flutterwave) ----
+        FLUTTERWAVE_SECRET_KEY=os.environ.get("FLUTTERWAVE_SECRET_KEY", ""),
+        BASE_URL=os.environ.get("BASE_URL", "http://localhost:5000"),
+        # ---- Crypto via ChangeNow ----
+        CHANGENOW_API_KEY=os.environ.get("CHANGENOW_API_KEY", ""),
+        CHANGENOW_RECEIVING_ADDRESS=os.environ.get("CHANGENOW_RECEIVING_ADDRESS", ""),
+        CHANGENOW_RECEIVING_NETWORK=os.environ.get("CHANGENOW_RECEIVING_NETWORK", "bsc"),
     )
     if config:
         app.config.update(config)
@@ -77,6 +84,8 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes.checkout import bp as checkout_bp
     from .routes.auth import bp as auth_bp
     from .routes.docs import bp as docs_bp
+    from .routes.kyc import bp as kyc_bp
+    from .routes.giftcards import bp as giftcards_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(dash_bp)
@@ -84,6 +93,8 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(checkout_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(docs_bp)
+    app.register_blueprint(kyc_bp)
+    app.register_blueprint(giftcards_bp)
 
     from . import cli  # noqa: F401
     cli.register(app)

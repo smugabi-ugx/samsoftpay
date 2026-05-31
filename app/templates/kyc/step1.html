@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}KYC — Business Info{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Step 1 of 5 — Business Information</h1>
+  <p class="page-subtitle">Basic company details as registered with URSB/URA.</p>
+</div>
+<div class="card">
+  <form method="POST" action="{{ url_for('kyc.step1_save') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Company / Business Name *</label>
+        <input class="form-input" type="text" name="company_name" required value="{{ app.company_name or '' }}" placeholder="Acme Traders Ltd">
+      </div>
+      <div class="form-group">
+        <label class="form-label">TIN (URA Tax ID) *</label>
+        <input class="form-input" type="text" name="tin" required value="{{ app.tin or '' }}" placeholder="1000123456">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Company Registration Number</label>
+        <input class="form-input" type="text" name="registration_number" value="{{ app.registration_number or '' }}" placeholder="80000012345">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date of Incorporation</label>
+        <input class="form-input" type="date" name="date_of_incorporation" value="{{ app.date_of_incorporation or '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contact Phone *</label>
+        <input class="form-input" type="tel" name="contact_phone" required value="{{ app.contact_phone or '' }}" placeholder="+256700000000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Service Type *</label>
+        <select class="form-select" name="service_type" required>
+          <option value="collections" {% if app.service_type == 'collections' %}selected{% endif %}>Collections only</option>
+          <option value="disbursements" {% if app.service_type == 'disbursements' %}selected{% endif %}>Disbursements only</option>
+          <option value="both" {% if not app.service_type or app.service_type == 'both' %}selected{% endif %}>Both</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Physical Address *</label>
+      <textarea class="form-textarea" name="physical_address" required placeholder="Plot 12, Kampala Road, Kampala, Uganda">{{ app.physical_address or '' }}</textarea>
+    </div>
+    <div class="btn-group mt-2">
+      <button type="submit" class="btn btn-primary"><i data-feather="arrow-right"></i> Save &amp; Continue</button>
+      <a href="{{ url_for('kyc.kyc_home') }}" class="btn btn-outline">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
