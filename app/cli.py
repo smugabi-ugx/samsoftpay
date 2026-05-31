@@ -56,7 +56,7 @@ def register(app: Flask) -> None:
 
     @app.cli.command("make-admin")
     def make_admin():
-        """Promote a merchant to the admin role (interactive)."""
+        """Promote an existing merchant to admin role (interactive)."""
         import click
         with app.app_context():
             email = click.prompt("Merchant email")
@@ -65,8 +65,36 @@ def register(app: Flask) -> None:
                 print(f"No merchant found with email: {email}")
                 return
             m.role = "admin"
+            m.email_verified = True
             db.session.commit()
             print(f"Done — {m.name} ({m.email}) is now an admin.")
+
+    @app.cli.command("create-admin")
+    def create_admin():
+        """Create a new admin account (interactive)."""
+        import click, secrets
+        from werkzeug.security import generate_password_hash
+        with app.app_context():
+            name  = click.prompt("Full name")
+            email = click.prompt("Email")
+            pwd   = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+            if Merchant.query.filter_by(email=email).first():
+                print("Account with that email already exists. Use make-admin instead.")
+                return
+            m = Merchant(
+                name=name, email=email,
+                password_hash=generate_password_hash(pwd),
+                public_key="pk_live_" + secrets.token_urlsafe(20),
+                secret_key="sk_live_" + secrets.token_urlsafe(28),
+                test_public_key="pk_test_" + secrets.token_urlsafe(20),
+                test_secret_key="sk_test_" + secrets.token_urlsafe(28),
+                handle=email.split("@")[0],
+                role="admin", kyc_status="verified",
+                email_verified=True, two_fa_enabled=False,
+            )
+            db.session.add(m)
+            db.session.commit()
+            print(f"Admin created: {email} (id={m.id})")
 
     @app.cli.command("bill-subscriptions")
     def bill_subscriptions():
