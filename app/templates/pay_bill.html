@@ -140,6 +140,7 @@
   {% endif %}
 
   <form method="POST" action="{{ url_for('bills.pay_bill_submit', handle=merchant.handle, bill_public_id=bill.public_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     {% if bill.is_variable %}
     <div class="field">

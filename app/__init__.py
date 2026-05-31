@@ -102,12 +102,13 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(subs_bp)
     app.register_blueprint(bills_bp)
 
-    # CSRF protection for all browser-facing forms
+    # CSRF protection for authenticated browser forms
     from flask_wtf.csrf import CSRFProtect
     csrf = CSRFProtect(app)
-    # Exempt the API blueprint — it uses Bearer tokens, not cookies
+    # Exempt blueprints that are public (no session) or use Bearer tokens
     csrf.exempt(api_bp)
     csrf.exempt(inbound_bp)
+    csrf.exempt(checkout_bp)   # public payment pages — no login session
 
     from . import cli  # noqa: F401
     cli.register(app)

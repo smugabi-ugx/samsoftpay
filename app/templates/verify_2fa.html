@@ -59,6 +59,7 @@
     {% if info %}<div class="info">{{ info }}</div>{% endif %}
 
     <form method="POST" action="{{ url_for('auth.verify_2fa') }}" id="otp-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="code" id="code-hidden">
       <div class="otp-inputs">
         <input type="text" maxlength="1" class="otp-digit" inputmode="numeric" pattern="[0-9]" autocomplete="off">
@@ -74,6 +75,7 @@
     <div class="resend">
       Didn't receive it?
       <form method="POST" action="{{ url_for('auth.resend_2fa') }}" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit">Resend code</button>
       </form>
     </div>

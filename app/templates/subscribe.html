@@ -106,6 +106,7 @@
   </div>
 
   <form method="POST" action="{{ url_for('subscriptions.subscribe_submit', handle=merchant.handle, plan_public_id=plan.public_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field">
       <label>Phone Number *</label>
       <div class="input-wrap">
