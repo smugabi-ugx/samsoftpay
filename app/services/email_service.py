@@ -1,6 +1,11 @@
-"""Email sending — OTPs and notifications."""
+"""Email sending — OTPs and notifications.
+
+If MAIL_HOST is not configured the code falls back to printing the OTP
+to the console (dev/local only). In production MAIL_HOST must be set.
+"""
 import secrets
 import smtplib
+import sys
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -9,7 +14,7 @@ from flask import current_app
 
 
 def generate_otp() -> str:
-    return f"{secrets.randbelow(1_000_000):06d}"   # cryptographically secure
+    return f"{secrets.randbelow(1_000_000):06d}"
 
 
 def otp_expiry() -> datetime:
@@ -17,7 +22,7 @@ def otp_expiry() -> datetime:
 
 
 def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
-    """Send a 6-digit OTP. Console fallback when MAIL_HOST is not set."""
+    """Send a 6-digit OTP. Console fallback ONLY when MAIL_HOST is not set."""
     subjects = {
         "verification": "Verify your Samsoftpay account",
         "login":        "Your Samsoftpay login code",
@@ -40,17 +45,20 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
 """
     plain = f"Your Samsoftpay code: {otp}\n\nExpires in 10 minutes. Do not share it."
 
-    host = current_app.config.get("MAIL_HOST")
+    host = current_app.config.get("MAIL_HOST", "")
     if not host:
-        import sys
-        msg = f"\n{'='*55}\n  [OTP]  To: {to_email}\n  [OTP]  Code: {otp}\n  [OTP]  Purpose: {purpose}\n{'='*55}\n"
-        print(msg, flush=True)
+        # Dev mode — no SMTP configured
+        print(f"\n{'='*55}", flush=True)
+        print(f"  [DEV OTP]  To: {to_email}", flush=True)
+        print(f"  [DEV OTP]  Code: {otp}", flush=True)
+        print(f"  [DEV OTP]  Purpose: {purpose}", flush=True)
+        print(f"{'='*55}\n", flush=True)
         sys.stdout.flush()
         return
 
-    port     = int(current_app.config.get("MAIL_PORT", 587))
-    username = current_app.config.get("MAIL_USERNAME", "")
-    password = current_app.config.get("MAIL_PASSWORD", "")
+    port      = int(current_app.config.get("MAIL_PORT", 587))
+    username  = current_app.config.get("MAIL_USERNAME", "")
+    password  = current_app.config.get("MAIL_PASSWORD", "").replace(" ", "")  # strip spaces
     from_addr = current_app.config.get("MAIL_FROM", username)
 
     msg = MIMEMultipart("alternative")
@@ -60,16 +68,40 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
     msg.attach(MIMEText(plain, "plain"))
     msg.attach(MIMEText(html,  "html"))
 
+    print(f"[SMTP] Connecting to {host}:{port} as {username}...", flush=True)
+    sys.stdout.flush()
+
     try:
         if port == 465:
-            server = smtplib.SMTP_SSL(host, port)
+            server = smtplib.SMTP_SSL(host, port, timeout=15)
         else:
-            server = smtplib.SMTP(host, port)
+            server = smtplib.SMTP(host, port, timeout=15)
             server.ehlo()
             server.starttls()
-        if username:
+            server.ehlo()
+
+        if username and password:
             server.login(username, password)
+
         server.sendmail(from_addr, to_email, msg.as_string())
         server.quit()
+        print(f"[SMTP] Email sent successfully to {to_email}", flush=True)
+        sys.stdout.flush()
+
+    except smtplib.SMTPAuthenticationError as exc:
+        print(f"[SMTP ERROR] Authentication failed: {exc}", flush=True)
+        print(f"[SMTP ERROR] Check MAIL_USERNAME and MAIL_PASSWORD (must be App Password, no spaces)", flush=True)
+        sys.stdout.flush()
+        raise
+    except smtplib.SMTPException as exc:
+        print(f"[SMTP ERROR] SMTP error: {exc}", flush=True)
+        sys.stdout.flush()
+        raise
+    except OSError as exc:
+        print(f"[SMTP ERROR] Connection failed to {host}:{port} — {exc}", flush=True)
+        sys.stdout.flush()
+        raise
     except Exception as exc:
-        print(f"[EMAIL ERROR] Failed to send to {to_email}: {exc} — OTP was: {otp}")
+        print(f"[SMTP ERROR] Unexpected error: {exc}", flush=True)
+        sys.stdout.flush()
+        raise

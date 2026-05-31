@@ -106,19 +106,14 @@ def signup():
     db.session.commit()
 
     if smtp_configured:
-        try:
-            send_otp(email, otp, purpose="verification")
-            login_user(merchant, remember=False)
-            return redirect(url_for("auth.verify_email_page"))
-        except Exception as exc:
-            # SMTP failed — auto-verify so user isn't permanently locked out
-            import sys
-            print(f"[EMAIL FAILED] {exc} — auto-verifying {email}", flush=True)
-            sys.stdout.flush()
-            merchant.email_verified = True
-            merchant.otp_code = None
-            db.session.commit()
+        send_otp(email, otp, purpose="verification")
+        login_user(merchant, remember=False)
+        return redirect(url_for("auth.verify_email_page"))
 
+    # No SMTP configured at all — skip verification (dev/local only)
+    merchant.email_verified = True
+    merchant.otp_code = None
+    db.session.commit()
     login_user(merchant, remember=False)
     return redirect(url_for("auth.account"))
 
@@ -182,9 +177,18 @@ def resend_verification():
     otp = generate_otp()
     m.otp_code = otp
     m.otp_expires_at = otp_expiry()
+    m.otp_attempts = 0
     db.session.commit()
-    send_otp(m.email, otp, purpose="verification")
-    return render_template("verify_email.html", info="A new code has been sent to your email.")
+
+    try:
+        send_otp(m.email, otp, purpose="verification")
+    except Exception as exc:
+        import sys
+        print(f"[SMTP ERROR] resend failed for {m.email}: {exc}", flush=True)
+        sys.stdout.flush()
+
+    return render_template("verify_email.html",
+        info=f"A new code has been sent to {m.email}. Check your inbox and spam folder.")
 
 
 # ---------- login ----------
