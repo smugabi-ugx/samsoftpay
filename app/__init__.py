@@ -3,6 +3,7 @@
 Keeping this thin on purpose. All real logic lives in services/.
 """
 import os
+import sys
 
 # Load .env before anything else reads os.environ.
 try:
@@ -22,7 +23,17 @@ def _fix_db_url(url: str) -> str:
     return url
 
 
+def _assert_production_env() -> None:
+    """Fail fast on Render if DATABASE_URL was not injected (would silently use SQLite)."""
+    if os.environ.get("RENDER") and "sqlite" in os.environ.get("DATABASE_URL", "sqlite://"):
+        sys.exit(
+            "FATAL: DATABASE_URL is missing or still points to SQLite on Render. "
+            "Attach the samsoftpay-db database in the Render dashboard."
+        )
+
+
 def create_app(config: dict | None = None) -> Flask:
+    _assert_production_env()
     app = Flask(__name__, template_folder="templates")
     from datetime import timedelta
     app.config.update(

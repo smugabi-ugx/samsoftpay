@@ -46,7 +46,7 @@ def register(app: Flask) -> None:
                 email_verified=True,
                 two_fa_enabled=False,
                 handle="demo-merchant",
-                webhook_url="http://localhost:5000/inbound/mtn_momo",
+                webhook_url=app.config.get("BASE_URL", "http://localhost:5000") + "/inbound/mtn_momo",
             )
             db.session.add(m)
             db.session.commit()

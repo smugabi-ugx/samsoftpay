@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile -
     preDeployCommand: python -m flask --app run.py db upgrade
     healthCheckPath: /
     envVars:
@@ -21,6 +21,8 @@ services:
         fromDatabase:
           name: samsoftpay-db
           property: connectionString
+      - key: BASE_URL
+        value: https://samsoftpay.onrender.com
       # Add these manually in the Render dashboard after first deploy:
       # MOMO_USE_REAL, MOMO_SUBSCRIPTION_KEY, MOMO_API_USER, MOMO_API_KEY
       # MOMO_DISBURSEMENT_SUBSCRIPTION_KEY, MOMO_DISBURSEMENT_API_USER, MOMO_DISBURSEMENT_API_KEY
