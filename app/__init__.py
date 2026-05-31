@@ -88,6 +88,7 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes.giftcards import bp as giftcards_bp
     from .routes.seo import bp as seo_bp
     from .routes.subscriptions import bp as subs_bp
+    from .routes.bills import bp as bills_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(dash_bp)
@@ -99,6 +100,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(giftcards_bp)
     app.register_blueprint(seo_bp)
     app.register_blueprint(subs_bp)
+    app.register_blueprint(bills_bp)
 
     # CSRF protection for all browser-facing forms
     from flask_wtf.csrf import CSRFProtect

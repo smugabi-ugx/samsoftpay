@@ -327,6 +327,74 @@ class PayoutBatch(db.Model):
 
 
 # ──────────────────────────────────────────────────────────────
+# Bills & Tax
+# ──────────────────────────────────────────────────────────────
+
+class BillCategory(str, Enum):
+    SCHOOL_FEES   = "school_fees"
+    UTILITY       = "utility"
+    GOVERNMENT    = "government"
+    HOSPITAL      = "hospital"
+    MEMBERSHIP    = "membership"
+    RENT          = "rent"
+    OTHER         = "other"
+
+
+class Bill(db.Model):
+    """A payable bill issued by a merchant to a specific customer or open."""
+    __tablename__ = "bills"
+    id = Column(Integer, primary_key=True)
+    public_id   = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+
+    # Bill details
+    category       = Column(SAEnum(BillCategory), nullable=False, default=BillCategory.OTHER)
+    title          = Column(String(255), nullable=False)
+    description    = Column(Text, nullable=True)
+    account_ref    = Column(String(120), nullable=True, index=True)  # student ID, meter no, etc.
+    customer_name  = Column(String(200), nullable=True)
+    customer_phone = Column(String(30), nullable=True)
+
+    # Amount & tax
+    amount          = Column(BigInteger, nullable=False, default=0)  # 0 = customer enters amount
+    is_variable     = Column(Boolean, default=False, nullable=False)
+    currency        = Column(String(3), default="UGX", nullable=False)
+    tax_rate_bps    = Column(Integer, default=0, nullable=False)  # basis points, e.g. 1800 = 18%
+    tax_inclusive   = Column(Boolean, default=False, nullable=False)
+
+    # Status
+    status         = Column(String(20), default="active", nullable=False, index=True)
+    # active | paid | overdue | cancelled
+    due_date       = Column(DateTime, nullable=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("amount >= 0", name="ck_bill_amount_nonneg"),
+    )
+
+
+class TaxConfiguration(db.Model):
+    """Per-merchant tax settings."""
+    __tablename__ = "tax_configurations"
+    id          = Column(Integer, primary_key=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, unique=True)
+    vat_enabled     = Column(Boolean, default=False, nullable=False)
+    vat_rate_bps    = Column(Integer, default=1800, nullable=False)  # 1800 = 18%
+    vat_number      = Column(String(50), nullable=True)   # TIN / VAT reg number
+    tax_inclusive   = Column(Boolean, default=False, nullable=False)
+    # levy: Mobile Money Levy 0.5% shown separately on receipts
+    show_levy       = Column(Boolean, default=True, nullable=False)
+    levy_rate_bps   = Column(Integer, default=50, nullable=False)    # 50 = 0.5%
+    business_name   = Column(String(200), nullable=True)
+    business_address= Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, nullable=False)
+
+
+# ──────────────────────────────────────────────────────────────
 # KYC — Merchant Verification
 # ──────────────────────────────────────────────────────────────
 

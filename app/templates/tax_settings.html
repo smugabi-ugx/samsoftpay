@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Tax Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Tax Configuration</h1>
+  <p class="page-subtitle">Configure VAT and the Uganda Mobile Money Levy for your receipts and bills.</p>
+</div>
+
+<div class="grid-2">
+  <div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title"><i data-feather="percent"></i> Uganda Tax Reference</h3></div>
+      <table style="font-size:.875rem;width:100%;border-collapse:collapse;">
+        <tr style="border-bottom:1px solid var(--gray-100);">
+          <td style="padding:.625rem 0;color:var(--gray-600);">VAT rate</td>
+          <td style="font-weight:600;">18%</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--gray-100);">
+          <td style="padding:.625rem 0;color:var(--gray-600);">VAT threshold</td>
+          <td style="font-weight:600;">UGX 150,000,000 / year</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--gray-100);">
+          <td style="padding:.625rem 0;color:var(--gray-600);">MoMo Levy</td>
+          <td style="font-weight:600;">0.5% per transaction</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--gray-100);">
+          <td style="padding:.625rem 0;color:var(--gray-600);">Withholding Tax</td>
+          <td style="font-weight:600;">6% (large taxpayers)</td>
+        </tr>
+        <tr>
+          <td style="padding:.625rem 0;color:var(--gray-600);">Samsoftpay fee</td>
+          <td style="font-weight:600;">1.5% (min UGX 200)</td>
+        </tr>
+      </table>
+      <div class="alert alert-info" style="margin-top:1.25rem;margin-bottom:0;">
+        <i data-feather="info" class="alert-icon"></i>
+        <div>Not sure if you need to charge VAT? Check with URA at <strong>ura.go.ug</strong> or consult a registered tax agent.</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-header"><h3 class="card-title"><i data-feather="settings"></i> Your Tax Settings</h3></div>
+      <form method="POST" action="{{ url_for('bills.save_tax_settings') }}">
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:.625rem;cursor:pointer;margin-bottom:.75rem;">
+            <input type="checkbox" name="vat_enabled" {% if cfg and cfg.vat_enabled %}checked{% endif %} style="width:16px;height:16px;">
+            <span style="font-weight:600;">I am VAT-registered — charge VAT on bills</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">VAT / TIN Number</label>
+          <input class="form-input" type="text" name="vat_number" value="{{ cfg.vat_number if cfg else '' }}" placeholder="1000123456">
+          <div class="form-hint">Printed on all tax invoices and receipts</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">VAT Rate (%)</label>
+          <input class="form-input" type="number" name="vat_rate" value="{{ (cfg.vat_rate_bps // 100) if cfg else 18 }}" min="0" max="100" step="0.5">
+        </div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:.625rem;cursor:pointer;">
+            <input type="checkbox" name="tax_inclusive" {% if cfg and cfg.tax_inclusive %}checked{% endif %} style="width:16px;height:16px;">
+            <span>Tax inclusive — VAT is already included in the bill amount</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:.625rem;cursor:pointer;">
+            <input type="checkbox" name="show_levy" {% if not cfg or cfg.show_levy %}checked{% endif %} style="width:16px;height:16px;">
+            <span>Show 0.5% Mobile Money Levy on receipts</span>
+          </label>
+        </div>
+
+        <hr style="margin:1.25rem 0;border:none;border-top:1px solid var(--gray-200);">
+
+        <div class="form-group">
+          <label class="form-label">Business Name (for receipts)</label>
+          <input class="form-input" type="text" name="business_name" value="{{ cfg.business_name if cfg else current_user.name }}" placeholder="{{ current_user.name }}">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Business Address (for receipts)</label>
+          <textarea class="form-textarea" name="business_address" style="min-height:70px;">{{ cfg.business_address if cfg else '' }}</textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary"><i data-feather="save"></i> Save Tax Settings</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<a href="{{ url_for('bills.list_bills') }}" class="btn btn-outline" style="margin-bottom:2rem;"><i data-feather="arrow-left"></i> Back to Bills</a>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

@@ -965,6 +965,14 @@
             <i data-feather="rotate-cw"></i>
             <span>Subscriptions</span>
           </a>
+          <a href="{{ url_for('bills.list_bills') }}" class="nav-link {% if 'bills.' in request.endpoint and 'tax' not in request.endpoint %}active{% endif %}">
+            <i data-feather="file-text"></i>
+            <span>Bill Collection</span>
+          </a>
+          <a href="{{ url_for('bills.tax_settings') }}" class="nav-link {% if 'tax' in request.endpoint %}active{% endif %}">
+            <i data-feather="percent"></i>
+            <span>Tax Settings</span>
+          </a>
         </div>
         {% endif %}
 

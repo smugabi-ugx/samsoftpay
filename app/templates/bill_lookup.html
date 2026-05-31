@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pay Bills — {{ merchant.name }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--primary:#6366f1;--success:#10b981;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased;}
+
+    .topbar{background:white;border-bottom:1px solid var(--line);padding:.875rem 1rem;display:flex;align-items:center;gap:.75rem;}
+    .back-btn{width:36px;height:36px;border-radius:8px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink);}
+    .topbar-title{font-size:.9375rem;font-weight:600;flex:1;}
+
+    .hero{background:linear-gradient(135deg,#1a0533,#2d1060);padding:2rem 1.25rem;color:white;text-align:center;}
+    .avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;margin:0 auto 1rem;border:2px solid rgba(255,255,255,.2);}
+    .hero h1{font-size:1.5rem;font-weight:700;margin-bottom:.375rem;}
+    .hero p{font-size:.9rem;opacity:.65;}
+
+    .body{max-width:480px;margin:0 auto;padding:1.5rem 1rem 3rem;width:100%;}
+    .search-form{background:white;border:1px solid var(--line);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;}
+    .search-form h3{font-size:.875rem;font-weight:700;color:var(--ink);margin-bottom:.875rem;}
+    .search-row{display:flex;gap:.5rem;}
+    .search-input{flex:1;border:2px solid var(--line);border-radius:8px;padding:0 1rem;height:48px;font-size:.9375rem;font-family:inherit;outline:none;transition:border-color .2s;}
+    .search-input:focus{border-color:var(--primary);}
+    .search-btn{height:48px;padding:0 1.25rem;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;}
+
+    .bill-card{background:white;border:1px solid var(--line);border-radius:12px;padding:1.25rem;margin-bottom:.75rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;text-decoration:none;color:inherit;transition:all .15s;}
+    .bill-card:hover{border-color:var(--primary);box-shadow:0 4px 16px rgba(99,102,241,.1);}
+    .bill-card-info{}
+    .bill-cat{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.25rem;}
+    .bill-name{font-size:1rem;font-weight:600;color:var(--ink);}
+    .bill-ref{font-size:.8125rem;color:var(--muted);margin-top:.125rem;}
+    .bill-amount{text-align:right;flex-shrink:0;}
+    .bill-amt{font-size:1.125rem;font-weight:700;color:var(--ink);}
+    .bill-due{font-size:.75rem;color:var(--muted);}
+    .bill-arrow{color:var(--muted);}
+
+    .empty{text-align:center;padding:2.5rem;color:var(--muted);}
+    .powered{text-align:center;font-size:.8125rem;color:var(--muted);margin-top:2rem;display:flex;align-items:center;justify-content:center;gap:.375rem;}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back-btn" href="{{ url_for('checkout.merchant_profile', handle=merchant.handle) if merchant.handle else '/' }}">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </a>
+  <span class="topbar-title">Pay Bills — {{ merchant.name }}</span>
+</div>
+
+<div class="hero">
+  <div class="avatar">{{ merchant.name[0].upper() }}</div>
+  <h1>{{ merchant.name }}</h1>
+  <p>Enter your account reference to find your bill</p>
+</div>
+
+<div class="body">
+  <div class="search-form">
+    <h3>Look up your bill</h3>
+    <form method="GET" action="{{ url_for('bills.bill_lookup', handle=merchant.handle) }}">
+      <div class="search-row">
+        <input class="search-input" type="text" name="ref"
+               value="{{ account_ref }}"
+               placeholder="Student ID / Meter No / Account No"
+               autocomplete="off" autofocus>
+        <button type="submit" class="search-btn">Search</button>
+      </div>
+    </form>
+  </div>
+
+  {% if account_ref %}
+    {% if bills %}
+    <p style="font-size:.875rem;color:var(--muted);margin-bottom:1rem;">{{ bills|length }} bill(s) found for <strong>{{ account_ref }}</strong></p>
+    {% for b in bills %}
+    <a class="bill-card" href="{{ url_for('bills.pay_bill_page', handle=merchant.handle, bill_public_id=b.public_id) }}">
+      <div class="bill-card-info">
+        <div class="bill-cat">{{ b.category.value.replace('_',' ').upper() }}</div>
+        <div class="bill-name">{{ b.title }}</div>
+        {% if b.customer_name %}<div class="bill-ref">{{ b.customer_name }}</div>{% endif %}
+      </div>
+      <div class="bill-amount">
+        {% if b.is_variable %}
+        <div class="bill-amt" style="font-size:.9rem;color:var(--muted);">Variable</div>
+        {% else %}
+        <div class="bill-amt">UGX {{ "{:,}".format(b.amount) }}</div>
+        {% endif %}
+        {% if b.due_date %}<div class="bill-due">Due {{ b.due_date.strftime('%d %b') }}</div>{% endif %}
+      </div>
+      <svg class="bill-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+    {% endfor %}
+    {% else %}
+    <div class="empty">
+      <p style="font-size:1.5rem;margin-bottom:.5rem;">🔍</p>
+      <p>No active bills found for <strong>{{ account_ref }}</strong></p>
+      <p style="margin-top:.5rem;font-size:.875rem;">Double-check your account reference or contact {{ merchant.name }}.</p>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <div class="powered">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    Secured by Samsoftpay
+  </div>
+</div>
+
+</body>
+</html>

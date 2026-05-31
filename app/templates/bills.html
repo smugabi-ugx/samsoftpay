@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Bill Collection{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">Bill Collection</h1>
+    <p class="page-subtitle">Issue and track bills — school fees, utilities, government levies, memberships.</p>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('bills.tax_settings') }}" class="btn btn-outline" style="font-size:.875rem;padding:.5rem 1rem;">
+      <i data-feather="percent"></i> Tax Settings
+    </a>
+  </div>
+</div>
+
+<!-- Tax warning if not configured -->
+{% if not tax_cfg or not tax_cfg.vat_number %}
+<div class="alert alert-warning" style="margin-bottom:2rem;">
+  <i data-feather="alert-triangle" class="alert-icon"></i>
+  <div>
+    <strong>Tax not configured.</strong> If your annual turnover exceeds UGX 150,000,000, you must charge 18% VAT.
+    <a href="{{ url_for('bills.tax_settings') }}" style="color:inherit;font-weight:700;">Configure tax settings →</a>
+  </div>
+</div>
+{% elif tax_cfg.vat_enabled %}
+<div class="alert alert-success" style="margin-bottom:2rem;">
+  <i data-feather="check-circle" class="alert-icon"></i>
+  <div>VAT enabled at {{ tax_cfg.vat_rate_bps // 100 }}% · VAT/TIN: <strong>{{ tax_cfg.vat_number }}</strong></div>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header"><span class="stat-label">Active Bills</span><div class="stat-icon primary"><i data-feather="file-text"></i></div></div>
+    <div class="stat-value">{{ stats.active }}</div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-header"><span class="stat-label">Paid</span><div class="stat-icon success"><i data-feather="check-circle"></i></div></div>
+    <div class="stat-value">{{ stats.paid }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-header"><span class="stat-label">Overdue</span><div class="stat-icon warning" style="background:rgba(245,158,11,.1);color:var(--warning);"><i data-feather="alert-circle"></i></div></div>
+    <div class="stat-value" style="color:var(--warning);">{{ stats.overdue }}</div>
+  </div>
+</div>
+
+<!-- Create bill -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="plus-circle"></i> Create Bill</h3></div>
+  <form method="POST" action="{{ url_for('bills.new_bill') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Bill Title *</label>
+        <input class="form-input" type="text" name="title" required placeholder="Term 2 School Fees 2025">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category *</label>
+        <select class="form-select" name="category" required>
+          {% for val, label in categories %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Reference <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+        <input class="form-input" type="text" name="account_ref" placeholder="Student ID / Meter No / Customer No">
+        <div class="form-hint">Customers use this to look up their bill at /pay/@{{ current_user.handle }}/bills</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Customer Name <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+        <input class="form-input" type="text" name="customer_name" placeholder="John Mukasa">
+      </div>
+      <div class="form-group" id="amount-group">
+        <label class="form-label">Amount (UGX)</label>
+        <input class="form-input" type="number" name="amount" min="0" placeholder="Leave 0 for variable amount">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Due Date <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+        <input class="form-input" type="date" name="due_date">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+      <input class="form-input" type="text" name="description" placeholder="Additional details shown to the customer">
+    </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:.625rem;cursor:pointer;">
+        <input type="checkbox" name="is_variable" id="is_variable" style="width:16px;height:16px;">
+        <span>Variable amount — customer enters how much to pay</span>
+      </label>
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-feather="plus"></i> Create Bill</button>
+  </form>
+</div>
+
+<!-- Bill list -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="list"></i> All Bills ({{ bills|length }})</h3>
+  </div>
+  {% if bills %}
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Bill</th><th>Ref</th><th>Amount</th><th>Tax</th><th>Due</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for b in bills %}
+        <tr>
+          <td>
+            <strong>{{ b.title }}</strong>
+            <br><small class="text-muted">{{ b.category.value.replace('_',' ').title() }}</small>
+          </td>
+          <td><code>{{ b.account_ref or '—' }}</code></td>
+          <td>
+            {% if b.is_variable %}
+            <span class="badge pending">Variable</span>
+            {% else %}
+            UGX {{ "{:,}".format(b.amount) }}
+            {% endif %}
+          </td>
+          <td>
+            {% if b.tax_rate_bps > 0 %}
+            <span class="badge succeeded">{{ b.tax_rate_bps // 100 }}% VAT</span>
+            {% else %}<span style="color:var(--gray-400);">None</span>{% endif %}
+          </td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ b.due_date.strftime('%d %b %Y') if b.due_date else '—' }}</td>
+          <td>
+            <span class="badge {% if b.status == 'paid' %}succeeded{% elif b.status == 'overdue' %}failed{% elif b.status == 'cancelled' %}failed{% else %}pending{% endif %}">
+              {{ b.status.title() }}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex;gap:.375rem;">
+              {% if current_user.handle and b.status == 'active' %}
+              <a href="{{ url_for('bills.pay_bill_page', handle=current_user.handle, bill_public_id=b.public_id) }}"
+                 target="_blank" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.75rem;" title="Share bill">
+                <i data-feather="external-link" style="width:13px;height:13px;"></i>
+              </a>
+              {% endif %}
+              {% if b.status == 'active' %}
+              <form method="POST" action="{{ url_for('bills.cancel_bill', bill_id=b.id) }}"
+                    onsubmit="return confirm('Cancel this bill?')">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.75rem;color:var(--danger);border-color:var(--danger);">
+                  <i data-feather="x" style="width:13px;height:13px;"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:var(--gray-500);">
+    <i data-feather="file-text" style="width:40px;height:40px;margin-bottom:1rem;"></i>
+    <p>No bills yet. Create your first bill above.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+  document.getElementById('is_variable').addEventListener('change', function() {
+    document.getElementById('amount-group').style.opacity = this.checked ? '0.4' : '1';
+  });
+</script>
+{% endblock %}
