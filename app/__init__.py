@@ -54,9 +54,10 @@ def create_app(config: dict | None = None) -> Flask:
 
     db.init_app(app)
 
-    from .extensions import limiter, login_manager
+    from .extensions import limiter, login_manager, migrate
     limiter.init_app(app)
     login_manager.init_app(app)
+    migrate.init_app(app, db)
 
     from .models import Merchant
 

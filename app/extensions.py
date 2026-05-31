@@ -2,8 +2,10 @@ from flask import request
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_login import LoginManager
+from flask_migrate import Migrate
 
 db = SQLAlchemy()
+migrate = Migrate()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login_page"
 login_manager.login_message = "Please log in to access that page."
