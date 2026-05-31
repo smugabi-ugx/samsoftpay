@@ -162,6 +162,19 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label" for="handle">Your @handle <span style="color:#94a3b8;font-weight:400;">(optional)</span></label>
+          <div style="display:flex;align-items:center;border:2px solid #e2e8f0;border-radius:8px;overflow:hidden;transition:border-color .2s;" id="handle-wrap">
+            <span style="padding:0 0.875rem;background:#f8fafc;border-right:1px solid #e2e8f0;font-size:0.875rem;font-weight:600;color:#64748b;height:46px;display:flex;align-items:center;">pay/@</span>
+            <input style="flex:1;border:none;outline:none;padding:0 0.875rem;height:46px;font-size:0.9375rem;font-family:inherit;color:#0f172a;background:transparent;"
+                   type="text" id="handle" name="handle"
+                   value="{{ form.handle if form else '' }}"
+                   placeholder="your-business" pattern="[a-z0-9\-]{3,30}"
+                   oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9\-]/g,'')">
+          </div>
+          <div class="form-hint">Appears in your payment page URL. Letters, numbers, hyphens only. Auto-generated if left blank.</div>
+        </div>
+
+        <div class="form-group">
           <label class="form-label" for="webhook_url">Webhook URL <span style="color:#94a3b8;font-weight:400;">(optional)</span></label>
           <input class="form-input" type="url" id="webhook_url" name="webhook_url"
             value="{{ form.webhook_url if form else '' }}"

@@ -21,6 +21,50 @@ from ..services.orchestrator import OrchestratorError, create_charge
 bp = Blueprint("checkout", __name__)
 
 
+@bp.get("/pay/@<handle>")
+def merchant_profile(handle: str):
+    """Public merchant profile — goes in TikTok bio, Instagram link, etc."""
+    merchant = Merchant.query.filter_by(handle=handle).one_or_none()
+    if merchant is None:
+        abort(404)
+    links = (
+        PaymentLink.query
+        .filter_by(merchant_id=merchant.id, is_active=True)
+        .order_by(PaymentLink.created_at.desc())
+        .limit(12)
+        .all()
+    )
+    return render_template("merchant_profile.html", merchant=merchant, links=links)
+
+
+@bp.get("/pay/@<handle>/pay")
+def profile_pay(handle: str):
+    """Create a one-shot payment link from the profile page custom-amount form."""
+    import uuid as _uuid
+    merchant = Merchant.query.filter_by(handle=handle).one_or_none()
+    if merchant is None:
+        abort(404)
+    try:
+        amount = int(request.args.get("amount", 0))
+    except ValueError:
+        amount = 0
+    if amount < 500:
+        return redirect(url_for("checkout.merchant_profile", handle=handle))
+
+    link = PaymentLink(
+        public_id=f"lnk_{_uuid.uuid4().hex[:16]}",
+        merchant_id=merchant.id,
+        amount=amount,
+        currency="UGX",
+        description=f"Payment to {merchant.name}",
+        allow_multiple_uses=False,
+        is_active=True,
+    )
+    db.session.add(link)
+    db.session.commit()
+    return redirect(url_for("checkout.checkout_page", public_id=link.public_id))
+
+
 @bp.get("/pay/<public_id>")
 def checkout_page(public_id: str):
     """The customer-facing payment page."""

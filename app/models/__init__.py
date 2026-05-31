@@ -91,6 +91,7 @@ class Merchant(UserMixin, db.Model):
     secret_key = Column(String(80), nullable=False, unique=True, index=True)
     test_public_key = Column(String(80), nullable=True, unique=True, index=True)
     test_secret_key = Column(String(80), nullable=True, unique=True, index=True)
+    handle = Column(String(40), nullable=True, unique=True, index=True)  # @handle for /pay/@handle
     webhook_url = Column(String(500), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
     is_active = Column(Boolean, default=True, nullable=False)

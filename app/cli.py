@@ -21,11 +21,17 @@ def register(app: Flask) -> None:
             existing = Merchant.query.filter_by(email="demo@samsoftpay.local").first()
             if existing:
                 # Backfill test keys if missing (for merchants seeded before sandbox feature)
+                changed = False
                 if not existing.test_secret_key:
                     existing.test_public_key = "pk_test_demo123"
                     existing.test_secret_key = "sk_test_demo123"
+                    changed = True
+                if not existing.handle:
+                    existing.handle = "demo-merchant"
+                    changed = True
+                if changed:
                     db.session.commit()
-                    print(f"backfilled test keys for id={existing.id}")
+                    print(f"backfilled missing fields for id={existing.id}")
                 else:
                     print(f"already exists: id={existing.id} secret={existing.secret_key}")
                 return
@@ -39,6 +45,7 @@ def register(app: Flask) -> None:
                 kyc_status="verified",
                 email_verified=True,
                 two_fa_enabled=False,
+                handle="demo-merchant",
                 webhook_url="http://localhost:5000/inbound/mtn_momo",
             )
             db.session.add(m)

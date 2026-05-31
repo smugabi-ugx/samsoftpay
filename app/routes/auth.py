@@ -1,4 +1,5 @@
 """Merchant auth: signup, login, logout, email verification, 2FA."""
+import re
 import secrets
 
 from flask import (
@@ -18,6 +19,17 @@ from ..utils import verified_required
 bp = Blueprint("auth", __name__)
 
 _PENDING_2FA_KEY = "_pending_2fa_id"
+
+
+def _make_handle(name: str) -> str:
+    """Turn 'Acme Traders Ltd' into a unique 'acme-traders' handle."""
+    base = re.sub(r"[^\w\s]", "", name.lower())
+    base = re.sub(r"\s+", "-", base.strip())[:30].rstrip("-") or "merchant"
+    handle, i = base, 1
+    while Merchant.query.filter_by(handle=handle).first():
+        handle = f"{base}-{i}"
+        i += 1
+    return handle
 
 
 # ---------- signup ----------
@@ -49,6 +61,9 @@ def signup():
     if error:
         return render_template("signup.html", error=error, form=request.form)
 
+    raw_handle = request.form.get("handle", "").strip().lower()
+    raw_handle = re.sub(r"[^\w-]", "", raw_handle)[:30]
+
     otp = generate_otp()
     merchant = Merchant(
         name=name,
@@ -60,6 +75,7 @@ def signup():
         test_secret_key="sk_test_" + secrets.token_urlsafe(28),
         kyc_status="verified",
         webhook_url=webhook_url,
+        handle=raw_handle if raw_handle else _make_handle(name),
         email_verified=False,
         otp_code=otp,
         otp_expires_at=otp_expiry(),
