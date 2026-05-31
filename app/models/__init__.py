@@ -253,7 +253,7 @@ class PaymentLink(db.Model):
 
     success_url / cancel_url: after payment completes, the customer is offered
     a "Return to <merchant>" button that navigates them back to the merchant's
-    site. This is how Stripe/Flutterwave/Pesapal close the loop.
+    site. This is how Stripe/Flutterwave/Samsoftpay close the loop.
     """
     __tablename__ = "payment_links"
     id = Column(Integer, primary_key=True)

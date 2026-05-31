@@ -20,7 +20,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-do-not-use-in-prod"),
         SQLALCHEMY_DATABASE_URI=os.environ.get(
-            "DATABASE_URL", "sqlite:///pesademo.db"
+            "DATABASE_URL", "sqlite:///samsoftpay.db"
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         WEBHOOK_SIGNING_SECRET=os.environ.get(

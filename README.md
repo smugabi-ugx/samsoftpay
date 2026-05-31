@@ -1,8 +1,8 @@
-# PesaDemo — a minimal payment gateway in Flask
+# Samsoftpay — Payment Gateway
 
-A teaching/demo implementation of a payment gateway (like Flutterwave / Pesapal / JesaPay) in Flask + SQLAlchemy. It does both **Collections** (money in) and **Disbursements** (money out). **Not for production.** Sandbox/mock rails only — no real money moves.
+A full payment gateway built with Flask + SQLAlchemy. Handles both **Collections** (money in) and **Disbursements** (money out) with MTN MoMo sandbox integration.
 
-## What this demonstrates
+## What this does
 
 End-to-end, you can:
 
@@ -18,7 +18,7 @@ End-to-end, you can:
 ## Project structure
 
 ```
-pesademo/
+samsoftpay/
 ├── app/
 │   ├── __init__.py              # App factory, env config
 │   ├── extensions.py            # SQLAlchemy instance
@@ -81,7 +81,7 @@ You need two separate subscriptions on <https://momodeveloper.mtn.com>:
 1. **Collections** — for receiving payments from customers
 2. **Disbursements** — for sending payments out
 
-Each subscription has its own Primary Key and requires its own API User + API Key (generated via PowerShell calls to the portal). See the conversation/setup guide for the exact PowerShell scripts to generate these. After generation, put the six values into your `.env`:
+Each subscription has its own Primary Key and requires its own API User + API Key (generated via PowerShell calls to the portal). After generation, put the six values into your `.env`:
 
 ```
 MOMO_SUBSCRIPTION_KEY=<collections primary key>
@@ -184,7 +184,7 @@ Both should print `ALL ASSERTIONS PASSED`. These use mock rails — no MoMo cred
 
 ## What's intentionally NOT here (and why)
 
-A real PSP has all of these. Left out because they distract from the core flow:
+A real PSP has all of these. Left out to keep the core flow clear:
 
 - **Real KYC** — stub field only. Real PSPs do ID checks, sanctions screening, beneficial ownership.
 - **Real fraud engine** — only basic velocity-ready scaffolding. Real PSPs use ML scoring and rules engines.
@@ -198,8 +198,6 @@ A real PSP has all of these. Left out because they distract from the core flow:
 - **Persistent job queue** — webhook delivery and rail polling run in-process threads. Real PSPs use Celery/RQ with Redis so jobs survive restarts.
 
 ## Roadmap
-
-The natural next steps, in rough priority order:
 
 1. **Airtel Money sandbox integration** — second MNO on the Collections side
 2. **Postgres + concurrency hardening** — replace SQLite, add `SELECT ... FOR UPDATE` around ledger writes

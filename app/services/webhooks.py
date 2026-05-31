@@ -1,7 +1,7 @@
 """Webhook signing + delivery with retry/backoff.
 
 Real PSPs typically:
-- Sign with HMAC-SHA256, send the signature in a header like X-PesaDemo-Signature.
+- Sign with HMAC-SHA256, send the signature in a header like X-Samsoftpay-Signature.
 - Include a timestamp in the signed payload to prevent replay.
 - Retry with exponential backoff up to ~48 hours.
 - Expect a 2xx response within ~5 seconds.
@@ -50,7 +50,7 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
                 data=wh.payload,
                 headers={
                     "Content-Type": "application/json",
-                    "X-PesaDemo-Signature": wh.signature,
+                    "X-Samsoftpay-Signature": wh.signature,
                 },
                 timeout=5,
             )

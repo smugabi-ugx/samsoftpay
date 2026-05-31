@@ -18,13 +18,13 @@ def register(app: Flask) -> None:
     def seed_demo():
         """Create a demo merchant with predictable keys."""
         with app.app_context():
-            existing = Merchant.query.filter_by(email="demo@pesademo.local").first()
+            existing = Merchant.query.filter_by(email="demo@samsoftpay.local").first()
             if existing:
                 print(f"already exists: id={existing.id} secret={existing.secret_key}")
                 return
             m = Merchant(
                 name="Demo Merchant Ltd",
-                email="demo@pesademo.local",
+                email="demo@samsoftpay.local",
                 public_key="pk_test_demo123",
                 secret_key="sk_test_demo123",
                 kyc_status="verified",
