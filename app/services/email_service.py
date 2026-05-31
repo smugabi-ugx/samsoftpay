@@ -42,11 +42,10 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
 
     host = current_app.config.get("MAIL_HOST")
     if not host:
-        print(f"\n{'='*55}")
-        print(f"  [DEV EMAIL]  To: {to_email}")
-        print(f"  [DEV EMAIL]  Subject: {subject}")
-        print(f"  [DEV EMAIL]  OTP: {otp}")
-        print(f"{'='*55}\n")
+        import sys
+        msg = f"\n{'='*55}\n  [OTP]  To: {to_email}\n  [OTP]  Code: {otp}\n  [OTP]  Purpose: {purpose}\n{'='*55}\n"
+        print(msg, flush=True)
+        sys.stdout.flush()
         return
 
     port     = int(current_app.config.get("MAIL_PORT", 587))
