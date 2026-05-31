@@ -365,7 +365,7 @@ def topup_status_json(topup_public_id: str):
         if link and link.transaction_id:
             txn = db.session.get(Transaction, link.transaction_id)
             if txn and txn.status == TxnStatus.SUCCEEDED:
-                _credit_wallet(topup.merchant_id, topup.amount, topup.public_id)
+                _settle_topup(topup.merchant_id, txn, topup.public_id)
                 topup.status         = "completed"
                 topup.transaction_id = txn.id
                 topup.processed_at   = datetime.now(timezone.utc)
@@ -378,8 +378,47 @@ def topup_status_json(topup_public_id: str):
     return jsonify(status=topup.status, amount=topup.amount, currency=topup.currency)
 
 
+def _settle_topup(merchant_id: int, txn, ref: str) -> None:
+    """Settle a completed top-up transaction correctly.
+
+    The normal charge flow already credited merchant_pending with (amount - fee).
+    We need to:
+      1. Move that net amount from pending → available
+      2. Refund the fee from psp_revenue → available
+    Net result: full gross amount lands in available. No double-count.
+    Merchant pays ZERO fee on their own top-up.
+    """
+    from ..services import ledger
+
+    net_amount = txn.amount - txn.fee_amount   # e.g. 1000 - 200 = 800
+    fee        = txn.fee_amount                # e.g. 200
+    currency   = txn.currency
+
+    pending  = ledger.get_or_create_account(
+        type=AccountType.MERCHANT_PENDING,  merchant_id=merchant_id, currency=currency)
+    avail    = ledger.get_or_create_account(
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency)
+    revenue  = ledger.get_or_create_account(
+        type=AccountType.PSP_REVENUE, merchant_id=None, currency=currency)
+
+    # Step 1 — move net from pending to available
+    ledger.post(
+        [(pending, +net_amount), (avail, -net_amount)],
+        currency=currency,
+        memo=f"top-up settle {ref}",
+    )
+
+    # Step 2 — refund the fee (merchant funded their own account, no fee applies)
+    if fee > 0:
+        ledger.post(
+            [(revenue, +fee), (avail, -fee)],
+            currency=currency,
+            memo=f"top-up fee refund {ref}",
+        )
+
+
 def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:
-    """Credit merchant_available directly — used for confirmed top-ups."""
+    """Used ONLY for bank/admin top-up approvals where no prior charge was made."""
     from ..services import ledger
     avail = ledger.get_or_create_account(
         type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency="UGX"
@@ -388,7 +427,7 @@ def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:
         type=AccountType.PSP_FLOAT, merchant_id=None, currency="UGX"
     )
     ledger.post([(psp_float, +amount), (avail, -amount)],
-                currency="UGX", memo=f"Wallet top-up {ref}")
+                currency="UGX", memo=f"bank/admin top-up {ref}")
 
 
 @bp.post("/dashboard/wallet/topup/bank")

@@ -41,29 +41,48 @@
 <div class="stats-grid" style="margin-bottom:2rem;">
   <div class="stat-card success">
     <div class="stat-header">
-      <span class="stat-label">Available Balance</span>
+      <span class="stat-label">Available to Withdraw</span>
       <div class="stat-icon success"><i data-feather="dollar-sign"></i></div>
     </div>
     <div class="stat-value">UGX {{ "{:,}".format(available) }}</div>
-    <div class="stat-change positive"><i data-feather="check-circle"></i> <span>Ready to withdraw</span></div>
+    <div class="stat-change positive">
+      <i data-feather="check-circle"></i>
+      <span>You can withdraw this now</span>
+    </div>
   </div>
   <div class="stat-card">
     <div class="stat-header">
-      <span class="stat-label">Pending Balance</span>
+      <span class="stat-label">Customer Payments Processing</span>
       <div class="stat-icon warning"><i data-feather="clock"></i></div>
     </div>
     <div class="stat-value" style="font-size:1.5rem;">UGX {{ "{:,}".format(pending) }}</div>
-    <div class="stat-change"><i data-feather="arrow-right"></i> <span>Awaiting settlement</span></div>
+    <div class="stat-change">
+      <i data-feather="info"></i>
+      <span>Customer payments confirming on the rail — moves to Available automatically</span>
+    </div>
   </div>
   <div class="stat-card">
     <div class="stat-header">
-      <span class="stat-label">Withdrawal Fee</span>
-      <div class="stat-icon info"><i data-feather="percent"></i></div>
+      <span class="stat-label">Total Balance</span>
+      <div class="stat-icon info"><i data-feather="layers"></i></div>
     </div>
-    <div class="stat-value" style="font-size:1.5rem;">UGX {{ "{:,}".format(withdrawal_fee) }}</div>
-    <div class="stat-change"><i data-feather="info"></i> <span>Flat per withdrawal</span></div>
+    <div class="stat-value" style="font-size:1.5rem;">UGX {{ "{:,}".format(available + pending) }}</div>
+    <div class="stat-change">
+      <i data-feather="trending-up"></i>
+      <span>Available + processing</span>
+    </div>
   </div>
 </div>
+
+{% if pending > 0 %}
+<div class="alert alert-info" style="margin-bottom:1.5rem;">
+  <i data-feather="info" class="alert-icon"></i>
+  <div>
+    <strong>UGX {{ "{:,}".format(pending) }} is from customer payments still confirming.</strong>
+    This is NOT money you deposited — it is payments your customers made to you that are waiting for final rail confirmation. Click <strong>Settle Now</strong> to move them to Available.
+  </div>
+</div>
+{% endif %}
 
 <!-- Settle pending -->
 {% if pending > 0 %}
