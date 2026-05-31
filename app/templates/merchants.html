@@ -1,65 +1,98 @@
 {% extends "base.html" %}
-
 {% block title %}All Merchants{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('dashboard.admin_home') }}">Admin</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-cur">Merchants</span>
+</nav>
+{% endblock %}
+
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">Merchants</h1>
-  <p class="page-subtitle">Manage all registered merchant accounts and their details</p>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">Merchant Accounts</h1>
+    <p class="page-subtitle">Create, edit, and manage all registered merchant accounts.</p>
+  </div>
+  <button class="btn btn-primary" onclick="document.getElementById('create-form').style.display='block';this.style.display='none';">
+    <i data-feather="user-plus"></i> Add Merchant
+  </button>
 </div>
 
-<!-- Stats -->
+<!-- CREATE FORM (hidden by default) -->
+<div id="create-form" style="display:none;" class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="user-plus"></i> Create New Merchant</h3>
+    <button class="btn btn-outline" style="font-size:.8125rem;padding:.375rem .75rem;"
+            onclick="this.closest('#create-form').style.display='none'">Cancel</button>
+  </div>
+  <form method="POST" action="{{ url_for('dashboard.admin_create_merchant') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Business Name *</label>
+        <input class="form-input" type="text" name="name" required placeholder="Acme Traders Ltd">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email *</label>
+        <input class="form-input" type="email" name="email" required placeholder="owner@business.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Temporary Password *</label>
+        <input class="form-input" type="password" name="password" required minlength="8" placeholder="Min 8 characters">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select class="form-select" name="role">
+          <option value="merchant">Merchant</option>
+          <option value="admin">Admin</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">KYC Status</label>
+        <select class="form-select" name="kyc_status">
+          <option value="pending">Pending</option>
+          <option value="verified">Verified</option>
+        </select>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-feather="check"></i> Create Account</button>
+  </form>
+</div>
+
+<!-- STATS -->
 <div class="stats-grid">
   <div class="stat-card">
-    <div class="stat-header">
-      <span class="stat-label">Total Merchants</span>
-      <div class="stat-icon primary">
-        <i data-feather="briefcase"></i>
-      </div>
-    </div>
+    <div class="stat-header"><span class="stat-label">Total</span><div class="stat-icon primary"><i data-feather="users"></i></div></div>
     <div class="stat-value">{{ merchants|length }}</div>
-    <div class="stat-change positive">
-      <i data-feather="trending-up"></i>
-      <span>All registered</span>
-    </div>
+    <div class="stat-change positive"><i data-feather="trending-up"></i><span>All time</span></div>
   </div>
-
   <div class="stat-card success">
-    <div class="stat-header">
-      <span class="stat-label">Active Accounts</span>
-      <div class="stat-icon success">
-        <i data-feather="check-circle"></i>
-      </div>
-    </div>
+    <div class="stat-header"><span class="stat-label">Active</span><div class="stat-icon success"><i data-feather="check-circle"></i></div></div>
     <div class="stat-value">{{ merchants|selectattr('is_active')|list|length }}</div>
-    <div class="stat-change">
-      <i data-feather="activity"></i>
-      <span>Operational</span>
-    </div>
+    <div class="stat-change"><i data-feather="activity"></i><span>Operational</span></div>
   </div>
-
   <div class="stat-card info">
-    <div class="stat-header">
-      <span class="stat-label">KYC Verified</span>
-      <div class="stat-icon info">
-        <i data-feather="shield"></i>
-      </div>
-    </div>
-    <div class="stat-value">{{ merchants|selectattr('kyc_status', 'equalto', 'verified')|list|length }}</div>
-    <div class="stat-change">
-      <i data-feather="check"></i>
-      <span>Verified</span>
-    </div>
+    <div class="stat-header"><span class="stat-label">KYC Verified</span><div class="stat-icon info"><i data-feather="shield"></i></div></div>
+    <div class="stat-value">{{ merchants|selectattr('kyc_status','equalto','verified')|list|length }}</div>
+    <div class="stat-change"><i data-feather="check"></i><span>Verified</span></div>
   </div>
 </div>
 
-<!-- Merchants Table -->
+<!-- MERCHANT TABLE -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title">
-      <i data-feather="users"></i>
-      All Merchant Accounts
-    </h3>
+    <h3 class="card-title"><i data-feather="users"></i> All Accounts ({{ merchants|length }})</h3>
   </div>
 
   {% if merchants %}
@@ -69,56 +102,80 @@
         <tr>
           <th>Merchant</th>
           <th>Email</th>
-          <th>KYC Status</th>
+          <th>Role</th>
+          <th>KYC</th>
           <th>Status</th>
-          <th>Action</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for m in merchants %}
         <tr>
           <td>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-              <div style="width: 48px; height: 48px; background: var(--gradient-primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 1.125rem;">
+            <div style="display:flex;align-items:center;gap:.75rem;">
+              {% if m.logo_filename %}
+              <img src="{{ url_for('auth.serve_logo', merchant_id=m.id) }}"
+                   style="width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0;">
+              {% else %}
+              <div style="width:40px;height:40px;background:var(--gradient-primary);border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;flex-shrink:0;">
                 {{ m.name[0] }}
               </div>
+              {% endif %}
               <div>
-                <div style="font-weight: 600; color: var(--gray-900);">{{ m.name }}</div>
-                <div style="font-size: 0.875rem; color: var(--gray-600);">ID: {{ m.id }}</div>
+                <div style="font-weight:600;color:var(--gray-900);">{{ m.name }}</div>
+                <div style="font-size:.8125rem;color:var(--gray-500);">ID: {{ m.id }}{% if m.handle %} · @{{ m.handle }}{% endif %}</div>
               </div>
             </div>
           </td>
-          <td style="color: var(--gray-700);">{{ m.email }}</td>
+          <td style="font-size:.875rem;">{{ m.email }}</td>
           <td>
-            {% if m.kyc_status == 'verified' %}
-              <span class="badge succeeded">
-                <i data-feather="check-circle" style="width: 14px; height: 14px;"></i>
-                Verified
-              </span>
-            {% elif m.kyc_status == 'pending' %}
-              <span class="badge pending">
-                <i data-feather="clock" style="width: 14px; height: 14px;"></i>
-                Pending
-              </span>
-            {% else %}
-              <span class="badge failed">
-                <i data-feather="x-circle" style="width: 14px; height: 14px;"></i>
-                {{ m.kyc_status }}
-              </span>
-            {% endif %}
+            <span class="badge {% if m.role == 'admin' %}succeeded{% else %}pending{% endif %}">
+              {{ m.role.title() }}
+            </span>
           </td>
           <td>
-            {% if m.is_active %}
-              <span class="badge succeeded">Active</span>
-            {% else %}
-              <span class="badge failed">Inactive</span>
-            {% endif %}
+            {% if m.kyc_status == 'verified' %}<span class="badge succeeded">Verified</span>
+            {% elif m.kyc_status == 'pending' %}<span class="badge pending">Pending</span>
+            {% else %}<span class="badge failed">{{ m.kyc_status }}</span>{% endif %}
           </td>
           <td>
-            <a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
-              <i data-feather="arrow-right"></i>
-              View Dashboard
-            </a>
+            {% if m.is_active %}<span class="badge succeeded">Active</span>
+            {% else %}<span class="badge failed">Inactive</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:.375rem;flex-wrap:wrap;">
+              <!-- View -->
+              <a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}"
+                 class="btn btn-primary" style="padding:.375rem .625rem;font-size:.8125rem;" title="View Dashboard">
+                <i data-feather="eye" style="width:13px;height:13px;"></i>
+              </a>
+
+              <!-- Edit -->
+              <button class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;" title="Edit"
+                      onclick="openEdit({{ m.id }}, '{{ m.name|replace("'","\\'")|replace('"','&quot;') }}', '{{ m.email }}', '{{ m.kyc_status }}', '{{ m.role }}', {{ 1 if m.is_active else 0 }})">
+                <i data-feather="edit-2" style="width:13px;height:13px;"></i>
+              </button>
+
+              <!-- Verify shortcut -->
+              {% if m.kyc_status != 'verified' %}
+              <a href="{{ url_for('auth.admin_verify_user', merchant_id=m.id) }}"
+                 class="btn btn-success" style="padding:.375rem .625rem;font-size:.8125rem;" title="Verify KYC">
+                <i data-feather="shield" style="width:13px;height:13px;"></i>
+              </a>
+              {% endif %}
+
+              <!-- Delete -->
+              {% if m.email not in ['smugabi@mail.com', 'demo@samsoftpay.local'] %}
+              <form method="POST" action="{{ url_for('dashboard.admin_delete_merchant', merchant_id=m.id) }}"
+                    onsubmit="return confirm('DELETE {{ m.name }}?\n\nThis removes the account and ALL their transactions, payouts, and balances. This cannot be undone.')">
+                <button type="submit" class="btn btn-outline"
+                        style="padding:.375rem .625rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);"
+                        title="Delete permanently">
+                  <i data-feather="trash-2" style="width:13px;height:13px;"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -126,11 +183,56 @@
     </table>
   </div>
   {% else %}
-  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
-    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
-    <p>No merchants registered yet</p>
+  <div style="text-align:center;padding:3rem;color:var(--gray-500);">
+    <i data-feather="inbox" style="width:40px;height:40px;margin-bottom:1rem;opacity:.4;"></i>
+    <p>No merchants yet.</p>
   </div>
   {% endif %}
+</div>
+
+<!-- EDIT MODAL -->
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:9000;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:white;border-radius:20px;padding:2rem;max-width:480px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.15);">
+    <h3 style="font-family:'Urbanist',sans-serif;font-size:1.125rem;font-weight:700;margin-bottom:1.5rem;">Edit Merchant</h3>
+    <form id="edit-form" method="POST">
+      <div class="form-group">
+        <label class="form-label">Business Name</label>
+        <input class="form-input" type="text" name="name" id="edit-name" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" name="email" id="edit-email" required>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">KYC Status</label>
+          <select class="form-select" name="kyc_status" id="edit-kyc">
+            <option value="pending">Pending</option>
+            <option value="verified">Verified</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-select" name="role" id="edit-role">
+            <option value="merchant">Merchant</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Account Status</label>
+        <select class="form-select" name="is_active" id="edit-active">
+          <option value="1">Active</option>
+          <option value="0">Inactive (suspended)</option>
+        </select>
+      </div>
+      <div class="btn-group" style="margin-top:.5rem;">
+        <button type="submit" class="btn btn-primary"><i data-feather="save"></i> Save Changes</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('edit-modal').style.display='none'">Cancel</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 {% endblock %}
@@ -138,5 +240,21 @@
 {% block extra_scripts %}
 <script>
   feather.replace();
+
+  function openEdit(id, name, email, kyc, role, active) {
+    document.getElementById('edit-form').action = `/admin/merchants/${id}/update`;
+    document.getElementById('edit-name').value   = name;
+    document.getElementById('edit-email').value  = email;
+    document.getElementById('edit-kyc').value    = kyc;
+    document.getElementById('edit-role').value   = role;
+    document.getElementById('edit-active').value = active ? '1' : '0';
+    const modal = document.getElementById('edit-modal');
+    modal.style.display = 'flex';
+    feather.replace();
+  }
+
+  document.getElementById('edit-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+  });
 </script>
 {% endblock %}

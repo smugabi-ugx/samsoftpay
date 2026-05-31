@@ -379,42 +379,28 @@ def topup_status_json(topup_public_id: str):
 
 
 def _settle_topup(merchant_id: int, txn, ref: str) -> None:
-    """Settle a completed top-up transaction correctly.
+    """Settle a completed top-up: move net amount from pending → available.
 
-    The normal charge flow already credited merchant_pending with (amount - fee).
-    We need to:
-      1. Move that net amount from pending → available
-      2. Refund the fee from psp_revenue → available
-    Net result: full gross amount lands in available. No double-count.
-    Merchant pays ZERO fee on their own top-up.
+    Platform keeps the 1.5% collection fee (min UGX 200) as normal revenue.
+    Merchant depositing 1,000 UGX gets 800 UGX available — 200 goes to platform.
+    This is the same fee applied to all collections.
     """
     from ..services import ledger
 
     net_amount = txn.amount - txn.fee_amount   # e.g. 1000 - 200 = 800
-    fee        = txn.fee_amount                # e.g. 200
     currency   = txn.currency
 
-    pending  = ledger.get_or_create_account(
+    pending = ledger.get_or_create_account(
         type=AccountType.MERCHANT_PENDING,  merchant_id=merchant_id, currency=currency)
-    avail    = ledger.get_or_create_account(
+    avail   = ledger.get_or_create_account(
         type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency)
-    revenue  = ledger.get_or_create_account(
-        type=AccountType.PSP_REVENUE, merchant_id=None, currency=currency)
 
-    # Step 1 — move net from pending to available
+    # Move net from pending → available. Fee stays in psp_revenue.
     ledger.post(
         [(pending, +net_amount), (avail, -net_amount)],
         currency=currency,
         memo=f"top-up settle {ref}",
     )
-
-    # Step 2 — refund the fee (merchant funded their own account, no fee applies)
-    if fee > 0:
-        ledger.post(
-            [(revenue, +fee), (avail, -fee)],
-            currency=currency,
-            memo=f"top-up fee refund {ref}",
-        )
 
 
 def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:

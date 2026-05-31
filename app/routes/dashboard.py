@@ -41,6 +41,108 @@ def list_merchants():
     return render_template("merchants.html", merchants=merchants)
 
 
+@bp.post("/admin/merchants/create")
+@login_required
+@admin_required
+def admin_create_merchant():
+    """Create a merchant account from the admin panel."""
+    import secrets as _sec
+    from werkzeug.security import generate_password_hash
+    from flask import flash
+    from ..routes.auth import _make_handle
+
+    name     = request.form.get("name", "").strip()
+    email    = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    role     = request.form.get("role", "merchant")
+    kyc      = request.form.get("kyc_status", "pending")
+
+    if not name or not email or len(password) < 8:
+        flash("Name, email and password (8+ chars) are required.", "error")
+        return redirect(url_for("dashboard.list_merchants"))
+    if Merchant.query.filter_by(email=email).first():
+        flash(f"Email already exists: {email}", "error")
+        return redirect(url_for("dashboard.list_merchants"))
+
+    m = Merchant(
+        name=name, email=email,
+        password_hash=generate_password_hash(password),
+        public_key="pk_live_" + _sec.token_urlsafe(20),
+        secret_key="sk_live_" + _sec.token_urlsafe(28),
+        test_public_key="pk_test_" + _sec.token_urlsafe(20),
+        test_secret_key="sk_test_" + _sec.token_urlsafe(28),
+        handle=_make_handle(name),
+        role=role, kyc_status=kyc,
+        email_verified=True, two_fa_enabled=False,
+    )
+    db.session.add(m)
+    db.session.commit()
+    flash(f"Created: {m.name} (ID {m.id})", "success")
+    return redirect(url_for("dashboard.list_merchants"))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/update")
+@login_required
+@admin_required
+def admin_update_merchant(merchant_id: int):
+    """Update merchant details from admin panel."""
+    from flask import flash
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    m.name       = request.form.get("name", m.name).strip() or m.name
+    m.email      = request.form.get("email", m.email).strip().lower() or m.email
+    m.kyc_status = request.form.get("kyc_status", m.kyc_status)
+    m.role       = request.form.get("role", m.role)
+    m.is_active  = request.form.get("is_active") == "1"
+    db.session.commit()
+    flash(f"Updated: {m.name}", "success")
+    return redirect(url_for("dashboard.list_merchants"))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/delete")
+@login_required
+@admin_required
+def admin_delete_merchant(merchant_id: int):
+    """Hard-delete a test/demo merchant and all their data."""
+    from flask import flash
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+
+    # Protect the superadmin account
+    if m.email in ("smugabi@mail.com", "demo@samsoftpay.local"):
+        flash(f"Cannot delete protected account: {m.email}", "error")
+        return redirect(url_for("dashboard.list_merchants"))
+
+    name = m.name
+    # SQLAlchemy cascades handle related records if FK cascade is set;
+    # for safety, delete in order
+    from ..models import (
+        AuditLog, Bill, GiftCard, KYCApplication, PaymentLink,
+        Payout, SettlementAccount, Subscription, SubscriptionPlan,
+        TopUpRequest, Transaction, WebhookDelivery, WithdrawalRequest,
+        Account, JournalEntry,
+    )
+    for model in [
+        AuditLog, Bill, GiftCard, KYCApplication,
+        Payout, SettlementAccount, Subscription, SubscriptionPlan,
+        TopUpRequest, WithdrawalRequest, WebhookDelivery,
+    ]:
+        model.query.filter_by(merchant_id=merchant_id).delete()
+
+    # Payment links first (transactions reference them)
+    PaymentLink.query.filter_by(merchant_id=merchant_id).delete()
+
+    # Journal entries → accounts
+    acct_ids = [a.id for a in Account.query.filter_by(merchant_id=merchant_id).all()]
+    if acct_ids:
+        JournalEntry.query.filter(JournalEntry.account_id.in_(acct_ids)).delete()
+    Account.query.filter_by(merchant_id=merchant_id).delete()
+    Transaction.query.filter_by(merchant_id=merchant_id).delete()
+
+    db.session.delete(m)
+    db.session.commit()
+    flash(f"Deleted merchant: {name}", "success")
+    return redirect(url_for("dashboard.list_merchants"))
+
+
 @bp.get("/admin")
 @login_required
 @admin_required
