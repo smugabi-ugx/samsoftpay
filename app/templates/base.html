@@ -961,6 +961,10 @@
             <i data-feather="gift"></i>
             <span>Gift Cards</span>
           </a>
+          <a href="{{ url_for('subscriptions.list_plans') }}" class="nav-link {% if 'subscriptions.' in request.endpoint %}active{% endif %}">
+            <i data-feather="rotate-cw"></i>
+            <span>Subscriptions</span>
+          </a>
         </div>
         {% endif %}
 

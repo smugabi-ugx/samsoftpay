@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Subscribers — {{ plan.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">{{ plan.name }}</h1>
+    <p class="page-subtitle">UGX {{ "{:,}".format(plan.amount) }} · {{ plan.interval.title() }} · {{ plan.channel.value.replace('_',' ').title() }}</p>
+  </div>
+  <a href="{{ url_for('subscriptions.list_plans') }}" class="btn btn-outline">← Back to Plans</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="users"></i> Subscribers ({{ subs|length }})</h3>
+    {% if current_user.handle %}
+    <a href="{{ url_for('subscriptions.subscribe_page', handle=current_user.handle, plan_public_id=plan.public_id) }}"
+       target="_blank" class="btn btn-primary" style="font-size:.875rem;padding:.5rem 1rem;">
+      <i data-feather="share-2"></i> Share Subscribe Link
+    </a>
+    {% endif %}
+  </div>
+
+  {% if subs %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr><th>Phone</th><th>Email</th><th>Status</th><th>Next Billing</th><th>Subscribed</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in subs %}
+        <tr>
+          <td><strong>{{ s.customer_phone }}</strong></td>
+          <td>{{ s.customer_email or '—' }}</td>
+          <td>
+            <span class="badge {% if s.status == 'active' %}succeeded{% elif s.status == 'paused' %}pending{% else %}failed{% endif %}">
+              {{ s.status.title() }}
+            </span>
+          </td>
+          <td style="font-size:.875rem;color:var(--gray-500);">
+            {{ s.next_billing_at.strftime('%d %b %Y %H:%M') if s.status == 'active' else '—' }}
+          </td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ s.created_at.strftime('%d %b %Y') }}</td>
+          <td>
+            <div style="display:flex;gap:.375rem;">
+              {% if s.status == 'active' %}
+              <form method="POST" action="{{ url_for('subscriptions.pause', sub_id=s.id) }}">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.75rem;" title="Pause">
+                  <i data-feather="pause" style="width:13px;height:13px;"></i>
+                </button>
+              </form>
+              {% elif s.status == 'paused' %}
+              <form method="POST" action="{{ url_for('subscriptions.resume', sub_id=s.id) }}">
+                <button type="submit" class="btn btn-success" style="padding:.375rem .625rem;font-size:.75rem;" title="Resume">
+                  <i data-feather="play" style="width:13px;height:13px;"></i>
+                </button>
+              </form>
+              {% endif %}
+              {% if s.status != 'cancelled' %}
+              <form method="POST" action="{{ url_for('subscriptions.cancel', sub_id=s.id) }}"
+                    onsubmit="return confirm('Cancel this subscription?')">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.75rem;color:var(--danger);border-color:var(--danger);" title="Cancel">
+                  <i data-feather="x" style="width:13px;height:13px;"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:var(--gray-500);">
+    <i data-feather="users" style="width:40px;height:40px;margin-bottom:1rem;"></i>
+    <p>No subscribers yet. Share your subscribe link to get started.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

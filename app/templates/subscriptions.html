@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Subscriptions{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">Subscription Plans</h1>
+    <p class="page-subtitle">Create recurring billing plans and manage your subscribers.</p>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header"><span class="stat-label">Active Plans</span><div class="stat-icon primary"><i data-feather="layers"></i></div></div>
+    <div class="stat-value">{{ plans|selectattr("is_active")|list|length }}</div>
+    <div class="stat-change"><i data-feather="check-circle"></i> <span>Live plans</span></div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-header"><span class="stat-label">Total Subscribers</span><div class="stat-icon success"><i data-feather="users"></i></div></div>
+    <div class="stat-value">{{ total_subs }}</div>
+    <div class="stat-change positive"><i data-feather="trending-up"></i> <span>All time</span></div>
+  </div>
+</div>
+
+<!-- Create plan -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="plus-circle"></i> Create New Plan</h3></div>
+  <form method="POST" action="{{ url_for('subscriptions.new_plan') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Plan Name *</label>
+        <input class="form-input" type="text" name="name" required placeholder="Monthly Newsletter">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount (UGX) *</label>
+        <input class="form-input" type="number" name="amount" required min="500" placeholder="10000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Billing Interval *</label>
+        <select class="form-select" name="interval" required>
+          {% for val, label in intervals %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment Channel *</label>
+        <select class="form-select" name="channel" required>
+          {% for val, label in channels %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="color:var(--gray-400);font-weight:400;">(optional)</span></label>
+      <input class="form-input" type="text" name="description" placeholder="What subscribers receive">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-feather="plus"></i> Create Plan</button>
+  </form>
+</div>
+
+<!-- Plans list -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="list"></i> Your Plans ({{ plans|length }})</h3></div>
+
+  {% if plans %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr><th>Plan</th><th>Amount</th><th>Interval</th><th>Channel</th><th>Subscribers</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for p in plans %}
+        <tr>
+          <td>
+            <strong>{{ p.name }}</strong>
+            {% if p.description %}<br><small class="text-muted">{{ p.description }}</small>{% endif %}
+          </td>
+          <td><strong>UGX {{ "{:,}".format(p.amount) }}</strong></td>
+          <td><span class="badge {% if p.interval == 'monthly' %}succeeded{% elif p.interval == 'weekly' %}pending{% else %}pending{% endif %}">{{ p.interval.title() }}</span></td>
+          <td>{{ p.channel.value.replace('_',' ').title() }}</td>
+          <td>
+            <a href="{{ url_for('subscriptions.plan_subscribers', plan_id=p.id) }}" style="color:var(--primary);font-weight:600;">
+              {{ counts.get(p.id, 0) }} active
+            </a>
+          </td>
+          <td>
+            {% if p.is_active %}<span class="badge succeeded">Active</span>
+            {% else %}<span class="badge failed">Inactive</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+              {% if current_user.handle %}
+              <a href="{{ url_for('subscriptions.subscribe_page', handle=current_user.handle, plan_public_id=p.public_id) }}"
+                 target="_blank" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;">
+                <i data-feather="external-link" style="width:14px;height:14px;"></i> Share
+              </a>
+              {% endif %}
+              {% if p.is_active %}
+              <form method="POST" action="{{ url_for('subscriptions.deactivate_plan', plan_id=p.id) }}"
+                    onsubmit="return confirm('Deactivate this plan? Existing subscribers continue until cancelled.')">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);">
+                  <i data-feather="pause" style="width:14px;height:14px;"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:var(--gray-500);">
+    <i data-feather="rotate-cw" style="width:40px;height:40px;margin-bottom:1rem;"></i>
+    <p>No plans yet. Create your first recurring billing plan above.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- How billing works -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="info"></i> How Subscriptions Work</h3></div>
+  <div class="grid-2">
+    <div>
+      <p style="color:var(--gray-700);line-height:1.7;margin-bottom:1rem;">
+        <strong>For merchants:</strong> Create a plan with a name, amount, and interval. Share the subscribe link on your TikTok, website, or WhatsApp. Customers subscribe once and are billed automatically.
+      </p>
+      <p style="color:var(--gray-700);line-height:1.7;">
+        <strong>Billing:</strong> The worker charges subscribers at each interval. Failed charges set the subscription to <code>failed</code>. You can pause or cancel any subscription from the subscribers list.
+      </p>
+    </div>
+    <div>
+      <p style="color:var(--gray-700);line-height:1.7;margin-bottom:1rem;">
+        <strong>For customers:</strong> They enter their phone number on the subscribe page. The first charge fires immediately. Subsequent charges happen automatically every week/month/year.
+      </p>
+      <p style="color:var(--gray-700);line-height:1.7;">
+        <strong>API:</strong> Create plans and subscriptions programmatically via <code>POST /v1/subscription-plans</code> and integrate into your app. See <a href="{{ url_for('docs.docs') }}" style="color:var(--primary);">API docs</a>.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

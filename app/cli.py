@@ -68,6 +68,15 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"Done — {m.name} ({m.email}) is now an admin.")
 
+    @app.cli.command("bill-subscriptions")
+    def bill_subscriptions():
+        """Manually trigger billing for all due subscriptions."""
+        from .services.subscriptions_service import bill_due
+        with app.app_context():
+            result = bill_due()
+            print(f"Billed: {result['attempted']} attempted, "
+                  f"{result['succeeded']} succeeded, {result['failed']} failed")
+
     @app.cli.command("sweep-pending")
     def sweep_pending():
         """Expire stale PENDING/AUTHORIZED transactions (older than 10 min)."""

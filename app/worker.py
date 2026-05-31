@@ -1,9 +1,9 @@
-"""Background worker — runs the webhook delivery + recon + settlement loop.
+"""Background worker — webhook delivery + subscription billing loop.
 
 Run with: python -m app.worker
 
-In production this would be Celery / RQ / Dramatiq with a Redis broker, multiple
-worker processes, and a separate beat scheduler. Here we just sleep-loop.
+In production use Celery / RQ with Redis so jobs survive restarts and
+multiple worker processes can run in parallel.
 """
 import time
 
@@ -13,15 +13,31 @@ from .services.webhooks import deliver_pending_webhooks
 
 def main():
     app = create_app()
+    tick = 0
     with app.app_context():
-        print("worker started")
+        print("worker started — webhooks every 2s, subscriptions every 60s")
         while True:
             try:
                 n = deliver_pending_webhooks()
                 if n:
-                    print(f"delivered {n} webhooks")
-            except Exception as exc:  # don't kill the loop on errors
-                print(f"worker error: {exc}")
+                    print(f"delivered {n} webhook(s)")
+            except Exception as exc:
+                print(f"webhook worker error: {exc}")
+
+            # Bill due subscriptions every 60 seconds
+            if tick % 30 == 0:
+                try:
+                    from .services.subscriptions_service import bill_due
+                    result = bill_due()
+                    if result["attempted"]:
+                        print(
+                            f"subscriptions billed: {result['attempted']} attempted, "
+                            f"{result['succeeded']} ok, {result['failed']} failed"
+                        )
+                except Exception as exc:
+                    print(f"subscription billing error: {exc}")
+
+            tick += 1
             time.sleep(2)
 
 
