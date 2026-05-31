@@ -34,7 +34,22 @@
 </style>
 {% endblock %}
 
+{% block extra_head_style %}
+@keyframes modal-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+{% endblock %}
+
 {% block content %}
+
+{# Flash messages from key rotation etc. #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, msg in messages %}
+  <div class="alert alert-{{ 'success' if category == 'success' else 'warning' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if category == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
 <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
   <div>
     <h1 class="page-title">My Account</h1>
@@ -138,29 +153,82 @@
   </div>
 </div>
 
-<!-- Payment Profile -->
+<!-- Payment Profile + QR -->
 <div class="card">
   <div class="card-header">
     <h3 class="card-title"><i data-feather="link"></i> Your Payment Page</h3>
     <span class="badge succeeded">Public</span>
   </div>
-  <p class="text-muted mb-2">Share this link on TikTok, Instagram, or WhatsApp. Anyone can tap it and pay you.</p>
+  <p class="text-muted mb-2">Share on TikTok, Instagram or WhatsApp. Anyone taps it and pays you directly.</p>
   {% if current_user.handle %}
   <div class="api-key-display">
     <code id="profile-url">{{ request.host_url }}pay/@{{ current_user.handle }}</code>
-    <button class="copy-btn" onclick="copyKey('profile-url', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+    <button class="copy-btn" onclick="copyKey('profile-url', this)" title="Copy">
+      <i data-feather="copy" style="width:14px;height:14px;"></i>
+    </button>
   </div>
   <div class="btn-group mt-2">
-    <a href="{{ url_for('checkout.merchant_profile', handle=current_user.handle) }}" target="_blank" class="btn btn-primary" style="font-size:0.875rem;padding:0.5rem 1rem;">
+    <a href="{{ url_for('checkout.merchant_profile', handle=current_user.handle) }}"
+       target="_blank" class="btn btn-primary" style="font-size:.875rem;padding:.5rem 1rem;">
       <i data-feather="external-link"></i> Preview Page
     </a>
+    <button class="btn btn-outline" onclick="showProfileQR()"
+            style="font-size:.875rem;padding:.5rem 1rem;">
+      <i data-feather="grid"></i> QR Code
+    </button>
   </div>
   {% else %}
   <div class="alert alert-warning">
     <i data-feather="alert-triangle" class="alert-icon"></i>
-    No handle set. Re-create your account or contact support to get a profile URL.
+    No handle set. Re-create your account or contact support.
   </div>
   {% endif %}
+</div>
+
+<!-- Key rotation cards -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="refresh-cw"></i> Key Rotation</h3>
+  </div>
+  <p class="text-muted mb-3">Rotate your keys every 90 days or immediately if you suspect they have been compromised. Old keys stop working instantly.</p>
+  <div class="grid-2">
+    <div style="background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:1.125rem;">
+      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Test Keys</div>
+      <div style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Safe to rotate anytime — only affects your sandbox.</div>
+      <form method="POST" action="{{ url_for('auth.rotate_keys', key_type='test') }}"
+            onsubmit="return confirm('Rotate test keys? Your old sk_test_ key will stop working.')">
+        <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;color:#d97706;border-color:#d97706;width:100%;">
+          <i data-feather="refresh-cw" style="width:14px;height:14px;"></i> Rotate Test Keys
+        </button>
+      </form>
+    </div>
+    <div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:1.125rem;">
+      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Live Keys</div>
+      <div style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Update production immediately after rotating.</div>
+      <form method="POST" action="{{ url_for('auth.rotate_keys', key_type='live') }}"
+            onsubmit="return confirm('Rotate LIVE keys? All production integrations using your current sk_live_ key will break until updated.')">
+        <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;color:var(--danger);border-color:var(--danger);width:100%;">
+          <i data-feather="alert-triangle" style="width:14px;height:14px;"></i> Rotate Live Keys
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div id="qr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:9000;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:white;border-radius:20px;padding:2rem;text-align:center;max-width:300px;width:100%;animation:modal-in .25s ease both;">
+    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-900);margin-bottom:.25rem;">Your Payment Page QR</h3>
+    <p style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Scan to visit your payment page</p>
+    <img id="acct-qr-img" width="180" height="180" style="border-radius:12px;border:1px solid var(--gray-200);margin:0 auto 1rem;display:block;" alt="QR">
+    <div style="font-size:.75rem;color:var(--gray-500);word-break:break-all;background:var(--gray-50);border-radius:8px;padding:.5rem .75rem;margin-bottom:1rem;">
+      {{ request.host_url }}pay/@{{ current_user.handle or '' }}
+    </div>
+    <button onclick="closeProfileQR()"
+            style="width:100%;padding:.75rem;background:var(--gray-900);color:white;border:none;border-radius:10px;font-size:.9375rem;font-weight:600;font-family:inherit;cursor:pointer;">
+      Close
+    </button>
+  </div>
 </div>
 
 <!-- Quick Integration -->
@@ -209,6 +277,7 @@ print(resp.json())
 <script>
   feather.replace();
 
+  // Mode toggle
   function setMode(mode) {
     document.getElementById('keys-test').classList.toggle('visible', mode === 'test');
     document.getElementById('keys-live').classList.toggle('visible', mode === 'live');
@@ -217,17 +286,22 @@ print(resp.json())
     feather.replace();
   }
 
-  function copyKey(id, btn) {
-    navigator.clipboard.writeText(document.getElementById(id).textContent).then(() => {
-      btn.classList.add('copied');
-      btn.innerHTML = '<i data-feather="check" style="width:14px;height:14px;"></i>';
-      feather.replace();
-      setTimeout(() => {
-        btn.classList.remove('copied');
-        btn.innerHTML = '<i data-feather="copy" style="width:14px;height:14px;"></i>';
-        feather.replace();
-      }, 2000);
-    });
+  // QR modal for payment page
+  function showProfileQR() {
+    const url = document.getElementById('profile-url').textContent.trim();
+    const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=2&data=' + encodeURIComponent(url);
+    document.getElementById('acct-qr-img').src = qrSrc;
+    const modal = document.getElementById('qr-modal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
   }
+  function closeProfileQR() {
+    document.getElementById('qr-modal').style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  // Close on backdrop click
+  document.getElementById('qr-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeProfileQR();
+  });
 </script>
 {% endblock %}

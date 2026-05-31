@@ -63,14 +63,22 @@
           </td>
           <td style="font-size:.875rem;color:var(--gray-500);">{{ c.created_at.strftime('%d %b %Y') }}</td>
           <td>
-            {% if c.is_active and c.balance > 0 %}
-            <form method="POST" action="{{ url_for('giftcards.deactivate', card_id=c.id) }}"
-                  onsubmit="return confirm('Deactivate this card?')">
-              <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;">
-                <i data-feather="slash" style="width:14px;height:14px;"></i>
+            <div style="display:flex;gap:.375rem;">
+              <!-- QR Code button -->
+              <button class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;"
+                      onclick="showGCQR('{{ c.code }}','{{ c.currency }} {{ '{:,}'.format(c.face_value) }}')"
+                      title="Show QR Code">
+                <i data-feather="grid" style="width:14px;height:14px;"></i>
               </button>
-            </form>
-            {% endif %}
+              {% if c.is_active and c.balance > 0 %}
+              <form method="POST" action="{{ url_for('giftcards.deactivate', card_id=c.id) }}"
+                    onsubmit="return confirm('Deactivate this card?')">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;" title="Deactivate">
+                  <i data-feather="slash" style="width:14px;height:14px;"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -87,11 +95,64 @@
 
 <div class="card">
   <div class="card-header"><h3 class="card-title"><i data-feather="info"></i> How Customers Redeem</h3></div>
-  <p style="color:var(--gray-700);line-height:1.7;margin-bottom:0;">
-    At checkout, customers enter the gift card code (e.g. <code>SAMF-X4K2-9WQP</code>) in the
-    coupon/voucher field. The balance is deducted from the payment amount automatically.
-    Partial redemption is supported — remaining balance stays on the card.
-  </p>
+  <div class="grid-2">
+    <div>
+      <p style="color:var(--gray-700);line-height:1.7;margin-bottom:.75rem;">
+        At checkout, customers enter the gift card code (e.g. <code>SAMF-X4K2-9WQP</code>) in the
+        voucher field. The balance is deducted automatically. Partial redemption supported.
+      </p>
+    </div>
+    <div style="background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:1rem;">
+      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">MTN Gift Card Redemption</div>
+      <p style="font-size:.875rem;color:var(--gray-600);line-height:1.65;">
+        Gift cards can be redeemed directly to MTN MoMo. Click the
+        <i data-feather="grid" style="width:13px;height:13px;vertical-align:middle;"></i> QR button
+        on any card — customers scan the QR with their MTN MoMo app to receive the balance as mobile money.
+      </p>
+    </div>
+  </div>
 </div>
+
+<!-- QR Modal -->
+<div id="gc-qr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:9000;align-items:center;justify-content:center;padding:1rem;">
+  <div style="background:white;border-radius:20px;padding:2rem;text-align:center;max-width:300px;width:100%;">
+    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-900);margin-bottom:.25rem;">Gift Card QR Code</h3>
+    <p id="gc-qr-label" style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;"></p>
+    <img id="gc-qr-img" width="180" height="180"
+         style="border-radius:12px;border:1px solid var(--gray-200);margin:0 auto 1rem;display:block;" alt="QR">
+    <div id="gc-qr-code-text"
+         style="font-family:monospace;font-size:1.125rem;font-weight:700;letter-spacing:.12em;
+                color:var(--gray-900);background:var(--gray-50);border-radius:8px;
+                padding:.75rem;margin-bottom:1rem;"></div>
+    <button onclick="document.getElementById('gc-qr-modal').style.display='none';document.body.style.overflow='';"
+            style="width:100%;padding:.75rem;background:var(--gray-900);color:white;border:none;
+                   border-radius:10px;font-size:.9375rem;font-weight:600;font-family:inherit;cursor:pointer;">
+      Close
+    </button>
+  </div>
+</div>
+
 {% endblock %}
-{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+
+  function showGCQR(code, value) {
+    // QR encodes the gift card code so MTN/Airtel apps can scan it
+    const qrData = 'samsoftpay:giftcard:' + code;
+    const qrSrc  = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=2&data=' + encodeURIComponent(qrData);
+    document.getElementById('gc-qr-img').src = qrSrc;
+    document.getElementById('gc-qr-label').textContent = value + ' gift card';
+    document.getElementById('gc-qr-code-text').textContent = code;
+    const modal = document.getElementById('gc-qr-modal');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  // Close on backdrop click
+  document.getElementById('gc-qr-modal').addEventListener('click', function(e) {
+    if (e.target === this) { this.style.display = 'none'; document.body.style.overflow = ''; }
+  });
+</script>
+{% endblock %}

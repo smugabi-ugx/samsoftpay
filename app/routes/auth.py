@@ -283,3 +283,26 @@ def toggle_2fa():
     m.two_fa_enabled = not m.two_fa_enabled
     db.session.commit()
     return redirect(url_for("auth.account"))
+
+
+@bp.post("/account/rotate-keys/<key_type>")
+@login_required
+@verified_required
+def rotate_keys(key_type: str):
+    """Rotate test or live API keys. Invalidates old keys immediately."""
+    if key_type not in ("test", "live"):
+        from flask import abort
+        abort(400)
+    m = db.session.get(Merchant, current_user.id)
+    if key_type == "test":
+        m.test_public_key = "pk_test_" + secrets.token_urlsafe(20)
+        m.test_secret_key = "sk_test_" + secrets.token_urlsafe(28)
+        msg = "Test keys rotated. Update your development environment."
+    else:
+        m.public_key  = "pk_live_" + secrets.token_urlsafe(20)
+        m.secret_key  = "sk_live_" + secrets.token_urlsafe(28)
+        msg = "Live keys rotated. Update your production environment immediately."
+    db.session.commit()
+    from flask import flash
+    flash(msg, "success")
+    return redirect(url_for("auth.account") + "#keys-" + key_type)

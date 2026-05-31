@@ -3,313 +3,313 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1a0533">
+  <meta name="theme-color" content="#6366f1">
   <title>Pay {{ merchant.name }}</title>
+  <meta name="description" content="Pay {{ merchant.name }} securely via MTN MoMo, Airtel Money, Visa or crypto — powered by Samsoftpay.">
+  <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --p:#6366f1;--green:#10b981;--mtn:#ffcb05;--mtn-t:#003566;
+      --airtel:#e60000;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;
+      --ease:cubic-bezier(.4,0,.2,1);
+    }
+    html,body{min-height:100vh;background:var(--bg);font-family:'Inter',sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
 
-    :root {
-      --purple: #6366f1;
-      --purple-dark: #4f46e5;
-      --green: #10b981;
-      --mtn: #ffcb05;
-      --mtn-text: #003566;
-      --airtel: #e60000;
-      --ink: #0f172a;
-      --muted: #64748b;
-      --line: #e2e8f0;
-      --bg: #f8fafc;
+    /* ── HEADER ── */
+    .hero{
+      background:linear-gradient(160deg,#0f0c29 0%,#1a0533 45%,#2d1060 100%);
+      padding:2.5rem 1.5rem 3rem;text-align:center;position:relative;overflow:hidden;
     }
+    .hero::before{
+      content:'';position:absolute;inset:0;
+      background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.3),transparent 70%);
+    }
+    .hero-inner{position:relative;z-index:1;}
 
-    html, body {
-      min-height: 100vh;
-      background: var(--bg);
-      font-family: 'Inter', sans-serif;
-      color: var(--ink);
-      -webkit-font-smoothing: antialiased;
+    /* Avatar — clearly separated from name */
+    .av-wrap{margin:0 auto 14px;width:80px;height:80px;position:relative;}
+    .av{
+      width:80px;height:80px;border-radius:50%;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      display:flex;align-items:center;justify-content:center;
+      font-size:2rem;font-weight:800;color:white;
+      border:3px solid rgba(255,255,255,.2);
+      box-shadow:0 8px 32px rgba(0,0,0,.35);
     }
+    .av-verified{
+      position:absolute;bottom:0;right:0;
+      width:22px;height:22px;border-radius:50%;
+      background:var(--green);border:2px solid #0f0c29;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .av-verified svg{width:11px;height:11px;color:white;}
 
-    /* ── Header ── */
-    .header {
-      background: linear-gradient(160deg, #1a0533 0%, #2d1060 50%, #4c1d95 100%);
-      padding: 3rem 1.5rem 4rem;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
+    .hero-name{font-size:1.5rem;font-weight:800;color:white;margin-bottom:4px;letter-spacing:-.02em;}
+    .hero-handle{font-size:.875rem;color:rgba(255,255,255,.5);margin-bottom:14px;}
+    .hero-channels{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
+    .ch-pill{
+      display:inline-flex;align-items:center;gap:6px;
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+      color:rgba(255,255,255,.75);padding:5px 12px;border-radius:99px;
+      font-size:.75rem;font-weight:600;
     }
-    .header::before {
-      content: '';
-      position: absolute; inset: 0;
-      background: radial-gradient(ellipse at 50% 0%, rgba(99,102,241,.35) 0%, transparent 70%);
-    }
-    .header-content { position: relative; z-index: 1; }
+    .ch-swatch{width:8px;height:8px;border-radius:50%;}
 
-    .avatar {
-      width: 84px; height: 84px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2.25rem; font-weight: 800; color: white;
-      margin: 0 auto 1rem;
-      border: 3px solid rgba(255,255,255,.2);
-      box-shadow: 0 8px 32px rgba(0,0,0,.3);
+    /* QR button */
+    .qr-btn{
+      margin-top:16px;display:inline-flex;align-items:center;gap:6px;
+      background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+      color:rgba(255,255,255,.8);padding:7px 14px;border-radius:8px;
+      font-size:.8125rem;font-weight:600;cursor:pointer;
+      backdrop-filter:blur(8px);transition:all .2s var(--ease);
     }
+    .qr-btn:hover{background:rgba(255,255,255,.18);}
+    .qr-btn svg{width:14px;height:14px;}
 
-    .merchant-name {
-      color: white;
-      font-size: 1.625rem;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
+    /* ── QR MODAL ── */
+    .modal-backdrop{
+      display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
+      backdrop-filter:blur(6px);z-index:500;
+      align-items:center;justify-content:center;padding:1rem;
     }
-
-    .verified-badge {
-      display: inline-flex; align-items: center; gap: 0.375rem;
-      background: rgba(16,185,129,.15);
-      border: 1px solid rgba(16,185,129,.35);
-      color: #6ee7b7;
-      font-size: 0.8125rem; font-weight: 600;
-      padding: 0.3rem 0.75rem;
-      border-radius: 99px;
+    .modal-backdrop.open{display:flex;}
+    .modal{
+      background:white;border-radius:20px;padding:2rem;text-align:center;
+      max-width:320px;width:100%;
+      animation:modal-in .25s var(--ease) both;
     }
-    .verified-badge svg { width: 13px; height: 13px; }
-
-    .channels-accepted {
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-      margin-top: 1rem;
+    @keyframes modal-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+    .modal h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:4px;}
+    .modal p{font-size:.8125rem;color:var(--muted);margin-bottom:16px;}
+    .qr-img{border-radius:12px;border:1px solid var(--line);margin:0 auto 16px;display:block;}
+    .modal-close{
+      width:100%;padding:.75rem;background:var(--ink);color:white;
+      border:none;border-radius:10px;font-size:.9375rem;font-weight:600;
+      font-family:inherit;cursor:pointer;transition:background .2s;
     }
-    .ch-chip {
-      padding: 0.3rem 0.625rem;
-      border-radius: 6px;
-      font-size: 0.75rem; font-weight: 700; letter-spacing: .02em;
-    }
-    .ch-chip.mtn { background: var(--mtn); color: var(--mtn-text); }
-    .ch-chip.airtel { background: var(--airtel); color: white; }
-    .ch-chip.card { background: rgba(255,255,255,.15); color: white; border: 1px solid rgba(255,255,255,.2); }
-
-    /* ── Content ── */
-    .content {
-      max-width: 480px;
-      margin: -2rem auto 0;
-      padding: 0 1rem 6rem;
-      position: relative; z-index: 2;
+    .modal-close:hover{background:#1e293b;}
+    .modal-url{
+      font-size:.75rem;color:var(--muted);word-break:break-all;
+      background:var(--bg);border-radius:8px;padding:.5rem .75rem;margin-top:10px;
     }
 
-    /* ── Section label ── */
-    .section-label {
-      font-size: 0.75rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .07em;
-      color: var(--muted);
-      padding: 0 0.25rem;
-      margin: 1.5rem 0 0.75rem;
+    /* ── BODY ── */
+    .body{max-width:480px;margin:0 auto;padding:1.25rem 1rem 4rem;}
+
+    .section-label{
+      font-size:.6875rem;font-weight:700;text-transform:uppercase;
+      letter-spacing:.08em;color:var(--muted);margin:1.25rem 0 .625rem;
     }
 
-    /* ── Product cards ── */
-    .products { display: flex; flex-direction: column; gap: 0.75rem; }
+    /* Product cards */
+    .products{display:flex;flex-direction:column;gap:.625rem;}
+    .product-card{
+      background:white;border:1px solid var(--line);border-radius:14px;
+      padding:1rem 1.125rem;display:flex;align-items:center;gap:.875rem;
+      text-decoration:none;color:inherit;
+      transition:all .18s var(--ease);
+      -webkit-tap-highlight-color:transparent;
+    }
+    .product-card:active{transform:scale(.98);background:var(--bg);}
+    .product-card:hover{border-color:rgba(99,102,241,.25);box-shadow:0 4px 16px rgba(99,102,241,.08);}
+    .product-icon{
+      width:48px;height:48px;border-radius:12px;
+      background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.1));
+      display:flex;align-items:center;justify-content:center;
+      font-size:1.25rem;flex-shrink:0;
+    }
+    .product-info{flex:1;min-width:0;}
+    .product-name{font-weight:600;font-size:.9375rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .product-desc{font-size:.8125rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .product-right{text-align:right;flex-shrink:0;}
+    .product-amt{font-size:1.0625rem;font-weight:700;color:var(--ink);}
+    .product-cur{font-size:.75rem;color:var(--muted);display:block;}
+    .product-arrow{color:var(--muted);margin-left:.25rem;}
 
-    .product-card {
-      background: white;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 1rem 1.125rem;
-      display: flex; align-items: center; gap: 1rem;
-      text-decoration: none; color: inherit;
-      transition: all 0.18s;
-      box-shadow: 0 1px 4px rgba(0,0,0,.04);
-      -webkit-tap-highlight-color: transparent;
+    /* Custom amount */
+    .custom-card{
+      background:white;border:1.5px dashed var(--line);border-radius:14px;padding:1.25rem;
     }
-    .product-card:active { transform: scale(0.98); background: #f8fafc; }
+    .custom-card h3{
+      font-size:.9375rem;font-weight:700;margin-bottom:1rem;
+      display:flex;align-items:center;gap:.5rem;color:var(--ink);
+    }
+    .amt-row{
+      display:flex;align-items:center;
+      border:2px solid var(--line);border-radius:10px;overflow:hidden;
+      margin-bottom:1rem;transition:border-color .2s;background:white;
+    }
+    .amt-row:focus-within{border-color:var(--p);}
+    .amt-prefix{
+      padding:0 .875rem;font-size:.875rem;font-weight:600;color:var(--muted);
+      border-right:1px solid var(--line);height:50px;display:flex;align-items:center;
+      background:var(--bg);white-space:nowrap;flex-shrink:0;
+    }
+    .amt-input{
+      flex:1;border:none;outline:none;padding:0 .875rem;
+      font-size:1.25rem;font-weight:700;font-family:inherit;
+      height:50px;background:transparent;min-width:0;color:var(--ink);
+    }
+    .amt-input::placeholder{color:#cbd5e1;font-weight:400;font-size:1rem;}
+    .pay-btn{
+      display:flex;align-items:center;justify-content:center;gap:.5rem;
+      width:100%;padding:.9375rem;
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      color:white;border:none;border-radius:10px;
+      font-size:1rem;font-weight:700;font-family:inherit;
+      cursor:pointer;transition:all .2s var(--ease);
+      -webkit-tap-highlight-color:transparent;
+    }
+    .pay-btn:active{transform:scale(.98);}
+    .pay-btn:disabled{opacity:.4;cursor:not-allowed;}
 
-    .product-icon {
-      width: 48px; height: 48px; border-radius: 10px;
-      background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(139,92,246,.12));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.25rem; flex-shrink: 0;
+    /* Powered by */
+    .powered{
+      text-align:center;padding:1.5rem 1rem 1rem;
+      font-size:.8125rem;color:var(--muted);
+      display:flex;align-items:center;justify-content:center;gap:.375rem;
     }
-
-    .product-info { flex: 1; min-width: 0; }
-    .product-name {
-      font-weight: 600; font-size: 0.9375rem;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .product-desc {
-      font-size: 0.8125rem; color: var(--muted); margin-top: 0.125rem;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    .product-amount {
-      text-align: right; flex-shrink: 0;
-    }
-    .product-amount .amt {
-      font-size: 1.0625rem; font-weight: 700; color: var(--ink);
-    }
-    .product-amount .cur {
-      font-size: 0.75rem; color: var(--muted); display: block;
-    }
-
-    .product-arrow {
-      color: var(--muted); flex-shrink: 0;
-    }
-
-    /* ── Custom amount card ── */
-    .custom-card {
-      background: white;
-      border: 1.5px dashed var(--line);
-      border-radius: 14px;
-      padding: 1.25rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,.04);
-    }
-    .custom-card h3 {
-      font-size: 0.9375rem; font-weight: 600; margin-bottom: 1rem;
-      display: flex; align-items: center; gap: 0.5rem;
-    }
-    .custom-card h3 svg { color: var(--purple); }
-
-    .amount-row {
-      display: flex; align-items: center;
-      border: 2px solid var(--line); border-radius: 10px;
-      overflow: hidden; background: white;
-      transition: border-color .2s;
-      margin-bottom: 1rem;
-    }
-    .amount-row:focus-within { border-color: var(--purple); }
-    .amount-prefix {
-      padding: 0 0.875rem;
-      font-size: 0.875rem; font-weight: 600; color: var(--muted);
-      border-right: 1px solid var(--line);
-      height: 48px; display: flex; align-items: center;
-      background: #f8fafc;
-      white-space: nowrap;
-    }
-    .amount-input {
-      flex: 1; border: none; outline: none;
-      padding: 0 0.875rem;
-      font-size: 1.125rem; font-weight: 600; font-family: inherit;
-      height: 48px; background: transparent;
-      min-width: 0;
-    }
-
-    .pay-btn {
-      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-      width: 100%; padding: 0.9375rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white; border: none; border-radius: 10px;
-      font-size: 1rem; font-weight: 700; font-family: inherit;
-      cursor: pointer; transition: all 0.2s;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .pay-btn:active { transform: scale(0.98); }
-    .pay-btn:disabled { opacity: .45; cursor: not-allowed; }
-
-    /* ── Empty state ── */
-    .empty {
-      text-align: center; padding: 2rem 1rem;
-      color: var(--muted); font-size: 0.9375rem;
-    }
-
-    /* ── Footer ── */
-    .powered-by {
-      text-align: center;
-      padding: 2rem 1rem 1rem;
-      font-size: 0.8125rem;
-      color: var(--muted);
-      display: flex; align-items: center; justify-content: center; gap: 0.4rem;
-    }
-    .powered-by svg { width: 13px; height: 13px; }
-    .powered-by strong { color: var(--ink); }
+    .powered svg{width:12px;height:12px;}
+    .powered img{height:16px;object-fit:contain;opacity:.6;}
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-content">
-      <div class="avatar">{{ merchant.name[0].upper() }}</div>
-      <h1 class="merchant-name">{{ merchant.name }}</h1>
-      <div class="verified-badge">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        Verified Merchant
-      </div>
-      <div class="channels-accepted">
-        <span class="ch-chip mtn">MTN</span>
-        <span class="ch-chip airtel">Airtel</span>
-        <span class="ch-chip card">Card</span>
-      </div>
-    </div>
+<!-- QR Modal -->
+<div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this)closeQR()">
+  <div class="modal">
+    <h3>Scan to pay</h3>
+    <p>Share or scan this QR code to go to your payment page</p>
+    <img id="qr-img" class="qr-img" width="200" height="200" alt="QR Code">
+    <div class="modal-url" id="qr-url-text"></div>
+    <button class="modal-close" onclick="closeQR()">Close</button>
   </div>
+</div>
 
-  <div class="content">
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-inner">
 
-    {% if links %}
-    <div class="section-label">Products &amp; Services</div>
-    <div class="products">
-      {% for link in links %}
-      <a class="product-card" href="{{ url_for('checkout.checkout_page', public_id=link.public_id) }}">
-        <div class="product-icon">
-          {% if link.description and ('food' in link.description.lower() or 'meal' in link.description.lower()) %}🍽️
-          {% elif link.description and ('school' in link.description.lower() or 'fee' in link.description.lower()) %}🎓
-          {% elif link.description and ('delivery' in link.description.lower()) %}🚚
-          {% else %}💳{% endif %}
-        </div>
-        <div class="product-info">
-          <div class="product-name">{{ link.description or 'Payment' }}</div>
-          {% if link.reference %}
-          <div class="product-desc">Ref: {{ link.reference }}</div>
-          {% endif %}
-        </div>
-        <div class="product-amount">
-          <span class="amt">{{ "{:,}".format(link.amount) }}</span>
-          <span class="cur">{{ link.currency }}</span>
-        </div>
-        <svg class="product-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </a>
-      {% endfor %}
+    <div class="av-wrap">
+      <div class="av">{{ merchant.name[0].upper() }}</div>
+      {% if merchant.kyc_status == 'verified' %}
+      <div class="av-verified">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      {% endif %}
     </div>
+
+    <div class="hero-name">{{ merchant.name }}</div>
+    {% if merchant.handle %}
+    <div class="hero-handle">@{{ merchant.handle }}</div>
     {% endif %}
 
-    <div class="section-label">Pay Custom Amount</div>
-    <div class="custom-card">
-      <h3>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-        Pay {{ merchant.name }}
-      </h3>
-      <form id="custom-form" method="GET">
-        <div class="amount-row">
-          <span class="amount-prefix">UGX</span>
-          <input class="amount-input" type="number" id="custom-amount" name="amount"
-            placeholder="0" min="500" inputmode="numeric" autocomplete="off">
-        </div>
-        <button type="submit" class="pay-btn" id="custom-pay-btn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          Continue to Pay
-        </button>
-      </form>
+    <div class="hero-channels">
+      <span class="ch-pill"><span class="ch-swatch" style="background:#ffcb05;"></span>MTN MoMo</span>
+      <span class="ch-pill"><span class="ch-swatch" style="background:#e60000;"></span>Airtel Money</span>
+      <span class="ch-pill"><span class="ch-swatch" style="background:#1a1f71;"></span>Visa/MC</span>
+      <span class="ch-pill"><span class="ch-swatch" style="background:#f7931a;"></span>Crypto</span>
     </div>
 
-    <div class="powered-by">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      Secured &amp; powered by <strong>Samsoftpay</strong>
-    </div>
+    {% if merchant.handle %}
+    <button class="qr-btn" onclick="showQR()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/></svg>
+      Show QR Code
+    </button>
+    {% endif %}
 
   </div>
+</div>
 
-  <script>
-    const amtInput = document.getElementById('custom-amount');
-    const payBtn = document.getElementById('custom-pay-btn');
-    const form = document.getElementById('custom-form');
+<!-- BODY -->
+<div class="body">
 
+  {% if links %}
+  <div class="section-label">Products &amp; Services</div>
+  <div class="products">
+    {% for link in links %}
+    <a class="product-card" href="{{ url_for('checkout.checkout_page', public_id=link.public_id) }}">
+      <div class="product-icon">
+        {% if link.description %}
+          {% if 'food' in link.description.lower() or 'meal' in link.description.lower() or 'lunch' in link.description.lower() %}🍽️
+          {% elif 'school' in link.description.lower() or 'fee' in link.description.lower() %}🎓
+          {% elif 'ticket' in link.description.lower() or 'show' in link.description.lower() or 'event' in link.description.lower() %}🎟️
+          {% elif 'delivery' in link.description.lower() %}🚚
+          {% elif 'shop' in link.description.lower() or 'store' in link.description.lower() %}🛒
+          {% else %}💳{% endif %}
+        {% else %}💳{% endif %}
+      </div>
+      <div class="product-info">
+        <div class="product-name">{{ link.description or 'Payment' }}</div>
+        {% if link.reference %}<div class="product-desc">Ref: {{ link.reference }}</div>{% endif %}
+      </div>
+      <div class="product-right">
+        <span class="product-amt">{{ "{:,}".format(link.amount) }}</span>
+        <span class="product-cur">{{ link.currency }}</span>
+      </div>
+      <svg class="product-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="section-label">Pay Custom Amount</div>
+  <div class="custom-card">
+    <h3>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--p)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      Pay {{ merchant.name }}
+    </h3>
+    {% if merchant.handle %}
+    <div class="amt-row">
+      <span class="amt-prefix">UGX</span>
+      <input class="amt-input" type="number" id="custom-amount"
+             placeholder="Enter amount" min="500" inputmode="numeric" autocomplete="off">
+    </div>
+    <button class="pay-btn" id="pay-btn" disabled
+            onclick="window.location.href='{{ url_for('checkout.profile_pay', handle=merchant.handle) }}?amount=' + document.getElementById('custom-amount').value">
+      Continue to Pay
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    {% else %}
+    <p style="color:var(--muted);font-size:.9rem;">Custom payments not available yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="powered">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    Secured &amp; powered by
+    <img src="/static/img/logo.png" alt="Samsoftpay">
+    <strong style="color:var(--ink);">Samsoftpay</strong>
+  </div>
+
+</div>
+
+<script>
+  // Custom amount enable/disable button
+  const amtInput = document.getElementById('custom-amount');
+  const payBtn   = document.getElementById('pay-btn');
+  if (amtInput && payBtn) {
     amtInput.addEventListener('input', () => {
-      const val = parseInt(amtInput.value);
-      payBtn.disabled = !(val >= 500);
+      payBtn.disabled = !(parseInt(amtInput.value) >= 500);
     });
+  }
 
-    form.addEventListener('submit', e => {
-      e.preventDefault();
-      const amt = parseInt(amtInput.value);
-      if (amt < 500) return;
-      // Create a one-time checkout by redirecting to a profile-checkout route
-      window.location.href = `{{ url_for('checkout.profile_pay', handle=merchant.handle) }}?amount=${amt}`;
-    });
-  </script>
+  // QR Modal
+  const profileUrl = '{{ request.host_url }}pay/@{{ merchant.handle }}';
+  function showQR() {
+    const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&qzone=2&data=' + encodeURIComponent(profileUrl);
+    document.getElementById('qr-img').src = qr;
+    document.getElementById('qr-url-text').textContent = profileUrl;
+    document.getElementById('qr-modal').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeQR() {
+    document.getElementById('qr-modal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+</script>
 </body>
 </html>
