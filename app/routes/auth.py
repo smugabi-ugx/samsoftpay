@@ -399,7 +399,7 @@ def first_setup():
 
     m = Merchant(
         name="Samsoftpay Admin",
-        email="smugabi@mail.com",
+        email="smugabi@gmail.com",
         password_hash=generate_password_hash("SamsoftAdmin2025!"),
         public_key="pk_live_admin_" + _sec.token_urlsafe(16),
         secret_key="sk_live_admin_" + _sec.token_urlsafe(20),
@@ -413,7 +413,7 @@ def first_setup():
     )
     db.session.add(m)
     db.session.commit()
-    return jsonify(ok=True, message="Admin created. Log in at /login with smugabi@mail.com / SamsoftAdmin2025!")
+    return jsonify(ok=True, message="Admin created. Log in at /login with smugabi@gmail.com / SamsoftAdmin2025!")
 
 
 @bp.get("/admin/verify-user/<int:merchant_id>")
