@@ -204,11 +204,22 @@
       display:none;
       position:fixed;top:0;left:0;right:0;height:56px;
       background:white;border-bottom:1px solid var(--gray-200);
-      z-index:200;padding:0 1rem;
-      align-items:center;justify-content:space-between;
+      z-index:200;padding:0 .75rem;
+      align-items:center;justify-content:space-between;gap:.5rem;
     }
-    .mobile-brand{display:flex;align-items:center;gap:.5rem;}
-    .mobile-brand img{width:28px;height:28px;border-radius:7px;object-fit:cover;}
+    .mobile-back{
+      width:40px;height:40px;border-radius:10px;
+      background:var(--gray-100);border:none;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      color:var(--gray-700);transition:background .15s;flex-shrink:0;
+    }
+    .mobile-back:hover{background:var(--gray-200);}
+    .mobile-back:active{transform:scale(.93);}
+    .mobile-brand{
+      display:flex;align-items:center;gap:.5rem;
+      text-decoration:none;flex:1;justify-content:center;
+    }
+    .mobile-brand img{width:26px;height:26px;border-radius:7px;object-fit:cover;}
     .mobile-brand span{font-size:.9375rem;font-weight:700;color:var(--gray-900);}
     .hamburger{
       width:40px;height:40px;border-radius:10px;
@@ -604,14 +615,22 @@
 
   <!-- MOBILE HEADER -->
   <header class="mobile-header">
+    <!-- Back button — shows when not on home, uses browser history -->
+    <button class="mobile-back" id="mobile-back" onclick="history.back()" aria-label="Go back"
+            style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+    </button>
+    <a class="mobile-brand"
+       href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+      <span id="mobile-page-title">{% block page_title %}Samsoftpay{% endblock %}</span>
+    </a>
     <button class="hamburger" id="hamburger" aria-label="Open menu">
       <span></span><span></span><span></span>
     </button>
-    <div class="mobile-brand">
-      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
-      <span>Samsoftpay</span>
-    </div>
-    <div style="width:40px;"></div>
   </header>
 
   <!-- SIDEBAR OVERLAY -->
@@ -622,7 +641,9 @@
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <a href="/" class="logo">
+        <!-- Logo: landing if guest, merchant dashboard if logged in -->
+        <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}"
+           class="logo">
           <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
           <span class="logo-text-main">Samsoftpay</span>
         </a>
@@ -634,17 +655,24 @@
       <nav class="sidebar-nav">
 
         <div class="nav-section">
-          <div class="nav-section-title">Main</div>
+          <div class="nav-section-title">Navigate</div>
+          <!-- Logo always goes to landing; Home goes to merchant dashboard if logged in -->
           <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="home"></i><span>Home</span>
           </a>
           {% if current_user.is_authenticated %}
-          <a href="{{ url_for('auth.account') }}" class="nav-link {% if request.endpoint == 'auth.account' %}active{% endif %}" onclick="closeSidebar()">
-            <i data-feather="user"></i><span>My Account</span>
+          <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}"
+             class="nav-link {% if request.endpoint == 'dashboard.merchant_detail' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="bar-chart-2"></i><span>My Dashboard</span>
+          </a>
+          <a href="{{ url_for('auth.account') }}"
+             class="nav-link {% if request.endpoint == 'auth.account' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="settings"></i><span>Settings &amp; API Keys</span>
           </a>
           {% if current_user.handle %}
-          <a href="{{ url_for('checkout.merchant_profile', handle=current_user.handle) }}" class="nav-link" target="_blank">
-            <i data-feather="link"></i><span>Payment Page</span>
+          <a href="{{ url_for('checkout.merchant_profile', handle=current_user.handle) }}"
+             class="nav-link" target="_blank" onclick="closeSidebar()">
+            <i data-feather="link"></i><span>My Payment Page ↗</span>
           </a>
           {% endif %}
           {% endif %}
@@ -737,35 +765,66 @@
 
   </div>
 
-  <!-- BOTTOM NAV (mobile) -->
+  <!-- BOTTOM NAV (mobile only) -->
   <nav class="bottom-nav" id="bottom-nav">
-    <a href="{{ url_for('dashboard.index') }}" class="bn-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      Home
-    </a>
     {% if current_user.is_authenticated %}
-    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="bn-item {% if request.endpoint == 'dashboard.merchant_detail' %}active{% endif %}">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-      Activity
+
+    <!-- Home → merchant dashboard -->
+    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}"
+       class="bn-item {% if request.endpoint == 'dashboard.merchant_detail' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Dashboard
     </a>
-    {% if current_user.handle %}
-    <a href="{{ url_for('checkout.merchant_profile', handle=current_user.handle) }}" class="bn-main" title="Payment Page">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-    </a>
-    {% endif %}
-    <a href="{{ url_for('bills.list_bills') }}" class="bn-item {% if 'bills.' in request.endpoint %}active{% endif %}">
+
+    <!-- Bills -->
+    <a href="{{ url_for('bills.list_bills') }}"
+       class="bn-item {% if 'bills.' in request.endpoint %}active{% endif %}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       Bills
     </a>
-    <a href="{{ url_for('auth.account') }}" class="bn-item {% if request.endpoint == 'auth.account' %}active{% endif %}">
+
+    <!-- Central action: Payment page -->
+    {% if current_user.handle %}
+    <a href="{{ url_for('checkout.merchant_profile', handle=current_user.handle) }}"
+       class="bn-main" title="My Payment Page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </a>
+    {% else %}
+    <div style="flex:1;max-width:60px;"></div>
+    {% endif %}
+
+    <!-- Docs -->
+    <a href="{{ url_for('docs.docs') }}"
+       class="bn-item {% if request.endpoint == 'docs.docs' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Docs
+    </a>
+
+    <!-- Account / Settings -->
+    <a href="{{ url_for('auth.account') }}"
+       class="bn-item {% if request.endpoint == 'auth.account' %}active{% endif %}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Account
     </a>
+
     {% else %}
+    <!-- Guest bottom nav -->
+    <a href="{{ url_for('dashboard.index') }}"
+       class="bn-item {% if request.endpoint == 'dashboard.index' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </a>
+    <a href="{{ url_for('docs.docs') }}"
+       class="bn-item {% if request.endpoint == 'docs.docs' %}active{% endif %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Docs
+    </a>
     <a href="{{ url_for('auth.signup_page') }}" class="bn-main" title="Sign Up">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </a>
-    <a href="{{ url_for('auth.login_page') }}" class="bn-item {% if request.endpoint == 'auth.login_page' %}active{% endif %}">
+    <div style="flex:1;max-width:80px;"></div>
+    <a href="{{ url_for('auth.login_page') }}"
+       class="bn-item {% if request.endpoint == 'auth.login_page' %}active{% endif %}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
       Sign In
     </a>
@@ -780,6 +839,24 @@
   <script>
     // ── FEATHER ICONS ──
     feather.replace({ 'stroke-width': 2 });
+
+    // ── BACK BUTTON (mobile) ──
+    // Show back button when there's something to go back to
+    const mobileBack = document.getElementById('mobile-back');
+    if (mobileBack) {
+      // If we navigated here (history.length > 1) and we're not on a root page
+      const rootPages = ['/', '/login', '/signup', '/docs'];
+      const isRoot = rootPages.includes(location.pathname) ||
+                     location.pathname.startsWith('/pay/@') ||
+                     location.pathname === '/account';
+      if (history.length > 1 && !isRoot) {
+        mobileBack.style.display = 'flex';
+      } else {
+        // Space holder so brand stays centered
+        mobileBack.style.visibility = 'hidden';
+        mobileBack.style.display = 'flex';
+      }
+    }
 
     // ── CSRF INJECTION ──
     const _csrf = document.querySelector('meta[name="csrf-token"]')?.content;

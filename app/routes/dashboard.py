@@ -21,9 +21,7 @@ bp = Blueprint("dashboard", __name__)
 
 @bp.get("/")
 def index():
-    from flask_login import current_user
-    if current_user.is_authenticated:
-        return redirect(url_for("auth.account"))
+    """Landing page — always visible to everyone."""
     return render_template("landing.html")
 
 
