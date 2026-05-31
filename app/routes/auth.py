@@ -82,6 +82,9 @@ def signup():
     raw_handle = request.form.get("handle", "").strip().lower()
     raw_handle = re.sub(r"[^\w-]", "", raw_handle)[:30]
 
+    from flask import current_app
+    smtp_configured = bool(current_app.config.get("MAIL_HOST"))
+
     otp = generate_otp()
     merchant = Merchant(
         name=name,
@@ -94,16 +97,30 @@ def signup():
         kyc_status="pending",
         webhook_url=webhook_url,
         handle=raw_handle if raw_handle else _make_handle(name),
-        email_verified=False,
-        otp_code=otp,
-        otp_expires_at=otp_expiry(),
+        # Auto-verify when SMTP is not configured — user can still set up email later
+        email_verified=not smtp_configured,
+        otp_code=otp if smtp_configured else None,
+        otp_expires_at=otp_expiry() if smtp_configured else None,
     )
     db.session.add(merchant)
     db.session.commit()
 
-    send_otp(email, otp, purpose="verification")
+    if smtp_configured:
+        try:
+            send_otp(email, otp, purpose="verification")
+            login_user(merchant, remember=False)
+            return redirect(url_for("auth.verify_email_page"))
+        except Exception as exc:
+            # SMTP failed — auto-verify so user isn't permanently locked out
+            import sys
+            print(f"[EMAIL FAILED] {exc} — auto-verifying {email}", flush=True)
+            sys.stdout.flush()
+            merchant.email_verified = True
+            merchant.otp_code = None
+            db.session.commit()
+
     login_user(merchant, remember=False)
-    return redirect(url_for("auth.verify_email_page"))
+    return redirect(url_for("auth.account"))
 
 
 # ---------- email verification ----------
@@ -374,6 +391,27 @@ def toggle_2fa():
     m.two_fa_enabled = not m.two_fa_enabled
     db.session.commit()
     return redirect(url_for("auth.account"))
+
+
+@bp.get("/admin/verify-user/<int:merchant_id>")
+@login_required
+def admin_verify_user(merchant_id: int):
+    """Emergency: manually verify any user's email. Admin only."""
+    if current_user.role != "admin":
+        abort(403)
+    m = db.session.get(Merchant, merchant_id)
+    if not m:
+        from flask import flash
+        flash("User not found.", "error")
+        return redirect(url_for("dashboard.admin_home"))
+    m.email_verified = True
+    m.otp_code = None
+    m.otp_attempts = 0
+    m.locked_until = None
+    db.session.commit()
+    from flask import flash
+    flash(f"Verified: {m.name} ({m.email})", "success")
+    return redirect(url_for("dashboard.admin_home"))
 
 
 @bp.post("/account/upload-logo")
