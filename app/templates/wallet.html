@@ -185,63 +185,112 @@
       <div class="card-header">
         <h3 class="card-title"><i data-feather="arrow-down-circle"></i> Top Up Wallet</h3>
       </div>
-      <p class="text-muted mb-3" style="font-size:.875rem;">Add funds to your float for disbursements and payouts.</p>
+      <p class="text-muted mb-3" style="font-size:.875rem;">Add funds to your available balance. MoMo top-up generates a QR you scan — credited instantly on payment.</p>
 
-      <div style="display:flex;flex-direction:column;gap:.75rem;">
-        <!-- MTN MoMo top-up -->
-        <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;">
-          <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
-            <span style="font-size:1.5rem;">📱</span>
-            <div>
-              <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">MTN Mobile Money</div>
-              <div style="font-size:.8rem;color:var(--gray-500);">Pay to our till number</div>
-            </div>
+      <!-- ── MTN MoMo top-up (generates QR) ── -->
+      <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
+          <span style="font-size:1.5rem;">📱</span>
+          <div>
+            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">MTN / Airtel Mobile Money</div>
+            <div style="font-size:.8rem;color:var(--gray-500);">Scan QR with your phone — wallet credited instantly on success</div>
           </div>
-          <div style="background:var(--gray-50);border-radius:8px;padding:.75rem;font-size:.875rem;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;">
-              <span style="color:var(--gray-600);">Till Number</span>
-              <strong>{{ current_user.id }}00000</strong>
-            </div>
-            <div style="display:flex;justify-content:space-between;">
-              <span style="color:var(--gray-600);">Reference</span>
-              <strong>{{ current_user.handle or current_user.id }}</strong>
-            </div>
-          </div>
-          <div class="form-hint" style="margin-top:.5rem;">Funds reflect within 30 minutes. Send reference to: <strong>support@samsoftpay.com</strong></div>
         </div>
-
-        <!-- Bank top-up -->
-        <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;">
-          <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
-            <span style="font-size:1.5rem;">🏦</span>
-            <div>
-              <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Bank Transfer</div>
-              <div style="font-size:.8rem;color:var(--gray-500);">Direct to our account</div>
+        <form method="POST" action="{{ url_for('wallet.topup_momo') }}">
+          <div style="display:flex;gap:.5rem;align-items:center;">
+            <div style="display:flex;align-items:center;border:2px solid var(--gray-200);border-radius:10px;overflow:hidden;flex:1;transition:border-color .2s;" onfocusin="this.style.borderColor='var(--primary)'" onfocusout="this.style.borderColor='var(--gray-200)'">
+              <span style="padding:0 .875rem;background:var(--gray-50);border-right:1px solid var(--gray-200);font-size:.875rem;font-weight:600;color:var(--gray-500);height:44px;display:flex;align-items:center;white-space:nowrap;">UGX</span>
+              <input type="number" name="topup_amount" min="1000" required
+                     placeholder="Enter amount (min 1,000)"
+                     style="flex:1;border:none;outline:none;padding:0 .875rem;height:44px;font-size:.9375rem;font-family:inherit;color:var(--gray-900);background:transparent;min-width:0;">
             </div>
+            <button type="submit" class="btn btn-primary" style="padding:.5rem 1rem;white-space:nowrap;flex-shrink:0;">
+              <i data-feather="grid"></i> Get QR
+            </button>
           </div>
-          <div style="background:var(--gray-50);border-radius:8px;padding:.75rem;font-size:.875rem;">
-            <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;"><span style="color:var(--gray-600);">Bank</span><strong>Stanbic Bank Uganda</strong></div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;"><span style="color:var(--gray-600);">Account</span><strong>9030-SAMSOFTPAY</strong></div>
-            <div style="display:flex;justify-content:space-between;"><span style="color:var(--gray-600);">Reference</span><strong>{{ current_user.handle or current_user.id }}</strong></div>
+          <div class="form-hint" style="margin-top:.375rem;">A payment page with QR code opens. Scan it with your MTN MoMo or Airtel app to pay.</div>
+        </form>
+      </div>
+
+      <!-- ── Bank transfer top-up ── -->
+      <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
+          <span style="font-size:1.5rem;">🏦</span>
+          <div>
+            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Bank Transfer</div>
+            <div style="font-size:.8rem;color:var(--gray-500);">Transfer to our account and submit the reference — credited within 1 business day</div>
           </div>
         </div>
 
-        <!-- Crypto top-up -->
-        <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;">
-          <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
-            <span style="font-size:1.5rem;">₿</span>
-            <div>
-              <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Crypto (USDT/BTC/ETH)</div>
-              <div style="font-size:.8rem;color:var(--gray-500);">Via ChangeNow instant exchange</div>
-            </div>
-          </div>
-          <a href="mailto:support@samsoftpay.com?subject=Crypto Top-Up&body=Account: {{ current_user.email }}"
-             class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .75rem;width:100%;">
-            <i data-feather="mail"></i> Request Crypto Top-Up
-          </a>
+        <!-- Our bank details -->
+        <div style="background:var(--gray-50);border-radius:8px;padding:.75rem;font-size:.875rem;margin-bottom:.875rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;"><span style="color:var(--gray-600);">Bank</span><strong>Stanbic Bank Uganda</strong></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;"><span style="color:var(--gray-600);">Account</span><strong>9030-SAMSOFTPAY</strong></div>
+          <div style="display:flex;justify-content:space-between;"><span style="color:var(--gray-600);">Your Reference</span><strong>TOPUP-{{ current_user.id }}</strong></div>
         </div>
+
+        <!-- Reference submission form -->
+        <form method="POST" action="{{ url_for('wallet.topup_bank') }}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem;">
+            <input type="number" name="bank_amount" min="10000" required
+                   placeholder="Amount (UGX)" class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;">
+            <input type="text" name="bank_name" placeholder="Your bank name"
+                   class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;">
+          </div>
+          <div style="display:flex;gap:.5rem;">
+            <input type="text" name="bank_ref" required
+                   placeholder="Transaction reference from your bank"
+                   class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;flex:1;">
+            <button type="submit" class="btn btn-outline" style="padding:.5rem .875rem;white-space:nowrap;flex-shrink:0;font-size:.8125rem;">
+              <i data-feather="send"></i> Submit
+            </button>
+          </div>
+          <div class="form-hint" style="margin-top:.375rem;">Our team verifies your reference and credits your wallet within 1 business day.</div>
+        </form>
+      </div>
+
+      <!-- ── Crypto top-up ── -->
+      <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
+          <span style="font-size:1.5rem;">₿</span>
+          <div>
+            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Crypto (USDT / BTC / ETH)</div>
+            <div style="font-size:.8rem;color:var(--gray-500);">Via ChangeNow instant exchange</div>
+          </div>
+        </div>
+        <a href="mailto:support@samsoftpay.com?subject=Crypto Top-Up Request&body=Account: {{ current_user.email }}%0AAmount (USDT): "
+           class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .75rem;width:100%;">
+          <i data-feather="mail"></i> Request Crypto Top-Up
+        </a>
       </div>
     </div>
+
+    <!-- Top-up history -->
+    {% if topups %}
+    <div class="card">
+      <div class="card-header"><h3 class="card-title"><i data-feather="refresh-cw"></i> Top-Up History</h3></div>
+      <div style="display:flex;flex-direction:column;gap:.5rem;">
+        {% for t in topups %}
+        <div style="display:flex;align-items:center;gap:.875rem;padding:.625rem;border:1px solid var(--gray-100);border-radius:10px;">
+          <span style="font-size:1.25rem;">{% if t.method == 'momo' %}📱{% elif t.method == 'bank' %}🏦{% else %}₿{% endif %}</span>
+          <div style="flex:1;">
+            <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">UGX {{ "{:,}".format(t.amount) }}</div>
+            <div style="font-size:.75rem;color:var(--gray-500);">{{ t.method.title() }} · {{ t.created_at.strftime('%d %b %Y') }}</div>
+          </div>
+          <span class="badge {{ 'succeeded' if t.status == 'completed' else 'failed' if t.status == 'rejected' else 'pending' }}">
+            {{ t.status.title() }}
+          </span>
+          {% if t.status == 'pending' and t.method == 'momo' and t.payment_link_id %}
+          <a href="{{ url_for('wallet.topup_qr_page', topup_public_id=t.public_id) }}"
+             class="btn btn-outline" style="padding:.25rem .625rem;font-size:.75rem;">
+            View QR
+          </a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Withdrawal request + history -->

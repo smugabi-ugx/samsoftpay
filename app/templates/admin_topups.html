@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Top-Up Requests{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('dashboard.admin_home') }}">Admin</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-cur">Top-Up Requests</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'info' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'info' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="page-header">
+  <h1 class="page-title">Top-Up Requests</h1>
+  <p class="page-subtitle">Verify bank references and approve wallet credits.</p>
+</div>
+
+{% if pending %}
+<div class="card" style="border-left:4px solid var(--primary);">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="clock"></i> Pending ({{ pending|length }})</h3>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Merchant</th><th>Method</th><th>Amount</th><th>Reference</th><th>Requested</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for t in pending %}
+        <tr>
+          <td><strong>#{{ t.merchant_id }}</strong></td>
+          <td>
+            {% if t.method == 'momo' %}
+            <span class="badge pending">MTN MoMo</span>
+            {% else %}
+            <span class="badge pending">{{ t.bank_name or 'Bank' }}</span>
+            {% endif %}
+          </td>
+          <td><strong>UGX {{ "{:,}".format(t.amount) }}</strong></td>
+          <td><code style="font-size:.8rem;">{{ t.reference or '—' }}</code></td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ t.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td>
+            <div style="display:flex;gap:.375rem;flex-wrap:wrap;">
+              <form method="POST" action="{{ url_for('wallet.admin_approve_topup', req_id=t.id) }}">
+                <button type="submit" class="btn btn-success" style="padding:.375rem .75rem;font-size:.8125rem;">
+                  <i data-feather="check"></i> Approve &amp; Credit
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('wallet.admin_reject_topup', req_id=t.id) }}"
+                    onsubmit="return confirm('Reject this top-up?')">
+                <input type="hidden" name="reason" value="Rejected by admin">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .75rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);">
+                  <i data-feather="x"></i> Reject
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:2rem;color:var(--gray-500);">
+  <i data-feather="check-circle" style="width:36px;height:36px;color:var(--success);margin-bottom:.75rem;"></i>
+  <p>No pending top-up requests.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="list"></i> All Top-Ups</h3></div>
+  {% if all_items %}
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Merchant</th><th>Method</th><th>Amount</th><th>Status</th><th>Date</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for t in all_items %}
+        <tr>
+          <td>#{{ t.merchant_id }}</td>
+          <td>{{ t.method.title() }}{% if t.bank_name %} · {{ t.bank_name }}{% endif %}</td>
+          <td>UGX {{ "{:,}".format(t.amount) }}</td>
+          <td><span class="badge {{ 'succeeded' if t.status == 'completed' else 'failed' if t.status == 'rejected' else 'pending' }}">{{ t.status.title() }}</span></td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ t.created_at.strftime('%d %b %Y') }}</td>
+          <td style="font-size:.8125rem;color:var(--gray-500);">{{ t.admin_notes or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">No top-up history.</p>
+  {% endif %}
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

@@ -392,6 +392,37 @@ class WithdrawalRequest(db.Model):
 
 
 # ──────────────────────────────────────────────────────────────
+# Wallet Top-Up Requests
+# ──────────────────────────────────────────────────────────────
+
+class TopUpRequest(db.Model):
+    """A merchant request to add funds to their available balance.
+
+    MoMo:  creates a PaymentLink → merchant scans QR → on success, ledger credited.
+    Bank:  merchant provides bank reference → admin verifies → ledger credited.
+    """
+    __tablename__ = "topup_requests"
+    id = Column(Integer, primary_key=True)
+    public_id   = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    method      = Column(String(20), nullable=False)  # momo | bank
+    amount      = Column(BigInteger, nullable=False)
+    currency    = Column(String(3), nullable=False, default="UGX")
+    status      = Column(String(20), default="pending", nullable=False, index=True)
+    # pending | completed | rejected | expired
+    # MoMo-specific
+    payment_link_id = Column(Integer, ForeignKey("payment_links.id"), nullable=True)
+    transaction_id  = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    # Bank-specific
+    bank_name   = Column(String(100), nullable=True)
+    reference   = Column(String(100), nullable=True)
+    # Review
+    admin_notes = Column(Text, nullable=True)
+    processed_at = Column(DateTime, nullable=True)
+    created_at   = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+
+# ──────────────────────────────────────────────────────────────
 # Bills & Tax
 # ──────────────────────────────────────────────────────────────
 

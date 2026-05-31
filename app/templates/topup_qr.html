@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Top Up Wallet{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('wallet.wallet_home') }}">Wallet</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-cur">MoMo Top-Up</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .topup-card{max-width:480px;margin:0 auto;}
+  .qr-status{text-align:center;padding:2rem;}
+  .status-icon{font-size:3.5rem;margin-bottom:1rem;display:block;}
+  .qr-box{
+    background:white;border:1px solid var(--gray-200);border-radius:16px;
+    padding:1.5rem;text-align:center;margin-bottom:1.5rem;
+  }
+  .qr-box img{border-radius:12px;border:1px solid var(--gray-200);margin:0 auto 1rem;display:block;}
+  .qr-amount{font-family:'Urbanist',sans-serif;font-size:2.5rem;font-weight:900;color:var(--gray-900);letter-spacing:-.03em;}
+  .qr-label{font-size:.875rem;color:var(--gray-500);margin-top:4px;}
+  .step-list{list-style:none;display:flex;flex-direction:column;gap:.875rem;margin-bottom:1.5rem;}
+  .step-item{display:flex;align-items:flex-start;gap:.875rem;}
+  .step-num{
+    width:28px;height:28px;border-radius:8px;flex-shrink:0;
+    background:linear-gradient(135deg,var(--primary),var(--secondary));
+    color:white;font-size:.8125rem;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step-text{font-size:.9rem;color:var(--gray-700);line-height:1.6;}
+  .processing-bar{
+    height:4px;background:var(--gray-200);border-radius:2px;overflow:hidden;margin:1.5rem 0;
+  }
+  .processing-fill{
+    height:100%;background:linear-gradient(90deg,var(--primary),var(--secondary));
+    border-radius:2px;animation:progress-pulse 2s ease-in-out infinite;
+    width:60%;
+  }
+  @keyframes progress-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+  .or-divider{display:flex;align-items:center;gap:.875rem;margin:1.25rem 0;color:var(--gray-400);font-size:.875rem;}
+  .or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:var(--gray-200);}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="topup-card">
+
+  <div class="page-header">
+    <h1 class="page-title">MoMo Wallet Top-Up</h1>
+    <p class="page-subtitle">Scan the QR code or use the link below to pay from your phone.</p>
+  </div>
+
+  {% if topup.status == 'completed' %}
+  <!-- SUCCESS -->
+  <div class="card" style="text-align:center;padding:3rem;">
+    <span class="status-icon">✅</span>
+    <h2 style="font-family:'Urbanist',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:.5rem;">Top-up successful!</h2>
+    <p style="color:var(--gray-500);margin-bottom:1.5rem;">
+      UGX {{ "{:,}".format(topup.amount) }} has been added to your available balance.
+    </p>
+    <a href="{{ url_for('wallet.wallet_home') }}" class="btn btn-success" style="width:100%;">
+      <i data-feather="check-circle"></i> View Wallet Balance
+    </a>
+  </div>
+
+  {% elif topup.status == 'rejected' %}
+  <!-- FAILED -->
+  <div class="card" style="text-align:center;padding:3rem;">
+    <span class="status-icon">❌</span>
+    <h2 style="font-family:'Urbanist',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:.5rem;">Payment failed</h2>
+    <p style="color:var(--gray-500);margin-bottom:1.5rem;">{{ topup.admin_notes or 'The payment could not be processed.' }}</p>
+    <a href="{{ url_for('wallet.wallet_home') }}" class="btn btn-outline" style="width:100%;">
+      Try Again
+    </a>
+  </div>
+
+  {% else %}
+  <!-- PENDING — show QR -->
+  <div class="qr-box">
+    <div class="qr-amount">UGX {{ "{:,}".format(topup.amount) }}</div>
+    <div class="qr-label">to {{ current_user.name }}</div>
+
+    {% if checkout_url %}
+    <div style="margin:1.25rem 0;">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&qzone=2&data={{ checkout_url|urlencode }}"
+           width="220" height="220" alt="Payment QR">
+    </div>
+    <div class="or-divider">or use the link</div>
+    <div style="background:var(--gray-50);border-radius:8px;padding:.625rem .875rem;font-size:.8rem;word-break:break-all;color:var(--gray-600);margin-bottom:1rem;">
+      {{ checkout_url }}
+    </div>
+    <a href="{{ checkout_url }}" class="btn btn-primary" style="width:100%;margin-bottom:0;">
+      <i data-feather="smartphone"></i> Open Payment Page
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Steps -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title"><i data-feather="list"></i> How to pay</h3>
+    </div>
+    <ul class="step-list">
+      <li class="step-item">
+        <div class="step-num">1</div>
+        <div class="step-text">Open your <strong>MTN MoMo</strong> or <strong>Airtel Money</strong> app and tap <em>Scan QR</em> — or click "Open Payment Page" above.</div>
+      </li>
+      <li class="step-item">
+        <div class="step-num">2</div>
+        <div class="step-text">Scan the QR code. Confirm the amount is <strong>UGX {{ "{:,}".format(topup.amount) }}</strong> and approve.</div>
+      </li>
+      <li class="step-item">
+        <div class="step-num">3</div>
+        <div class="step-text">Come back here — this page updates automatically when payment is confirmed. Usually within 30 seconds.</div>
+      </li>
+    </ul>
+
+    <div class="processing-bar">
+      <div class="processing-fill" id="progress-bar"></div>
+    </div>
+    <p style="text-align:center;font-size:.8125rem;color:var(--gray-500);" id="status-text">
+      Waiting for payment…
+    </p>
+  </div>
+
+  <a href="{{ url_for('wallet.wallet_home') }}" class="btn btn-outline" style="width:100%;margin-top:.75rem;">
+    Cancel &amp; Go Back
+  </a>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+
+  {% if topup.status == 'pending' %}
+  // Poll every 5 seconds
+  const POLL_URL = '{{ url_for("wallet.topup_status_json", topup_public_id=topup.public_id) }}';
+  let dots = 0;
+  const statusText = document.getElementById('status-text');
+
+  function poll() {
+    fetch(POLL_URL)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'completed') {
+          statusText.textContent = '✅ Payment confirmed! Refreshing…';
+          statusText.style.color = 'var(--success)';
+          setTimeout(() => location.reload(), 1200);
+        } else if (data.status === 'rejected') {
+          statusText.textContent = '❌ Payment failed. Please try again.';
+          statusText.style.color = 'var(--danger)';
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          dots = (dots + 1) % 4;
+          statusText.textContent = 'Waiting for payment' + '.'.repeat(dots + 1);
+          setTimeout(poll, 5000);
+        }
+      })
+      .catch(() => setTimeout(poll, 8000));
+  }
+  setTimeout(poll, 5000);
+  {% endif %}
+</script>
+{% endblock %}

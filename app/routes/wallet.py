@@ -1,13 +1,13 @@
 """Wallet — settlement accounts, withdrawal requests, and top-up."""
 import uuid
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
 from ..models import (
     Account, AccountType, Merchant, Payout, PayoutStatus,
-    SettlementAccount, WithdrawalRequest,
+    PaymentLink, SettlementAccount, TopUpRequest, TxnStatus, WithdrawalRequest,
 )
 from ..utils import admin_required, verified_required
 
@@ -35,10 +35,16 @@ def wallet_home():
     available = -avail_acct.cached_balance if avail_acct else 0
     pending   = -pending_acct.cached_balance if pending_acct else 0
 
+    topups = (TopUpRequest.query
+              .filter_by(merchant_id=current_user.id)
+              .order_by(TopUpRequest.created_at.desc())
+              .limit(10).all())
+
     return render_template("wallet.html",
         accounts=accounts, withdrawals=withdrawals,
         available=available, pending=pending,
         withdrawal_fee=_WITHDRAWAL_FEE,
+        topups=topups,
     )
 
 
@@ -286,3 +292,173 @@ def admin_reject_withdrawal(wr_id: int):
     db.session.commit()
     flash("Withdrawal rejected.", "info")
     return redirect(url_for("wallet.admin_withdrawals"))
+
+
+# ── Wallet Top-Up ──────────────────────────────────────────────────────────────
+
+@bp.post("/dashboard/wallet/topup/momo")
+@login_required
+@verified_required
+def topup_momo():
+    """Create a PaymentLink for MoMo top-up — merchant scans QR and pays."""
+    try:
+        amount = int(request.form.get("topup_amount", 0))
+    except ValueError:
+        flash("Invalid amount.", "error")
+        return redirect(url_for("wallet.wallet_home"))
+    if amount < 1000:
+        flash("Minimum MoMo top-up is UGX 1,000.", "error")
+        return redirect(url_for("wallet.wallet_home"))
+
+    merchant = db.session.get(Merchant, current_user.id)
+    link = PaymentLink(
+        public_id           = f"lnk_{uuid.uuid4().hex[:16]}",
+        merchant_id         = merchant.id,
+        amount              = amount,
+        currency            = "UGX",
+        description         = f"Wallet top-up — {merchant.name}",
+        reference           = f"TOPUP-{merchant.id}",
+        allow_multiple_uses = False,
+        is_active           = True,
+    )
+    db.session.add(link)
+    db.session.flush()
+
+    from ..models import TopUpRequest
+    topup = TopUpRequest(
+        public_id       = f"tu_{uuid.uuid4().hex[:16]}",
+        merchant_id     = merchant.id,
+        method          = "momo",
+        amount          = amount,
+        status          = "pending",
+        payment_link_id = link.id,
+    )
+    db.session.add(topup)
+    db.session.commit()
+    return redirect(url_for("wallet.topup_qr_page", topup_public_id=topup.public_id))
+
+
+@bp.get("/dashboard/wallet/topup/<topup_public_id>/qr")
+@login_required
+@verified_required
+def topup_qr_page(topup_public_id: str):
+    from ..models import TopUpRequest
+    topup = TopUpRequest.query.filter_by(
+        public_id=topup_public_id, merchant_id=current_user.id
+    ).first_or_404()
+    link = db.session.get(PaymentLink, topup.payment_link_id) if topup.payment_link_id else None
+    checkout_url = url_for("checkout.checkout_page", public_id=link.public_id, _external=True) if link else None
+    return render_template("topup_qr.html", topup=topup, link=link, checkout_url=checkout_url)
+
+
+@bp.get("/dashboard/wallet/topup/<topup_public_id>/status.json")
+@login_required
+def topup_status_json(topup_public_id: str):
+    from datetime import datetime, timezone
+    from ..models import TopUpRequest, Transaction
+    topup = TopUpRequest.query.filter_by(
+        public_id=topup_public_id, merchant_id=current_user.id
+    ).first_or_404()
+
+    if topup.status == "pending" and topup.payment_link_id:
+        link = db.session.get(PaymentLink, topup.payment_link_id)
+        if link and link.transaction_id:
+            txn = db.session.get(Transaction, link.transaction_id)
+            if txn and txn.status == TxnStatus.SUCCEEDED:
+                _credit_wallet(topup.merchant_id, topup.amount, topup.public_id)
+                topup.status         = "completed"
+                topup.transaction_id = txn.id
+                topup.processed_at   = datetime.now(timezone.utc)
+                db.session.commit()
+            elif txn and txn.status == TxnStatus.FAILED:
+                topup.status      = "rejected"
+                topup.admin_notes = txn.failure_reason or "Payment failed"
+                db.session.commit()
+
+    return jsonify(status=topup.status, amount=topup.amount, currency=topup.currency)
+
+
+def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:
+    """Credit merchant_available directly — used for confirmed top-ups."""
+    from ..services import ledger
+    avail = ledger.get_or_create_account(
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency="UGX"
+    )
+    psp_float = ledger.get_or_create_account(
+        type=AccountType.PSP_FLOAT, merchant_id=None, currency="UGX"
+    )
+    ledger.post([(psp_float, +amount), (avail, -amount)],
+                currency="UGX", memo=f"Wallet top-up {ref}")
+
+
+@bp.post("/dashboard/wallet/topup/bank")
+@login_required
+@verified_required
+def topup_bank():
+    try:
+        amount = int(request.form.get("bank_amount", 0))
+    except ValueError:
+        flash("Invalid amount.", "error")
+        return redirect(url_for("wallet.wallet_home"))
+    if amount < 10000:
+        flash("Minimum bank top-up is UGX 10,000.", "error")
+        return redirect(url_for("wallet.wallet_home"))
+
+    from ..models import TopUpRequest
+    topup = TopUpRequest(
+        public_id   = f"tu_{uuid.uuid4().hex[:16]}",
+        merchant_id = current_user.id,
+        method      = "bank",
+        amount      = amount,
+        status      = "pending",
+        bank_name   = request.form.get("bank_name", "").strip() or None,
+        reference   = request.form.get("bank_ref", "").strip() or None,
+    )
+    db.session.add(topup)
+    db.session.commit()
+    flash("Bank top-up submitted. We'll verify your reference and credit your wallet within 1 business day.", "success")
+    return redirect(url_for("wallet.wallet_home"))
+
+
+@bp.get("/admin/topups")
+@login_required
+@admin_required
+def admin_topups():
+    from ..models import TopUpRequest
+    pending   = TopUpRequest.query.filter_by(status="pending").order_by(TopUpRequest.created_at.asc()).all()
+    all_items = TopUpRequest.query.order_by(TopUpRequest.created_at.desc()).limit(50).all()
+    return render_template("admin_topups.html", pending=pending, all_items=all_items)
+
+
+@bp.post("/admin/topups/<int:req_id>/approve")
+@login_required
+@admin_required
+def admin_approve_topup(req_id: int):
+    from datetime import datetime, timezone
+    from ..models import TopUpRequest
+    topup = db.session.get(TopUpRequest, req_id) or abort(404)
+    if topup.status != "pending":
+        flash("Already processed.", "error")
+        return redirect(url_for("wallet.admin_topups"))
+    _credit_wallet(topup.merchant_id, topup.amount, topup.public_id)
+    topup.status       = "completed"
+    topup.admin_notes  = f"Approved by {current_user.email}"
+    topup.processed_at = datetime.now(timezone.utc)
+    db.session.commit()
+    flash(f"UGX {topup.amount:,} credited to merchant #{topup.merchant_id}.", "success")
+    return redirect(url_for("wallet.admin_topups"))
+
+
+@bp.post("/admin/topups/<int:req_id>/reject")
+@login_required
+@admin_required
+def admin_reject_topup(req_id: int):
+    from datetime import datetime, timezone
+    from ..models import TopUpRequest
+    topup = db.session.get(TopUpRequest, req_id) or abort(404)
+    topup.status       = "rejected"
+    topup.admin_notes  = request.form.get("reason", "Rejected").strip()
+    topup.processed_at = datetime.now(timezone.utc)
+    db.session.commit()
+    flash("Top-up request rejected.", "info")
+    return redirect(url_for("wallet.admin_topups"))
