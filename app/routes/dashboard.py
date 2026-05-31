@@ -112,34 +112,50 @@ def admin_delete_merchant(merchant_id: int):
         return redirect(url_for("dashboard.list_merchants"))
 
     name = m.name
-    # SQLAlchemy cascades handle related records if FK cascade is set;
-    # for safety, delete in order
     from ..models import (
-        AuditLog, Bill, GiftCard, KYCApplication, PaymentLink,
-        Payout, SettlementAccount, Subscription, SubscriptionPlan,
+        AuditLog, Bill, GiftCard, KYCApplication, KYCDirector, KYCDocument,
+        PaymentLink, Payout, SettlementAccount, Subscription, SubscriptionPlan,
         TopUpRequest, Transaction, WebhookDelivery, WithdrawalRequest,
         Account, JournalEntry,
     )
-    for model in [
-        AuditLog, Bill, GiftCard, KYCApplication,
-        Payout, SettlementAccount, Subscription, SubscriptionPlan,
-        TopUpRequest, WithdrawalRequest, WebhookDelivery,
-    ]:
-        model.query.filter_by(merchant_id=merchant_id).delete()
+    try:
+        # 1. Children of KYCApplication
+        kyc_apps = KYCApplication.query.filter_by(merchant_id=merchant_id).all()
+        for app in kyc_apps:
+            KYCDirector.query.filter_by(application_id=app.id).delete()
+            KYCDocument.query.filter_by(application_id=app.id).delete()
+        KYCApplication.query.filter_by(merchant_id=merchant_id).delete()
 
-    # Payment links first (transactions reference them)
-    PaymentLink.query.filter_by(merchant_id=merchant_id).delete()
+        # 2. Subscriptions before plans
+        Subscription.query.filter_by(merchant_id=merchant_id).delete()
+        SubscriptionPlan.query.filter_by(merchant_id=merchant_id).delete()
 
-    # Journal entries → accounts
-    acct_ids = [a.id for a in Account.query.filter_by(merchant_id=merchant_id).all()]
-    if acct_ids:
-        JournalEntry.query.filter(JournalEntry.account_id.in_(acct_ids)).delete()
-    Account.query.filter_by(merchant_id=merchant_id).delete()
-    Transaction.query.filter_by(merchant_id=merchant_id).delete()
+        # 3. Withdrawal & top-up requests (reference settlement accounts, payouts)
+        WithdrawalRequest.query.filter_by(merchant_id=merchant_id).delete()
+        TopUpRequest.query.filter_by(merchant_id=merchant_id).delete()
+        SettlementAccount.query.filter_by(merchant_id=merchant_id).delete()
 
-    db.session.delete(m)
-    db.session.commit()
-    flash(f"Deleted merchant: {name}", "success")
+        # 4. Other direct merchant refs
+        for model in [AuditLog, Bill, GiftCard, WebhookDelivery]:
+            model.query.filter_by(merchant_id=merchant_id).delete()
+
+        # 5. Payment links (before transactions that ref them)
+        PaymentLink.query.filter_by(merchant_id=merchant_id).delete()
+        Payout.query.filter_by(merchant_id=merchant_id).delete()
+        Transaction.query.filter_by(merchant_id=merchant_id).delete()
+
+        # 6. Ledger — journal entries ref accounts
+        acct_ids = [a.id for a in Account.query.filter_by(merchant_id=merchant_id).all()]
+        for chunk in [acct_ids[i:i+100] for i in range(0, len(acct_ids), 100)]:
+            JournalEntry.query.filter(JournalEntry.account_id.in_(chunk)).delete()
+        Account.query.filter_by(merchant_id=merchant_id).delete()
+
+        db.session.delete(m)
+        db.session.commit()
+        flash(f"Deleted: {name}", "success")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Delete failed: {exc}", "error")
     return redirect(url_for("dashboard.list_merchants"))
 
 
