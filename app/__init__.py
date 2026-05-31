@@ -24,11 +24,16 @@ def _fix_db_url(url: str) -> str:
 
 
 def _assert_production_env() -> None:
-    """Fail fast on Render if DATABASE_URL was not injected (would silently use SQLite)."""
-    if os.environ.get("RENDER") and "sqlite" in os.environ.get("DATABASE_URL", "sqlite://"):
+    """Fail fast on Render if DATABASE_URL is missing, empty, or still SQLite."""
+    if not os.environ.get("RENDER"):
+        return   # local dev — skip
+    db_url = os.environ.get("DATABASE_URL", "")
+    if not db_url or "sqlite" in db_url:
         sys.exit(
-            "FATAL: DATABASE_URL is missing or still points to SQLite on Render. "
-            "Attach the samsoftpay-db database in the Render dashboard."
+            "FATAL: DATABASE_URL is missing or empty on Render.\n"
+            "Fix: go to your Render service → Environment → add DATABASE_URL "
+            "with the Internal Connection String from your PostgreSQL database.\n"
+            "If you have not created a database yet: Render dashboard → New + → PostgreSQL."
         )
 
 
