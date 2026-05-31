@@ -15,20 +15,27 @@ from flask import Flask
 from .extensions import db
 
 
+def _fix_db_url(url: str) -> str:
+    """Render provides postgres:// — SQLAlchemy 2.x requires postgresql://"""
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__, template_folder="templates")
     from datetime import timedelta
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-do-not-use-in-prod"),
-        # ── Secure session cookies (Capital One / AMEX standard) ──────────────
-        SESSION_COOKIE_NAME="ssp_sid",          # obscure the framework name
-        SESSION_COOKIE_HTTPONLY=True,            # JS cannot read the cookie
-        SESSION_COOKIE_SAMESITE="Lax",          # CSRF mitigation
-        SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
+        # ── Secure session cookies ──────────────────────────────────────────
+        SESSION_COOKIE_NAME="ssp_sid",
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # True on Render, False locally
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),  # idle timeout
         SESSION_REFRESH_EACH_REQUEST=True,       # reset 30-min window on activity
-        SQLALCHEMY_DATABASE_URI=os.environ.get(
-            "DATABASE_URL", "sqlite:///samsoftpay.db"
+        SQLALCHEMY_DATABASE_URI=_fix_db_url(
+            os.environ.get("DATABASE_URL", "sqlite:///samsoftpay.db")
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         WEBHOOK_SIGNING_SECRET=os.environ.get(
