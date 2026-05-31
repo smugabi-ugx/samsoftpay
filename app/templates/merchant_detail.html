@@ -1,173 +1,274 @@
 {% extends "base.html" %}
+{% block title %}{{ merchant.name }} — Dashboard{% endblock %}
 
-{% block title %}{{ merchant.name }}{% endblock %}
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('dashboard.index') }}">Home</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-cur">{{ merchant.name }}</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Account hero (Capital One style) ── */
+  .acct-hero {
+    background: linear-gradient(135deg, #0f0c29 0%, #1a0533 60%, #2d1060 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 1.75rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+  .acct-hero::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 80% 50%, rgba(99,102,241,.2), transparent 60%);
+  }
+  .acct-hero-inner { position: relative; z-index: 1; }
+  .acct-hero-top {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 1rem; margin-bottom: 1.75rem;
+  }
+  .acct-name-row { display: flex; align-items: center; gap: .875rem; }
+  .acct-avatar {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Urbanist', sans-serif;
+    font-size: 1.375rem; font-weight: 800; color: white;
+    flex-shrink: 0;
+  }
+  .acct-name { font-family: 'Urbanist', sans-serif; font-size: 1.375rem; font-weight: 800; }
+  .acct-meta { font-size: .8125rem; opacity: .6; margin-top: 2px; }
+  .acct-mode-badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.15);
+    color: rgba(255,255,255,.8); padding: .35rem .875rem;
+    border-radius: 99px; font-size: .75rem; font-weight: 700;
+  }
+  .acct-mode-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* Balance row */
+  .balance-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1.25rem; margin-bottom: 1.75rem;
+  }
+  @media(max-width:520px) { .balance-row { grid-template-columns: 1fr; } }
+  .balance-item {}
+  .balance-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; opacity: .55; margin-bottom: .375rem; }
+  .balance-amount {
+    font-family: 'Urbanist', sans-serif;
+    font-size: 2.25rem; font-weight: 900; letter-spacing: -.03em; line-height: 1;
+  }
+  .balance-sub { font-size: .8125rem; opacity: .5; margin-top: 4px; }
+  .balance-divider { width: 1px; background: rgba(255,255,255,.12); }
+
+  /* Quick actions */
+  .quick-actions { display: flex; gap: .625rem; flex-wrap: wrap; }
+  .qa-btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
+    color: white; padding: .625rem 1.125rem; border-radius: 10px;
+    font-size: .875rem; font-weight: 600; text-decoration: none;
+    font-family: inherit; cursor: pointer;
+    transition: all .2s; -webkit-tap-highlight-color: transparent;
+  }
+  .qa-btn:hover { background: rgba(255,255,255,.18); transform: translateY(-1px); }
+  .qa-btn:active { transform: scale(.97); }
+  .qa-btn svg { width: 15px; height: 15px; }
+  .qa-btn.primary-action {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-color: transparent;
+    box-shadow: 0 4px 16px rgba(99,102,241,.4);
+  }
+
+  /* Activity table — bank-grade */
+  .activity-row {
+    display: flex; align-items: center; gap: 1rem;
+    padding: .875rem 0;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .activity-row:last-child { border-bottom: none; }
+  .activity-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; flex-shrink: 0;
+  }
+  .activity-info { flex: 1; min-width: 0; }
+  .activity-title { font-weight: 600; font-size: .9rem; color: var(--gray-900); }
+  .activity-sub { font-size: .8rem; color: var(--gray-500); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .activity-amount { font-family: 'Urbanist', sans-serif; font-weight: 700; font-size: 1rem; text-align: right; flex-shrink: 0; }
+  .activity-amount.in { color: var(--success); }
+  .activity-amount.out { color: var(--gray-700); }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 3.5rem 1rem; }
+  .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: .4; }
+  .empty-state h4 { font-size: 1rem; font-weight: 700; color: var(--gray-700); margin-bottom: .375rem; }
+  .empty-state p { font-size: .875rem; color: var(--gray-500); }
+
+  /* Inline KYC/verification banner */
+  .verification-banner {
+    background: linear-gradient(135deg, rgba(99,102,241,.06), rgba(139,92,246,.06));
+    border: 1px solid rgba(99,102,241,.15);
+    border-radius: 14px; padding: 1.25rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 1.75rem; flex-wrap: wrap;
+  }
+  .vb-icon {
+    width: 44px; height: 44px; border-radius: 11px;
+    background: rgba(99,102,241,.1); display: flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .vb-text { flex: 1; }
+  .vb-text h4 { font-size: .9375rem; font-weight: 700; color: var(--gray-900); margin-bottom: 2px; }
+  .vb-text p { font-size: .8125rem; color: var(--gray-500); }
+</style>
+{% endblock %}
 
 {% block content %}
-<!-- Page Header -->
-<div class="page-header" style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 1.5rem;">
-  <div>
-    <h1 class="page-title" style="display: flex; align-items: center; gap: 1rem;">
-      <div style="width: 56px; height: 56px; background: var(--gradient-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; font-weight: 700;">
-        {{ merchant.name[0] }}
-      </div>
-      {{ merchant.name }}
-    </h1>
-    <!-- API Keys Section -->
-    <div style="margin-top: 1rem;">
-      <div style="margin-bottom: 0.75rem;">
-        <div style="font-size: 0.75rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Public Key</div>
-        <div class="api-key-display">
-          <code id="publicKey">{{ merchant.public_key }}</code>
-          <button class="copy-btn" onclick="copyToClipboard('publicKey', this)" title="Copy to clipboard">
-            <i data-feather="copy" style="width: 16px; height: 16px;"></i>
-          </button>
+
+<!-- ── ACCOUNT HERO (Capital One style) ── -->
+<div class="acct-hero">
+  <div class="acct-hero-inner">
+
+    <div class="acct-hero-top">
+      <div class="acct-name-row">
+        <div class="acct-avatar">{{ merchant.name[0].upper() }}</div>
+        <div>
+          <div class="acct-name">{{ merchant.name }}</div>
+          <div class="acct-meta">Merchant #{{ merchant.id }} · {{ merchant.kyc_status.replace('_',' ').title() }}</div>
         </div>
       </div>
-      <div>
-        <div style="font-size: 0.75rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Secret Key</div>
-        <div class="api-key-display" style="border-color: var(--danger); background: rgba(239, 68, 68, 0.05);">
-          <code id="secretKey" style="color: var(--danger);">{{ merchant.secret_key }}</code>
-          <button class="copy-btn" onclick="copyToClipboard('secretKey', this)" title="Copy to clipboard">
-            <i data-feather="copy" style="width: 16px; height: 16px;"></i>
-          </button>
-        </div>
-        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.8125rem; color: var(--gray-600);">
-          <i data-feather="shield" style="width: 14px; height: 14px; color: var(--danger);"></i>
-          <span>Keep your secret key secure. Never share it publicly or commit it to version control.</span>
-        </div>
+      <div class="acct-mode-badge">
+        <span class="acct-mode-dot" style="background:#10b981;"></span> Samsoftpay Dashboard
       </div>
     </div>
-  </div>
 
-  <div class="btn-group">
-    <a href="{{ url_for('dashboard.new_link_form', merchant_id=merchant.id) }}" class="btn btn-primary">
-      <i data-feather="link"></i>
-      Payment Link
-    </a>
-    <a href="{{ url_for('dashboard.new_payout_form', merchant_id=merchant.id) }}" class="btn btn-success">
-      <i data-feather="send"></i>
-      Send Payout
-    </a>
-    <a href="{{ url_for('dashboard.bulk_payout_form', merchant_id=merchant.id) }}" class="btn btn-info">
-      <i data-feather="upload"></i>
-      Bulk CSV
-    </a>
+    <div class="balance-row">
+      <div class="balance-item">
+        <div class="balance-label">Available Balance</div>
+        <div class="balance-amount">UGX {{ "{:,}".format(available_balance) }}</div>
+        <div class="balance-sub">Ready to withdraw</div>
+      </div>
+      <div class="balance-item" style="border-left:1px solid rgba(255,255,255,.1);padding-left:1.25rem;">
+        <div class="balance-label">Pending Settlement</div>
+        <div class="balance-amount" style="opacity:.65;">UGX {{ "{:,}".format(pending_balance) }}</div>
+        <div class="balance-sub">Processing</div>
+      </div>
+    </div>
+
+    <div class="quick-actions">
+      <a href="{{ url_for('wallet.wallet_home') }}" class="qa-btn primary-action">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Withdraw
+      </a>
+      <a href="{{ url_for('dashboard.new_link_form', merchant_id=merchant.id) }}" class="qa-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Payment Link
+      </a>
+      <a href="{{ url_for('dashboard.new_payout_form', merchant_id=merchant.id) }}" class="qa-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Send Payout
+      </a>
+      <a href="{{ url_for('dashboard.bulk_payout_form', merchant_id=merchant.id) }}" class="qa-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+        Bulk CSV
+      </a>
+      {% if merchant.handle %}
+      <a href="{{ url_for('checkout.merchant_profile', handle=merchant.handle) }}" target="_blank" class="qa-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/></svg>
+        Pay Page
+      </a>
+      {% endif %}
+    </div>
+
   </div>
 </div>
 
-<!-- Security Best Practices Alert -->
-<div class="alert alert-info">
-  <i data-feather="shield" class="alert-icon"></i>
-  <div>
-    <strong style="display: block; margin-bottom: 0.25rem;">Security Best Practices</strong>
-    <ul style="margin: 0.5rem 0 0 0; padding-left: 1.25rem; line-height: 1.6;">
-      <li>Webhook signatures are verified using HMAC-SHA256</li>
-      <li>All API requests must use HTTPS in production</li>
-      <li>Implement IP whitelisting for added security</li>
-      <li>Rotate your API keys regularly (every 90 days recommended)</li>
-    </ul>
+<!-- ── VERIFICATION BANNER (only if not verified or no settlement account) ── -->
+{% if merchant.kyc_status != 'verified' %}
+<div class="verification-banner">
+  <div class="vb-icon"><i data-feather="shield" style="width:20px;height:20px;color:var(--primary);"></i></div>
+  <div class="vb-text">
+    <h4>Complete verification to enable withdrawals</h4>
+    <p>Submit your business documents to unlock live payouts and full platform features.</p>
   </div>
+  <a href="{{ url_for('kyc.kyc_home') }}" class="btn btn-primary" style="font-size:.875rem;padding:.5rem 1rem;flex-shrink:0;">
+    <i data-feather="arrow-right"></i> Start KYC
+  </a>
 </div>
+{% endif %}
 
-<!-- Balance Cards -->
+<!-- ── STATS ── -->
 <div class="stats-grid">
-  <div class="stat-card">
-    <div class="stat-header">
-      <span class="stat-label">Pending Balance</span>
-      <div class="stat-icon warning">
-        <i data-feather="clock"></i>
-      </div>
-    </div>
-    <div class="stat-value">{{ "{:,}".format(pending_balance) }} <span style="font-size: 1.25rem; font-weight: 500; color: var(--gray-600);">UGX</span></div>
-    <div class="stat-change">
-      <i data-feather="info"></i>
-      <span>Awaiting settlement</span>
-    </div>
-  </div>
-
-  <div class="stat-card success">
-    <div class="stat-header">
-      <span class="stat-label">Available Balance</span>
-      <div class="stat-icon success">
-        <i data-feather="check-circle"></i>
-      </div>
-    </div>
-    <div class="stat-value">{{ "{:,}".format(available_balance) }} <span style="font-size: 1.25rem; font-weight: 500; color: var(--gray-600);">UGX</span></div>
-    <div class="stat-change positive">
-      <i data-feather="trending-up"></i>
-      <span>Ready for payout</span>
-    </div>
-  </div>
-
   <div class="stat-card info">
     <div class="stat-header">
-      <span class="stat-label">Total Transactions</span>
-      <div class="stat-icon info">
-        <i data-feather="activity"></i>
-      </div>
+      <span class="stat-label">Total Collected</span>
+      <div class="stat-icon info"><i data-feather="trending-up"></i></div>
     </div>
-    <div class="stat-value">{{ txns|length }}</div>
-    <div class="stat-change">
-      <i data-feather="database"></i>
-      <span>All time</span>
-    </div>
+    <div class="stat-value">{{ txns|selectattr('status.value', 'equalto', 'succeeded')|list|length }}</div>
+    <div class="stat-change positive"><i data-feather="check-circle"></i> <span>Succeeded transactions</span></div>
   </div>
-
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Total Volume</span>
+      <div class="stat-icon primary"><i data-feather="dollar-sign"></i></div>
+    </div>
+    <div class="stat-value" style="font-size:1.5rem;">
+      {% set vol = namespace(v=0) %}
+      {% for t in txns %}{% if t.status.value == 'succeeded' %}{% set vol.v = vol.v + t.amount %}{% endif %}{% endfor %}
+      {{ "{:,}".format(vol.v) }}
+    </div>
+    <div class="stat-change"><i data-feather="layers"></i> <span>UGX collected</span></div>
+  </div>
   <div class="stat-card">
     <div class="stat-header">
       <span class="stat-label">Payouts Sent</span>
-      <div class="stat-icon primary">
-        <i data-feather="arrow-up-right"></i>
-      </div>
+      <div class="stat-icon success"><i data-feather="send"></i></div>
     </div>
     <div class="stat-value">{{ payouts|length }}</div>
-    <div class="stat-change">
-      <i data-feather="send"></i>
-      <span>Disbursements</span>
+    <div class="stat-change"><i data-feather="arrow-up-right"></i> <span>Disbursements</span></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Payment Links</span>
+      <div class="stat-icon warning"><i data-feather="link"></i></div>
     </div>
+    <div class="stat-value">{{ links|length }}</div>
+    <div class="stat-change"><i data-feather="external-link"></i> <span>Active links</span></div>
   </div>
 </div>
 
-<!-- Charts Row -->
+<!-- ── CHARTS ── -->
 <div class="grid-2 mb-3">
-  <!-- Transaction Status Chart -->
   <div class="card">
     <div class="card-header">
-      <h3 class="card-title">
-        <i data-feather="pie-chart"></i>
-        Transaction Status
-      </h3>
+      <h3 class="card-title"><i data-feather="pie-chart"></i> Transaction Status</h3>
     </div>
-    <canvas id="statusChart" style="max-height: 300px;"></canvas>
+    <canvas id="statusChart" style="max-height:260px;"></canvas>
   </div>
-
-  <!-- Channel Distribution Chart -->
   <div class="card">
     <div class="card-header">
-      <h3 class="card-title">
-        <i data-feather="bar-chart-2"></i>
-        Payment Channels
-      </h3>
+      <h3 class="card-title"><i data-feather="bar-chart-2"></i> Payment Channels</h3>
     </div>
-    <canvas id="channelChart" style="max-height: 300px;"></canvas>
+    <canvas id="channelChart" style="max-height:260px;"></canvas>
   </div>
 </div>
 
-<!-- Recent Transactions -->
+<!-- ── RECENT ACTIVITY (bank-grade table) ── -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title">
-      <i data-feather="credit-card"></i>
-      Recent Transactions
-    </h3>
-    <div style="display: flex; align-items: center; gap: 0.75rem;">
-      <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ txns|length }} total</span>
-      {% set pending_count = txns|selectattr('status.value', 'in', ['pending', 'authorized'])|list|length %}
-      {% if pending_count > 0 %}
-      <form method="post" action="{{ url_for('dashboard.sweep_pending') }}" style="margin: 0;">
-        <button type="submit" class="btn btn-outline" style="padding: 0.375rem 0.75rem; font-size: 0.8125rem; color: var(--warning);">
-          <i data-feather="refresh-cw"></i>
-          Resolve {{ pending_count }} Pending
+    <h3 class="card-title"><i data-feather="activity"></i> Recent Transactions</h3>
+    <div style="display:flex;align-items:center;gap:.625rem;">
+      <span class="badge" style="background:var(--gray-100);color:var(--gray-700);">{{ txns|length }}</span>
+      {% set pend = txns|selectattr('status.value','in',['pending','authorized'])|list|length %}
+      {% if pend > 0 %}
+      <form method="post" action="{{ url_for('dashboard.sweep_pending') }}">
+        <button type="submit" class="btn btn-outline" style="padding:.375rem .75rem;font-size:.8125rem;color:var(--warning);">
+          <i data-feather="refresh-cw"></i> Settle {{ pend }}
         </button>
       </form>
       {% endif %}
@@ -175,147 +276,114 @@
   </div>
 
   {% if txns %}
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Transaction ID</th>
-          <th>Date & Time</th>
-          <th>Amount</th>
-          <th>Fee</th>
-          <th>Channel</th>
-          <th>Status</th>
-          <th>Reference</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in txns %}
-        <tr>
-          <td><code style="font-size: 0.8125rem;">{{ t.public_id }}</code></td>
-          <td>
-            <div style="font-size: 0.875rem;">{{ t.created_at.strftime("%Y-%m-%d") }}</div>
-            <div style="font-size: 0.8125rem; color: var(--gray-600);">{{ t.created_at.strftime("%H:%M:%S") }}</div>
-          </td>
-          <td style="font-weight: 600; color: var(--gray-900);">{{ "{:,}".format(t.amount) }} UGX</td>
-          <td style="color: var(--gray-600);">{{ "{:,}".format(t.fee_amount) }}</td>
-          <td>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <i data-feather="smartphone" style="width: 16px; height: 16px; color: var(--primary);"></i>
-              <span>{{ t.channel.value }}</span>
-            </div>
-          </td>
-          <td><span class="badge {{ t.status.value }}">{{ t.status.value }}</span></td>
-          <td style="color: var(--gray-600); font-size: 0.875rem;">{{ t.merchant_reference or "—" }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div style="padding:0 .25rem;">
+    {% for t in txns[:15] %}
+    <div class="activity-row">
+      <div class="activity-icon" style="background:{% if t.status.value == 'succeeded' %}rgba(16,185,129,.1){% elif t.status.value == 'failed' %}rgba(239,68,68,.1){% else %}rgba(245,158,11,.1){% endif %};">
+        {% if t.channel.value == 'mtn_momo' %}📱
+        {% elif t.channel.value == 'airtel_money' %}📲
+        {% elif t.channel.value == 'card' or t.channel.value == 'visa' %}💳
+        {% elif t.channel.value == 'crypto' %}₿
+        {% else %}💰{% endif %}
+      </div>
+      <div class="activity-info">
+        <div class="activity-title">
+          {{ t.channel.value.replace('_',' ').title() }}
+          {% if t.is_test %}<span style="font-size:.7rem;background:rgba(245,158,11,.1);color:#d97706;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">TEST</span>{% endif %}
+        </div>
+        <div class="activity-sub">{{ t.public_id }} · {{ t.created_at.strftime('%d %b %Y %H:%M') }}{% if t.merchant_reference %} · {{ t.merchant_reference }}{% endif %}</div>
+      </div>
+      <div>
+        <span class="badge {{ t.status.value }}">{{ t.status.value }}</span>
+      </div>
+      <div class="activity-amount in">+ {{ "{:,}".format(t.amount) }} UGX</div>
+    </div>
+    {% endfor %}
   </div>
+  {% if txns|length > 15 %}
+  <div style="text-align:center;padding:1rem;font-size:.875rem;color:var(--gray-500);">
+    Showing 15 of {{ txns|length }} transactions.
+  </div>
+  {% endif %}
   {% else %}
-  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
-    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
-    <p>No transactions yet</p>
+  <div class="empty-state">
+    <div class="empty-state-icon">📊</div>
+    <h4>No transactions yet</h4>
+    <p>Create a payment link or make your first API charge to see activity here.</p>
+    <a href="{{ url_for('docs.docs') }}" class="btn btn-primary" style="margin-top:1rem;font-size:.875rem;">
+      <i data-feather="book-open"></i> View API Docs
+    </a>
   </div>
   {% endif %}
 </div>
 
-<!-- Payouts -->
+<!-- ── PAYOUTS ── -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title">
-      <i data-feather="arrow-up-right"></i>
-      Payouts
-    </h3>
-    <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ payouts|length }} total</span>
+    <h3 class="card-title"><i data-feather="send"></i> Recent Payouts</h3>
+    <div style="display:flex;align-items:center;gap:.625rem;">
+      <span class="badge" style="background:var(--gray-100);color:var(--gray-700);">{{ payouts|length }}</span>
+      <a href="{{ url_for('dashboard.new_payout_form', merchant_id=merchant.id) }}" class="btn btn-primary" style="padding:.375rem .75rem;font-size:.8125rem;">
+        <i data-feather="plus"></i> New Payout
+      </a>
+    </div>
   </div>
 
   {% if payouts %}
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Payout ID</th>
-          <th>Date & Time</th>
-          <th>Amount</th>
-          <th>Channel</th>
-          <th>Recipient</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in payouts %}
-        <tr>
-          <td><code style="font-size: 0.8125rem;">{{ p.public_id }}</code></td>
-          <td>
-            <div style="font-size: 0.875rem;">{{ p.created_at.strftime("%Y-%m-%d") }}</div>
-            <div style="font-size: 0.8125rem; color: var(--gray-600);">{{ p.created_at.strftime("%H:%M:%S") }}</div>
-          </td>
-          <td style="font-weight: 600; color: var(--danger);">-{{ "{:,}".format(p.amount) }} UGX</td>
-          <td>
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <i data-feather="smartphone" style="width: 16px; height: 16px; color: var(--success);"></i>
-              <span>{{ p.channel.value }}</span>
-            </div>
-          </td>
-          <td>
-            <div style="font-weight: 500;">{{ p.recipient_phone }}</div>
-            <div style="font-size: 0.8125rem; color: var(--gray-600);">{{ p.recipient_name or "—" }}</div>
-          </td>
-          <td><span class="badge {{ p.status.value }}">{{ p.status.value }}</span></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div style="padding:0 .25rem;">
+    {% for p in payouts[:10] %}
+    <div class="activity-row">
+      <div class="activity-icon" style="background:rgba(99,102,241,.08);">📤</div>
+      <div class="activity-info">
+        <div class="activity-title">{{ p.recipient_name or p.recipient_phone }}</div>
+        <div class="activity-sub">{{ p.public_id }} · {{ p.channel.value.replace('_',' ').title() }} · {{ p.created_at.strftime('%d %b %Y') }}</div>
+      </div>
+      <span class="badge {{ p.status.value }}">{{ p.status.value }}</span>
+      <div class="activity-amount out">− {{ "{:,}".format(p.amount) }} UGX</div>
+    </div>
+    {% endfor %}
   </div>
   {% else %}
-  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
-    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
-    <p>No payouts yet</p>
+  <div class="empty-state">
+    <div class="empty-state-icon">📤</div>
+    <h4>No payouts yet</h4>
+    <p>Send money to your recipients via MTN MoMo or Airtel Money.</p>
   </div>
   {% endif %}
 </div>
 
-<!-- Payment Links -->
+<!-- ── PAYMENT LINKS ── -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title">
-      <i data-feather="link"></i>
-      Payment Links
-    </h3>
-    <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ links|length }} total</span>
+    <h3 class="card-title"><i data-feather="link"></i> Payment Links</h3>
+    <a href="{{ url_for('dashboard.new_link_form', merchant_id=merchant.id) }}" class="btn btn-primary" style="padding:.375rem .75rem;font-size:.8125rem;">
+      <i data-feather="plus"></i> New Link
+    </a>
   </div>
 
   {% if links %}
   <div class="table-container">
     <table>
       <thead>
-        <tr>
-          <th>Link ID</th>
-          <th>Amount</th>
-          <th>Description</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
+        <tr><th>Description</th><th>Amount</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {% for l in links %}
         <tr>
-          <td><code style="font-size: 0.8125rem;">{{ l.public_id }}</code></td>
-          <td style="font-weight: 600;">{{ "{:,}".format(l.amount) }} {{ l.currency }}</td>
-          <td>{{ l.description or "—" }}</td>
           <td>
-            {% if l.transaction_id %}
-              <span class="badge succeeded">Paid</span>
-            {% elif not l.is_active %}
-              <span class="badge failed">Inactive</span>
-            {% else %}
-              <span class="badge pending">Open</span>
-            {% endif %}
+            <div style="font-weight:600;color:var(--gray-900);">{{ l.description or 'Payment' }}</div>
+            <div style="font-size:.8rem;color:var(--gray-500);">{{ l.public_id }}</div>
+          </td>
+          <td style="font-weight:700;">UGX {{ "{:,}".format(l.amount) }}</td>
+          <td>
+            {% if l.transaction_id %}<span class="badge succeeded">Paid</span>
+            {% elif not l.is_active %}<span class="badge failed">Inactive</span>
+            {% else %}<span class="badge pending">Open</span>{% endif %}
           </td>
           <td>
-            <a href="{{ url_for('checkout.checkout_page', public_id=l.public_id) }}" target="_blank" class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.8125rem;">
-              <i data-feather="external-link"></i>
-              Open Link
+            <a href="{{ url_for('checkout.checkout_page', public_id=l.public_id) }}" target="_blank"
+               class="btn btn-outline" style="padding:.375rem .625rem;font-size:.8125rem;">
+              <i data-feather="external-link" style="width:13px;height:13px;"></i>
             </a>
           </td>
         </tr>
@@ -324,58 +392,10 @@
     </table>
   </div>
   {% else %}
-  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
-    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
-    <p>No payment links created yet</p>
-  </div>
-  {% endif %}
-</div>
-
-<!-- Webhook Deliveries -->
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title">
-      <i data-feather="bell"></i>
-      Webhook Deliveries
-    </h3>
-    <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ webhooks|length }} total</span>
-  </div>
-
-  {% if webhooks %}
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Webhook URL</th>
-          <th>Status</th>
-          <th>Attempts</th>
-          <th>Last Response</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for w in webhooks %}
-        <tr>
-          <td>{{ w.id }}</td>
-          <td><code style="font-size: 0.8125rem;">{{ w.url }}</code></td>
-          <td><span class="badge {% if w.status == 'sent' %}succeeded{% elif w.status == 'failed' %}failed{% else %}pending{% endif %}">{{ w.status }}</span></td>
-          <td>{{ w.attempts }}</td>
-          <td>
-            {% if w.last_response_code %}
-              <span class="badge {% if w.last_response_code == 200 %}succeeded{% else %}failed{% endif %}">{{ w.last_response_code }}</span>
-            {% else %}
-              —
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
-    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
-    <p>No webhook deliveries yet</p>
+  <div class="empty-state">
+    <div class="empty-state-icon">🔗</div>
+    <h4>No payment links</h4>
+    <p>Create a shareable link your customers can open to pay you — no integration needed.</p>
   </div>
   {% endif %}
 </div>
@@ -384,133 +404,39 @@
 
 {% block extra_scripts %}
 <script>
-  // Re-initialize Feather Icons
-  feather.replace();
+  feather.replace({ 'stroke-width': 2 });
 
-  // Copy to clipboard function
-  function copyToClipboard(elementId, button) {
-    const element = document.getElementById(elementId);
-    const text = element.textContent;
-
-    navigator.clipboard.writeText(text).then(() => {
-      // Success feedback
-      const originalHTML = button.innerHTML;
-      button.innerHTML = '<i data-feather="check" style="width: 16px; height: 16px;"></i>';
-      button.classList.add('copied');
-      feather.replace();
-
-      setTimeout(() => {
-        button.innerHTML = originalHTML;
-        button.classList.remove('copied');
-        feather.replace();
-      }, 2000);
-    }).catch(err => {
-      console.error('Failed to copy:', err);
-      alert('Failed to copy to clipboard');
-    });
-  }
-
-  // Prepare transaction data for charts
-  // Count statuses and channels
+  // Charts
+  const txns = {{ txns | tojson }};
   const statusCounts = {};
   const channelCounts = {};
+  (txns || []).forEach(t => {
+    statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+    channelCounts[t.channel] = (channelCounts[t.channel] || 0) + 1;
+  });
 
-  {% for t in txns %}
-    // Count statuses
-    const status_{{ loop.index }} = "{{ t.status.value }}";
-    statusCounts[status_{{ loop.index }}] = (statusCounts[status_{{ loop.index }}] || 0) + 1;
+  const palette = ['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'];
 
-    // Count channels
-    const channel_{{ loop.index }} = "{{ t.channel.value }}";
-    channelCounts[channel_{{ loop.index }}] = (channelCounts[channel_{{ loop.index }}] || 0) + 1;
-  {% endfor %}
-
-  // Status Chart
-  const statusCtx = document.getElementById('statusChart');
-  if (statusCtx && Object.keys(statusCounts).length > 0) {
-    new Chart(statusCtx, {
+  function makeChart(id, labels, data) {
+    const ctx = document.getElementById(id);
+    if (!ctx || !data.length) return;
+    new Chart(ctx, {
       type: 'doughnut',
       data: {
-        labels: Object.keys(statusCounts).map(s => s.charAt(0).toUpperCase() + s.slice(1)),
-        datasets: [{
-          data: Object.values(statusCounts),
-          backgroundColor: [
-            'rgba(16, 185, 129, 0.8)',  // succeeded
-            'rgba(245, 158, 11, 0.8)',  // pending/authorized
-            'rgba(239, 68, 68, 0.8)',   // failed
-            'rgba(99, 102, 241, 0.8)'   // other
-          ],
-          borderWidth: 0
-        }]
+        labels,
+        datasets: [{ data, backgroundColor: palette, borderWidth: 2, borderColor: '#fff' }]
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
         plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              padding: 15,
-              font: {
-                family: "'Inter', sans-serif",
-                size: 12
-              }
-            }
-          }
-        }
+          legend: { position: 'bottom', labels: { font: { family: 'Inter', size: 12 }, padding: 16 } }
+        },
+        cutout: '65%'
       }
     });
   }
 
-  // Channel Chart
-  const channelCtx = document.getElementById('channelChart');
-  if (channelCtx && Object.keys(channelCounts).length > 0) {
-    new Chart(channelCtx, {
-      type: 'bar',
-      data: {
-        labels: Object.keys(channelCounts).map(c => c.replace('_', ' ').toUpperCase()),
-        datasets: [{
-          label: 'Transactions',
-          data: Object.values(channelCounts),
-          backgroundColor: 'rgba(99, 102, 241, 0.8)',
-          borderRadius: 8,
-          borderSkipped: false
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            display: false
-          }
-        },
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: {
-              precision: 0,
-              font: {
-                family: "'Inter', sans-serif"
-              }
-            },
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)'
-            }
-          },
-          x: {
-            ticks: {
-              font: {
-                family: "'Inter', sans-serif"
-              }
-            },
-            grid: {
-              display: false
-            }
-          }
-        }
-      }
-    });
-  }
+  makeChart('statusChart', Object.keys(statusCounts), Object.values(statusCounts));
+  makeChart('channelChart', Object.keys(channelCounts), Object.values(channelCounts));
 </script>
 {% endblock %}
