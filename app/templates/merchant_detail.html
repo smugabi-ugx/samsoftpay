@@ -406,14 +406,13 @@
 <script>
   feather.replace({ 'stroke-width': 2 });
 
-  // Charts
-  const txns = {{ txns | tojson }};
+  // Charts — built inline to avoid SQLAlchemy serialisation issues
   const statusCounts = {};
   const channelCounts = {};
-  (txns || []).forEach(t => {
-    statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
-    channelCounts[t.channel] = (channelCounts[t.channel] || 0) + 1;
-  });
+  {% for t in txns %}
+  statusCounts["{{ t.status.value }}"]  = (statusCounts["{{ t.status.value }}"]  || 0) + 1;
+  channelCounts["{{ t.channel.value }}"] = (channelCounts["{{ t.channel.value }}"] || 0) + 1;
+  {% endfor %}
 
   const palette = ['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'];
 
