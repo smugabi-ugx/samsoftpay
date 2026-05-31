@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#6366f1">
-  <title>Pay {{ merchant.name }}</title>
-  <meta name="description" content="Pay {{ merchant.name }} securely via MTN MoMo, Airtel Money, Visa or crypto — powered by Samsoftpay.">
+  <meta name="theme-color" content="#0f0c29">
+  <title>Pay {{ merchant.name }} | Samsoftpay</title>
+  <meta name="description" content="Pay {{ merchant.name }} securely via MTN MoMo, Airtel Money, Visa or crypto.">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Urbanist:wght@700;800;900&display=swap" rel="stylesheet">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -16,93 +16,108 @@
       --airtel:#e60000;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;
       --ease:cubic-bezier(.4,0,.2,1);
     }
-    html,body{min-height:100vh;background:var(--bg);font-family:'Inter',sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;}
+    html,body{min-height:100vh;background:var(--bg);font-family:'Inter',sans-serif;
+              color:var(--ink);-webkit-font-smoothing:antialiased;}
 
-    /* ── HEADER ── */
+    /* ── TOP NAV — always visible, links home ── */
+    .topnav{
+      position:sticky;top:0;z-index:100;
+      background:rgba(15,12,41,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      border-bottom:1px solid rgba(255,255,255,.08);
+      height:52px;padding:0 1rem;
+      display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+    }
+    .topnav-logo{
+      display:flex;align-items:center;gap:.5rem;text-decoration:none;
+      transition:opacity .15s;
+    }
+    .topnav-logo:hover{opacity:.8;}
+    .topnav-logo img{width:26px;height:26px;border-radius:6px;object-fit:cover;}
+    .topnav-logo span{font-family:'Urbanist',sans-serif;font-size:.9375rem;font-weight:700;color:white;}
+
+    .topnav-center{font-size:.875rem;font-weight:500;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;text-align:center;}
+
+    .topnav-right{display:flex;align-items:center;gap:.625rem;flex-shrink:0;}
+    .topnav-btn{
+      display:inline-flex;align-items:center;gap:.375rem;
+      color:rgba(255,255,255,.7);text-decoration:none;font-size:.8125rem;font-weight:600;
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+      padding:.375rem .875rem;border-radius:8px;
+      transition:all .15s var(--ease);
+    }
+    .topnav-btn:hover{background:rgba(255,255,255,.14);color:white;}
+    .topnav-btn svg{width:13px;height:13px;}
+    .topnav-btn.primary{background:linear-gradient(135deg,#667eea,#764ba2);border-color:transparent;color:white;}
+
+    /* ── HERO ── */
     .hero{
       background:linear-gradient(160deg,#0f0c29 0%,#1a0533 45%,#2d1060 100%);
       padding:2.5rem 1.5rem 3rem;text-align:center;position:relative;overflow:hidden;
     }
-    .hero::before{
-      content:'';position:absolute;inset:0;
-      background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.3),transparent 70%);
-    }
+    .hero::before{content:'';position:absolute;inset:0;
+      background:radial-gradient(ellipse at 50% 0%,rgba(99,102,241,.3),transparent 70%);}
     .hero-inner{position:relative;z-index:1;}
 
-    /* Avatar — clearly separated from name */
-    .av-wrap{margin:0 auto 14px;width:80px;height:80px;position:relative;}
-    .av{
-      width:80px;height:80px;border-radius:50%;
+    /* Merchant logo/avatar */
+    .merchant-logo{
+      width:88px;height:88px;border-radius:22px;margin:0 auto 14px;
+      overflow:hidden;
+      border:3px solid rgba(255,255,255,.15);
+      box-shadow:0 8px 32px rgba(0,0,0,.4);
+      position:relative;
+    }
+    .merchant-logo img{width:100%;height:100%;object-fit:cover;}
+    .merchant-logo.letter{
       background:linear-gradient(135deg,#667eea,#764ba2);
       display:flex;align-items:center;justify-content:center;
-      font-size:2rem;font-weight:800;color:white;
-      border:3px solid rgba(255,255,255,.2);
-      box-shadow:0 8px 32px rgba(0,0,0,.35);
+      font-family:'Urbanist',sans-serif;font-size:2.5rem;font-weight:900;color:white;
     }
-    .av-verified{
-      position:absolute;bottom:0;right:0;
-      width:22px;height:22px;border-radius:50%;
-      background:var(--green);border:2px solid #0f0c29;
+    .merchant-logo .verified-ring{
+      position:absolute;bottom:-4px;right:-4px;
+      width:24px;height:24px;border-radius:50%;
+      background:var(--green);border:3px solid #1a0533;
       display:flex;align-items:center;justify-content:center;
     }
-    .av-verified svg{width:11px;height:11px;color:white;}
+    .merchant-logo .verified-ring svg{width:11px;height:11px;color:white;}
 
-    .hero-name{font-size:1.5rem;font-weight:800;color:white;margin-bottom:4px;letter-spacing:-.02em;}
-    .hero-handle{font-size:.875rem;color:rgba(255,255,255,.5);margin-bottom:14px;}
+    .hero-name{font-family:'Urbanist',sans-serif;font-size:1.5rem;font-weight:800;color:white;margin-bottom:3px;letter-spacing:-.02em;}
+    .hero-handle{font-size:.875rem;color:rgba(255,255,255,.45);margin-bottom:16px;}
     .hero-channels{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;}
     .ch-pill{
       display:inline-flex;align-items:center;gap:6px;
-      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);
       color:rgba(255,255,255,.75);padding:5px 12px;border-radius:99px;
       font-size:.75rem;font-weight:600;
     }
-    .ch-swatch{width:8px;height:8px;border-radius:50%;}
-
-    /* QR button */
+    .ch-swatch{width:7px;height:7px;border-radius:50%;}
     .qr-btn{
-      margin-top:16px;display:inline-flex;align-items:center;gap:6px;
-      background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-      color:rgba(255,255,255,.8);padding:7px 14px;border-radius:8px;
-      font-size:.8125rem;font-weight:600;cursor:pointer;
-      backdrop-filter:blur(8px);transition:all .2s var(--ease);
+      margin-top:14px;display:inline-flex;align-items:center;gap:6px;
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+      color:rgba(255,255,255,.75);padding:6px 14px;border-radius:8px;
+      font-size:.8125rem;font-weight:600;cursor:pointer;transition:all .2s;
     }
-    .qr-btn:hover{background:rgba(255,255,255,.18);}
-    .qr-btn svg{width:14px;height:14px;}
+    .qr-btn:hover{background:rgba(255,255,255,.14);}
+    .qr-btn svg{width:13px;height:13px;}
 
     /* ── QR MODAL ── */
-    .modal-backdrop{
-      display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);
-      backdrop-filter:blur(6px);z-index:500;
-      align-items:center;justify-content:center;padding:1rem;
-    }
-    .modal-backdrop.open{display:flex;}
-    .modal{
-      background:white;border-radius:20px;padding:2rem;text-align:center;
-      max-width:320px;width:100%;
-      animation:modal-in .25s var(--ease) both;
-    }
-    @keyframes modal-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
-    .modal h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:4px;}
-    .modal p{font-size:.8125rem;color:var(--muted);margin-bottom:16px;}
-    .qr-img{border-radius:12px;border:1px solid var(--line);margin:0 auto 16px;display:block;}
-    .modal-close{
-      width:100%;padding:.75rem;background:var(--ink);color:white;
-      border:none;border-radius:10px;font-size:.9375rem;font-weight:600;
-      font-family:inherit;cursor:pointer;transition:background .2s;
-    }
+    .modal-bd{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+      backdrop-filter:blur(8px);z-index:500;align-items:center;justify-content:center;padding:1rem;}
+    .modal-bd.open{display:flex;}
+    .modal{background:white;border-radius:20px;padding:2rem;text-align:center;max-width:300px;width:100%;
+      animation:modal-in .25s var(--ease) both;}
+    @keyframes modal-in{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
+    .modal h3{font-family:'Urbanist',sans-serif;font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:4px;}
+    .modal p{font-size:.8125rem;color:var(--muted);margin-bottom:14px;}
+    .modal img{border-radius:12px;border:1px solid var(--line);margin:0 auto 14px;display:block;}
+    .modal-url{font-size:.75rem;color:var(--muted);word-break:break-all;background:var(--bg);border-radius:8px;padding:.5rem .75rem;margin-bottom:12px;}
+    .modal-close{width:100%;padding:.75rem;background:var(--ink);color:white;border:none;border-radius:10px;
+      font-size:.9375rem;font-weight:600;font-family:inherit;cursor:pointer;}
     .modal-close:hover{background:#1e293b;}
-    .modal-url{
-      font-size:.75rem;color:var(--muted);word-break:break-all;
-      background:var(--bg);border-radius:8px;padding:.5rem .75rem;margin-top:10px;
-    }
 
     /* ── BODY ── */
-    .body{max-width:480px;margin:0 auto;padding:1.25rem 1rem 4rem;}
-
-    .section-label{
-      font-size:.6875rem;font-weight:700;text-transform:uppercase;
-      letter-spacing:.08em;color:var(--muted);margin:1.25rem 0 .625rem;
-    }
+    .body{max-width:480px;margin:0 auto;padding:1.25rem 1rem 5rem;}
+    .section-label{font-size:.6875rem;font-weight:700;text-transform:uppercase;
+      letter-spacing:.08em;color:var(--muted);margin:1.25rem 0 .625rem;}
 
     /* Product cards */
     .products{display:flex;flex-direction:column;gap:.625rem;}
@@ -110,93 +125,111 @@
       background:white;border:1px solid var(--line);border-radius:14px;
       padding:1rem 1.125rem;display:flex;align-items:center;gap:.875rem;
       text-decoration:none;color:inherit;
-      transition:all .18s var(--ease);
-      -webkit-tap-highlight-color:transparent;
+      transition:all .18s var(--ease);-webkit-tap-highlight-color:transparent;
     }
     .product-card:active{transform:scale(.98);background:var(--bg);}
     .product-card:hover{border-color:rgba(99,102,241,.25);box-shadow:0 4px 16px rgba(99,102,241,.08);}
-    .product-icon{
-      width:48px;height:48px;border-radius:12px;
+    .product-icon{width:48px;height:48px;border-radius:12px;
       background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.1));
-      display:flex;align-items:center;justify-content:center;
-      font-size:1.25rem;flex-shrink:0;
-    }
+      display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;}
     .product-info{flex:1;min-width:0;}
     .product-name{font-weight:600;font-size:.9375rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .product-desc{font-size:.8125rem;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .product-desc{font-size:.8125rem;color:var(--muted);margin-top:1px;}
     .product-right{text-align:right;flex-shrink:0;}
-    .product-amt{font-size:1.0625rem;font-weight:700;color:var(--ink);}
+    .product-amt{font-family:'Urbanist',sans-serif;font-size:1.0625rem;font-weight:700;color:var(--ink);}
     .product-cur{font-size:.75rem;color:var(--muted);display:block;}
     .product-arrow{color:var(--muted);margin-left:.25rem;}
 
     /* Custom amount */
-    .custom-card{
-      background:white;border:1.5px dashed var(--line);border-radius:14px;padding:1.25rem;
-    }
-    .custom-card h3{
-      font-size:.9375rem;font-weight:700;margin-bottom:1rem;
-      display:flex;align-items:center;gap:.5rem;color:var(--ink);
-    }
-    .amt-row{
-      display:flex;align-items:center;
-      border:2px solid var(--line);border-radius:10px;overflow:hidden;
-      margin-bottom:1rem;transition:border-color .2s;background:white;
-    }
+    .custom-card{background:white;border:1.5px dashed var(--line);border-radius:14px;padding:1.25rem;}
+    .custom-card h3{font-family:'Urbanist',sans-serif;font-size:.9375rem;font-weight:700;
+      margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;color:var(--ink);}
+    .custom-card h3 svg{color:var(--p);}
+    .amt-row{display:flex;align-items:center;border:2px solid var(--line);border-radius:10px;
+      overflow:hidden;margin-bottom:1rem;transition:border-color .2s;background:white;}
     .amt-row:focus-within{border-color:var(--p);}
-    .amt-prefix{
-      padding:0 .875rem;font-size:.875rem;font-weight:600;color:var(--muted);
+    .amt-prefix{padding:0 .875rem;font-size:.875rem;font-weight:600;color:var(--muted);
       border-right:1px solid var(--line);height:50px;display:flex;align-items:center;
-      background:var(--bg);white-space:nowrap;flex-shrink:0;
-    }
-    .amt-input{
-      flex:1;border:none;outline:none;padding:0 .875rem;
-      font-size:1.25rem;font-weight:700;font-family:inherit;
-      height:50px;background:transparent;min-width:0;color:var(--ink);
-    }
-    .amt-input::placeholder{color:#cbd5e1;font-weight:400;font-size:1rem;}
-    .pay-btn{
-      display:flex;align-items:center;justify-content:center;gap:.5rem;
+      background:var(--bg);white-space:nowrap;flex-shrink:0;}
+    .amt-input{flex:1;border:none;outline:none;padding:0 .875rem;
+      font-family:'Urbanist',sans-serif;font-size:1.25rem;font-weight:700;
+      height:50px;background:transparent;min-width:0;color:var(--ink);}
+    .amt-input::placeholder{color:#cbd5e1;font-weight:400;font-size:1rem;font-family:'Inter',sans-serif;}
+    .pay-btn{display:flex;align-items:center;justify-content:center;gap:.5rem;
       width:100%;padding:.9375rem;
       background:linear-gradient(135deg,#667eea,#764ba2);
       color:white;border:none;border-radius:10px;
       font-size:1rem;font-weight:700;font-family:inherit;
-      cursor:pointer;transition:all .2s var(--ease);
-      -webkit-tap-highlight-color:transparent;
-    }
+      cursor:pointer;transition:all .2s var(--ease);-webkit-tap-highlight-color:transparent;}
     .pay-btn:active{transform:scale(.98);}
+    .pay-btn:hover{box-shadow:0 8px 24px rgba(99,102,241,.4);}
     .pay-btn:disabled{opacity:.4;cursor:not-allowed;}
 
     /* Powered by */
-    .powered{
-      text-align:center;padding:1.5rem 1rem 1rem;
-      font-size:.8125rem;color:var(--muted);
-      display:flex;align-items:center;justify-content:center;gap:.375rem;
-    }
-    .powered svg{width:12px;height:12px;}
-    .powered img{height:16px;object-fit:contain;opacity:.6;}
+    .powered{text-align:center;padding:1.5rem 1rem 1rem;font-size:.8125rem;color:var(--muted);
+      display:flex;align-items:center;justify-content:center;gap:.375rem;}
+    .powered a{color:inherit;text-decoration:none;display:flex;align-items:center;gap:.375rem;}
+    .powered img{height:14px;object-fit:contain;opacity:.5;}
   </style>
 </head>
 <body>
 
 <!-- QR Modal -->
-<div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this)closeQR()">
+<div class="modal-bd" id="qr-modal" onclick="if(event.target===this)closeQR()">
   <div class="modal">
     <h3>Scan to pay</h3>
-    <p>Share or scan this QR code to go to your payment page</p>
-    <img id="qr-img" class="qr-img" width="200" height="200" alt="QR Code">
-    <div class="modal-url" id="qr-url-text"></div>
+    <p>Share this QR code — anyone can scan it to pay {{ merchant.name }}</p>
+    <img id="qr-img" width="180" height="180" alt="QR Code">
+    <div class="modal-url" id="qr-url"></div>
     <button class="modal-close" onclick="closeQR()">Close</button>
   </div>
 </div>
 
-<!-- HERO -->
+<!-- ── TOP NAV ── -->
+<nav class="topnav">
+  <!-- Always-visible home logo -->
+  <a href="/" class="topnav-logo">
+    <img src="/static/img/logo.png" alt="Samsoftpay">
+    <span>Samsoftpay</span>
+  </a>
+
+  <span class="topnav-center">{{ merchant.name }}</span>
+
+  <div class="topnav-right">
+    {% if current_user and current_user.is_authenticated %}
+      {% if current_user.id == merchant.id %}
+      <!-- Merchant viewing their own page — show dashboard link -->
+      <a href="{{ url_for('dashboard.merchant_detail', merchant_id=merchant.id) }}" class="topnav-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Dashboard
+      </a>
+      {% else %}
+      <a href="{{ url_for('dashboard.index') }}" class="topnav-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Home
+      </a>
+      {% endif %}
+    {% else %}
+    <a href="{{ url_for('auth.signup_page') }}" class="topnav-btn primary">
+      Open account
+    </a>
+    {% endif %}
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
 <div class="hero">
   <div class="hero-inner">
 
-    <div class="av-wrap">
-      <div class="av">{{ merchant.name[0].upper() }}</div>
+    <!-- Logo: uploaded image OR initial letter -->
+    <div class="merchant-logo {% if not merchant.logo_filename %}letter{% endif %}">
+      {% if merchant.logo_filename %}
+        <img src="{{ url_for('auth.serve_logo', merchant_id=merchant.id) }}" alt="{{ merchant.name }}">
+      {% else %}
+        {{ merchant.name[0].upper() }}
+      {% endif %}
       {% if merchant.kyc_status == 'verified' %}
-      <div class="av-verified">
+      <div class="verified-ring">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
       {% endif %}
@@ -209,7 +242,7 @@
 
     <div class="hero-channels">
       <span class="ch-pill"><span class="ch-swatch" style="background:#ffcb05;"></span>MTN MoMo</span>
-      <span class="ch-pill"><span class="ch-swatch" style="background:#e60000;"></span>Airtel Money</span>
+      <span class="ch-pill"><span class="ch-swatch" style="background:#e60000;"></span>Airtel</span>
       <span class="ch-pill"><span class="ch-swatch" style="background:#1a1f71;"></span>Visa/MC</span>
       <span class="ch-pill"><span class="ch-swatch" style="background:#f7931a;"></span>Crypto</span>
     </div>
@@ -221,10 +254,19 @@
     </button>
     {% endif %}
 
+    <!-- Owner-only edit hint -->
+    {% if current_user and current_user.is_authenticated and current_user.id == merchant.id %}
+    <div style="margin-top:14px;font-size:.75rem;color:rgba(255,255,255,.35);">
+      <a href="{{ url_for('auth.account') }}#logo-upload" style="color:rgba(255,255,255,.4);text-decoration:underline;">
+        Upload your business logo →
+      </a>
+    </div>
+    {% endif %}
+
   </div>
 </div>
 
-<!-- BODY -->
+<!-- ── BODY ── -->
 <div class="body">
 
   {% if links %}
@@ -234,11 +276,11 @@
     <a class="product-card" href="{{ url_for('checkout.checkout_page', public_id=link.public_id) }}">
       <div class="product-icon">
         {% if link.description %}
-          {% if 'food' in link.description.lower() or 'meal' in link.description.lower() or 'lunch' in link.description.lower() %}🍽️
+          {% if 'food' in link.description.lower() or 'meal' in link.description.lower() %}🍽️
           {% elif 'school' in link.description.lower() or 'fee' in link.description.lower() %}🎓
           {% elif 'ticket' in link.description.lower() or 'show' in link.description.lower() or 'event' in link.description.lower() %}🎟️
           {% elif 'delivery' in link.description.lower() %}🚚
-          {% elif 'shop' in link.description.lower() or 'store' in link.description.lower() %}🛒
+          {% elif 'shop' in link.description.lower() %}🛒
           {% else %}💳{% endif %}
         {% else %}💳{% endif %}
       </div>
@@ -250,7 +292,7 @@
         <span class="product-amt">{{ "{:,}".format(link.amount) }}</span>
         <span class="product-cur">{{ link.currency }}</span>
       </div>
-      <svg class="product-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <svg class="product-arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </a>
     {% endfor %}
   </div>
@@ -259,7 +301,7 @@
   <div class="section-label">Pay Custom Amount</div>
   <div class="custom-card">
     <h3>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--p)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
       Pay {{ merchant.name }}
     </h3>
     {% if merchant.handle %}
@@ -268,41 +310,44 @@
       <input class="amt-input" type="number" id="custom-amount"
              placeholder="Enter amount" min="500" inputmode="numeric" autocomplete="off">
     </div>
-    <button class="pay-btn" id="pay-btn" disabled
-            onclick="window.location.href='{{ url_for('checkout.profile_pay', handle=merchant.handle) }}?amount=' + document.getElementById('custom-amount').value">
+    <button class="pay-btn" id="pay-btn" disabled>
       Continue to Pay
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
     </button>
-    {% else %}
-    <p style="color:var(--muted);font-size:.9rem;">Custom payments not available yet.</p>
     {% endif %}
   </div>
 
   <div class="powered">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-    Secured &amp; powered by
-    <img src="/static/img/logo.png" alt="Samsoftpay">
-    <strong style="color:var(--ink);">Samsoftpay</strong>
+    <a href="/">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <img src="/static/img/logo.png" alt="Samsoftpay">
+      Secured by Samsoftpay
+    </a>
   </div>
 
 </div>
 
 <script>
-  // Custom amount enable/disable button
+  // Custom amount
   const amtInput = document.getElementById('custom-amount');
   const payBtn   = document.getElementById('pay-btn');
   if (amtInput && payBtn) {
     amtInput.addEventListener('input', () => {
-      payBtn.disabled = !(parseInt(amtInput.value) >= 500);
+      const v = parseInt(amtInput.value);
+      payBtn.disabled = !(v >= 500);
+    });
+    payBtn.addEventListener('click', () => {
+      const v = parseInt(amtInput.value);
+      if (v >= 500) window.location.href = '{{ url_for("checkout.profile_pay", handle=merchant.handle) if merchant.handle else "#" }}?amount=' + v;
     });
   }
 
-  // QR Modal
+  // QR modal
   const profileUrl = '{{ request.host_url }}pay/@{{ merchant.handle }}';
   function showQR() {
-    const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&qzone=2&data=' + encodeURIComponent(profileUrl);
-    document.getElementById('qr-img').src = qr;
-    document.getElementById('qr-url-text').textContent = profileUrl;
+    document.getElementById('qr-img').src =
+      'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=2&data=' + encodeURIComponent(profileUrl);
+    document.getElementById('qr-url').textContent = profileUrl;
     document.getElementById('qr-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
   }

@@ -376,6 +376,57 @@ def toggle_2fa():
     return redirect(url_for("auth.account"))
 
 
+@bp.post("/account/upload-logo")
+@login_required
+@verified_required
+def upload_logo():
+    """Upload merchant business logo (shown on payment profile page)."""
+    import os
+    from werkzeug.utils import secure_filename
+    from flask import current_app
+
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        from flask import flash
+        flash("No file selected.", "error")
+        return redirect(url_for("auth.account"))
+
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in ("png", "jpg", "jpeg", "webp", "gif"):
+        from flask import flash
+        flash("Only PNG, JPG, WEBP or GIF files allowed.", "error")
+        return redirect(url_for("auth.account"))
+
+    folder = os.path.join(current_app.instance_path, "logos")
+    os.makedirs(folder, exist_ok=True)
+    filename = f"{current_user.id}.{ext}"
+    f.save(os.path.join(folder, filename))
+
+    m = db.session.get(Merchant, current_user.id)
+    m.logo_filename = filename
+    db.session.commit()
+
+    from flask import flash
+    flash("Logo updated successfully.", "success")
+    return redirect(url_for("auth.account"))
+
+
+@bp.get("/media/logo/<int:merchant_id>")
+def serve_logo(merchant_id: int):
+    """Serve a merchant's uploaded logo."""
+    import os
+    from flask import current_app, send_from_directory, send_file
+    m = Merchant.query.get(merchant_id)
+    if not m or not m.logo_filename:
+        # Return the default Samsoftpay logo
+        return send_from_directory(
+            os.path.join(current_app.root_path, "static", "img"),
+            "logo.png"
+        )
+    folder = os.path.join(current_app.instance_path, "logos")
+    return send_from_directory(folder, m.logo_filename)
+
+
 @bp.post("/account/rotate-keys/<key_type>")
 @login_required
 @verified_required
