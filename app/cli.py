@@ -36,6 +36,17 @@ def register(app: Flask) -> None:
             print(f"public_key={m.public_key}")
             print(f"secret_key={m.secret_key}")
 
+    @app.cli.command("sweep-pending")
+    def sweep_pending():
+        """Expire stale PENDING/AUTHORIZED transactions (older than 10 min)."""
+        from .services.sweep import sweep_stale_transactions
+        with app.app_context():
+            result = sweep_stale_transactions(stale_minutes=10)
+            print(f"Swept {result['swept']} transaction(s): "
+                  f"{result['succeeded']} succeeded, {result['failed']} failed/expired")
+            for item in result["items"]:
+                print(f"  {item['id']} -> {item['result']}")
+
     @app.cli.command("new-merchant")
     def new_merchant():
         """Generate a fresh merchant with random keys."""

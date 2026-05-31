@@ -5,3 +5,5 @@ __pycache__/
 instance/
 *.db
 .DS_Store
+.claude/
+TRANSFORMATION_SUMMARY.md

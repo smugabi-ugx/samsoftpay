@@ -1,28 +1,250 @@
 {% extends "base.html" %}
-{% block content %}
-<h1>Reconciliation report</h1>
 
-<h2>Internal consistency</h2>
-<div class="card">
-  <p>Journal sum by currency (must be 0 for a balanced ledger):</p>
-  <ul>
-    {% for c, s in report.internal.journal_sum_by_currency.items() %}
-      <li><code>{{ c }}</code>: {{ s }} {% if s == 0 %}&#9989;{% else %}&#10060;{% endif %}</li>
-    {% endfor %}
-  </ul>
-  <p>Cached vs recomputed balance mismatches: {% if not report.internal.balance_mismatches %}none &#9989;{% else %}{{ report.internal.balance_mismatches }}{% endif %}</p>
+{% block title %}Reconciliation Report{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 1rem;">
+  <div>
+    <h1 class="page-title">Reconciliation Report</h1>
+    <p class="page-subtitle">Verify internal ledger consistency and external rail synchronization</p>
+  </div>
+  <form method="post" action="{{ url_for('dashboard.sweep_pending') }}">
+    <button type="submit" class="btn btn-primary">
+      <i data-feather="refresh-cw"></i>
+      Expire Stale Transactions
+    </button>
+  </form>
 </div>
 
-<h2>External consistency (rail events vs. transactions)</h2>
-<table>
-  <tr><th>Channel</th><th>Rail succeeded events</th><th>Txns succeeded</th><th>Match?</th></tr>
-  {% for ch, row in report.external.items() %}
-    <tr>
-      <td>{{ ch }}</td>
-      <td>{{ row.rail_succeeded_events }}</td>
-      <td>{{ row.transactions_succeeded }}</td>
-      <td>{% if row.match %}&#9989;{% else %}&#10060;{% endif %}</td>
-    </tr>
-  {% endfor %}
-</table>
+{% if request.args.get('swept') %}
+<div class="alert alert-{% if request.args.get('swept', '0') == '0' %}info{% else %}success{% endif %}" style="margin-bottom: 1.5rem;">
+  <i data-feather="check-circle" class="alert-icon"></i>
+  <div>
+    Swept <strong>{{ request.args.get('swept') }}</strong> stale transaction(s):
+    <strong>{{ request.args.get('succeeded') }}</strong> succeeded,
+    <strong>{{ request.args.get('failed') }}</strong> failed/expired.
+  </div>
+</div>
+{% endif %}
+
+<!-- Summary Stats -->
+<div class="stats-grid">
+  <div class="stat-card {% if not report.internal.balance_mismatches %}success{% else %}failed{% endif %}">
+    <div class="stat-header">
+      <span class="stat-label">Ledger Status</span>
+      <div class="stat-icon {% if not report.internal.balance_mismatches %}success{% else %}danger{% endif %}">
+        <i data-feather="{% if not report.internal.balance_mismatches %}check-circle{% else %}alert-circle{% endif %}"></i>
+      </div>
+    </div>
+    <div class="stat-value">{% if not report.internal.balance_mismatches %}Balanced{% else %}Issues{% endif %}</div>
+    <div class="stat-change {% if not report.internal.balance_mismatches %}positive{% else %}negative{% endif %}">
+      <i data-feather="{% if not report.internal.balance_mismatches %}check{% else %}x{% endif %}"></i>
+      <span>Internal consistency</span>
+    </div>
+  </div>
+
+  <div class="stat-card info">
+    <div class="stat-header">
+      <span class="stat-label">Currencies Tracked</span>
+      <div class="stat-icon info">
+        <i data-feather="globe"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ report.internal.journal_sum_by_currency|length }}</div>
+    <div class="stat-change">
+      <i data-feather="layers"></i>
+      <span>Multi-currency</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Payment Channels</span>
+      <div class="stat-icon primary">
+        <i data-feather="zap"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ report.external|length }}</div>
+    <div class="stat-change">
+      <i data-feather="activity"></i>
+      <span>Active rails</span>
+    </div>
+  </div>
+</div>
+
+<!-- Internal Consistency -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="shield"></i>
+      Internal Consistency
+    </h3>
+  </div>
+
+  <div style="margin-bottom: 2rem;">
+    <h4 style="font-size: 1rem; font-weight: 600; color: var(--gray-900); margin-bottom: 1rem;">
+      Journal Sum by Currency
+    </h4>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">
+      For a balanced double-entry ledger, the sum of all journal entries in each currency must be exactly 0.
+    </p>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Currency</th>
+            <th>Journal Sum</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c, s in report.internal.journal_sum_by_currency.items() %}
+          <tr>
+            <td>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <i data-feather="dollar-sign" style="width: 18px; height: 18px; color: var(--primary);"></i>
+                <code style="font-size: 0.9375rem; font-weight: 600;">{{ c }}</code>
+              </div>
+            </td>
+            <td style="font-weight: 600; {% if s != 0 %}color: var(--danger);{% else %}color: var(--gray-700);{% endif %}">
+              {{ "{:,}".format(s) }}
+            </td>
+            <td>
+              {% if s == 0 %}
+                <span class="badge succeeded">
+                  <i data-feather="check" style="width: 14px; height: 14px;"></i>
+                  Balanced
+                </span>
+              {% else %}
+                <span class="badge failed">
+                  <i data-feather="x" style="width: 14px; height: 14px;"></i>
+                  Imbalanced
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <h4 style="font-size: 1rem; font-weight: 600; color: var(--gray-900); margin-bottom: 1rem;">
+      Balance Mismatches
+    </h4>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">
+      Comparison between cached account balances and recomputed balances from journal entries.
+    </p>
+
+    {% if not report.internal.balance_mismatches %}
+    <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 1.5rem; display: flex; align-items: center; gap: 1rem;">
+      <i data-feather="check-circle" style="width: 32px; height: 32px; color: var(--success);"></i>
+      <div>
+        <div style="font-weight: 600; color: var(--success); margin-bottom: 0.25rem;">All Clear!</div>
+        <div style="color: var(--gray-700);">No balance mismatches detected. All cached balances match recomputed values.</div>
+      </div>
+    </div>
+    {% else %}
+    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 1.5rem; display: flex; align-items: center; gap: 1rem;">
+      <i data-feather="alert-triangle" style="width: 32px; height: 32px; color: var(--danger);"></i>
+      <div>
+        <div style="font-weight: 600; color: var(--danger); margin-bottom: 0.25rem;">Mismatches Found</div>
+        <div style="color: var(--gray-700);">{{ report.internal.balance_mismatches }} account(s) have mismatched balances.</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- External Consistency -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="radio"></i>
+      External Consistency (Rail Events vs Transactions)
+    </h3>
+  </div>
+
+  <p class="text-muted" style="margin-bottom: 1.5rem;">
+    Verify that succeeded transaction counts match succeeded rail events from external payment providers.
+  </p>
+
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Channel</th>
+          <th>Rail Succeeded Events</th>
+          <th>Transactions Succeeded</th>
+          <th>Match Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ch, row in report.external.items() %}
+        <tr>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i data-feather="smartphone" style="width: 18px; height: 18px; color: var(--primary);"></i>
+              <span style="font-weight: 500;">{{ ch }}</span>
+            </div>
+          </td>
+          <td style="text-align: center; font-weight: 600; color: var(--gray-700);">{{ row.rail_succeeded_events }}</td>
+          <td style="text-align: center; font-weight: 600; color: var(--gray-700);">{{ row.transactions_succeeded }}</td>
+          <td>
+            {% if row.match %}
+              <span class="badge succeeded">
+                <i data-feather="check-circle" style="width: 14px; height: 14px;"></i>
+                Match
+              </span>
+            {% else %}
+              <span class="badge failed">
+                <i data-feather="x-circle" style="width: 14px; height: 14px;"></i>
+                Mismatch
+              </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Overall Status -->
+{% set balance_values = report.internal.journal_sum_by_currency.values()|list %}
+{% set all_balanced = balance_values|length > 0 and balance_values|sum == 0 %}
+{% set all_matched = report.external.values()|selectattr('match')|list|length == report.external|length %}
+
+<div class="card" style="{% if all_balanced and all_matched and not report.internal.balance_mismatches %}background: var(--gradient-success);{% else %}background: var(--gradient-primary);{% endif %} color: white; border: none;">
+  <div style="display: flex; align-items: center; gap: 1.5rem;">
+    <div style="width: 64px; height: 64px; background: rgba(255, 255, 255, 0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+      <i data-feather="{% if all_balanced and all_matched and not report.internal.balance_mismatches %}check-circle{% else %}info{% endif %}" style="width: 36px; height: 36px;"></i>
+    </div>
+    <div>
+      <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem; color: white;">
+        {% if all_balanced and all_matched and not report.internal.balance_mismatches %}
+          System Reconciled Successfully
+        {% else %}
+          Reconciliation Status
+        {% endif %}
+      </h3>
+      <p style="opacity: 0.95; margin: 0;">
+        {% if all_balanced and all_matched and not report.internal.balance_mismatches %}
+          All ledger entries are balanced, balances are consistent, and external rails are synchronized.
+        {% else %}
+          Review the items above to identify and resolve any inconsistencies.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+</script>
 {% endblock %}

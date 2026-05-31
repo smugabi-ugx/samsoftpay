@@ -1,16 +1,142 @@
 {% extends "base.html" %}
+
+{% block title %}All Merchants{% endblock %}
+
 {% block content %}
-<h1>Merchants</h1>
-<table>
-  <tr><th>ID</th><th>Name</th><th>Email</th><th>KYC</th><th>Active</th></tr>
-  {% for m in merchants %}
-    <tr>
-      <td><a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}">{{ m.id }}</a></td>
-      <td>{{ m.name }}</td>
-      <td>{{ m.email }}</td>
-      <td>{{ m.kyc_status }}</td>
-      <td>{{ "yes" if m.is_active else "no" }}</td>
-    </tr>
-  {% endfor %}
-</table>
+<div class="page-header">
+  <h1 class="page-title">Merchants</h1>
+  <p class="page-subtitle">Manage all registered merchant accounts and their details</p>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Total Merchants</span>
+      <div class="stat-icon primary">
+        <i data-feather="briefcase"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ merchants|length }}</div>
+    <div class="stat-change positive">
+      <i data-feather="trending-up"></i>
+      <span>All registered</span>
+    </div>
+  </div>
+
+  <div class="stat-card success">
+    <div class="stat-header">
+      <span class="stat-label">Active Accounts</span>
+      <div class="stat-icon success">
+        <i data-feather="check-circle"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ merchants|selectattr('is_active')|list|length }}</div>
+    <div class="stat-change">
+      <i data-feather="activity"></i>
+      <span>Operational</span>
+    </div>
+  </div>
+
+  <div class="stat-card info">
+    <div class="stat-header">
+      <span class="stat-label">KYC Verified</span>
+      <div class="stat-icon info">
+        <i data-feather="shield"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ merchants|selectattr('kyc_status', 'equalto', 'verified')|list|length }}</div>
+    <div class="stat-change">
+      <i data-feather="check"></i>
+      <span>Verified</span>
+    </div>
+  </div>
+</div>
+
+<!-- Merchants Table -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="users"></i>
+      All Merchant Accounts
+    </h3>
+  </div>
+
+  {% if merchants %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Merchant</th>
+          <th>Email</th>
+          <th>KYC Status</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in merchants %}
+        <tr>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div style="width: 48px; height: 48px; background: var(--gradient-primary); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 1.125rem;">
+                {{ m.name[0] }}
+              </div>
+              <div>
+                <div style="font-weight: 600; color: var(--gray-900);">{{ m.name }}</div>
+                <div style="font-size: 0.875rem; color: var(--gray-600);">ID: {{ m.id }}</div>
+              </div>
+            </div>
+          </td>
+          <td style="color: var(--gray-700);">{{ m.email }}</td>
+          <td>
+            {% if m.kyc_status == 'verified' %}
+              <span class="badge succeeded">
+                <i data-feather="check-circle" style="width: 14px; height: 14px;"></i>
+                Verified
+              </span>
+            {% elif m.kyc_status == 'pending' %}
+              <span class="badge pending">
+                <i data-feather="clock" style="width: 14px; height: 14px;"></i>
+                Pending
+              </span>
+            {% else %}
+              <span class="badge failed">
+                <i data-feather="x-circle" style="width: 14px; height: 14px;"></i>
+                {{ m.kyc_status }}
+              </span>
+            {% endif %}
+          </td>
+          <td>
+            {% if m.is_active %}
+              <span class="badge succeeded">Active</span>
+            {% else %}
+              <span class="badge failed">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+              <i data-feather="arrow-right"></i>
+              View Dashboard
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+    <p>No merchants registered yet</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+</script>
 {% endblock %}

@@ -1,0 +1,22 @@
+<svg width="180" height="48" viewBox="0 0 180 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Logo Icon -->
+  <rect width="48" height="48" rx="12" fill="url(#gradient1)"/>
+  <path d="M24 12L32 18V30L24 36L16 30V18L24 12Z" fill="white" opacity="0.9"/>
+  <circle cx="24" cy="24" r="4" fill="white"/>
+  <path d="M24 20V28M20 24H28" stroke="url(#gradient2)" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Text -->
+  <text x="58" y="26" font-family="Inter, sans-serif" font-size="18" font-weight="700" fill="#1e293b">Sam Soft</text>
+  <text x="58" y="42" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#6366f1">Pay</text>
+
+  <defs>
+    <linearGradient id="gradient1" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#667eea"/>
+      <stop offset="1" stop-color="#764ba2"/>
+    </linearGradient>
+    <linearGradient id="gradient2" x1="20" y1="20" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#667eea"/>
+      <stop offset="1" stop-color="#764ba2"/>
+    </linearGradient>
+  </defs>
+</svg>

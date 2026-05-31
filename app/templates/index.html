@@ -1,10 +1,90 @@
 {% extends "base.html" %}
-{% block content %}
-<h1>PesaDemo</h1>
-<p>A minimal Flask demo of a payment aggregator. Mock rails only — no real money moves.</p>
 
-<h2>Quick start</h2>
-<pre><code>curl -X POST http://localhost:5000/v1/charges \
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Welcome to Sam Soft Pay</h1>
+  <p class="page-subtitle">A modern, professional payment gateway platform for East Africa — Collections, Disbursements & More</p>
+</div>
+
+<!-- Hero Card with Gradient -->
+<div class="card" style="background: var(--gradient-primary); color: white; border: none; margin-bottom: 2rem;">
+  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2rem;">
+    <div style="flex: 1; min-width: 300px;">
+      <h2 style="font-size: 1.75rem; margin-bottom: 1rem; color: white;">Start Accepting Payments</h2>
+      <p style="opacity: 0.95; margin-bottom: 1.5rem; line-height: 1.7;">
+        Integrate collections (money in) and disbursements (money out) with our simple API.
+        Supports MTN MoMo, Airtel Money, and card payments.
+      </p>
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{{ url_for('dashboard.list_merchants') }}" class="btn btn-outline" style="background: white; color: var(--primary); border-color: white;">
+          <i data-feather="arrow-right"></i>
+          View Merchants
+        </a>
+      </div>
+    </div>
+    <div style="font-size: 80px; opacity: 0.2;">
+      <i data-feather="credit-card"></i>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Total Merchants</span>
+      <div class="stat-icon primary">
+        <i data-feather="users"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ merchants|length }}</div>
+    <div class="stat-change positive">
+      <i data-feather="trending-up"></i>
+      <span>Active accounts</span>
+    </div>
+  </div>
+
+  <div class="stat-card success">
+    <div class="stat-header">
+      <span class="stat-label">Integration Ready</span>
+      <div class="stat-icon success">
+        <i data-feather="check-circle"></i>
+      </div>
+    </div>
+    <div class="stat-value">100%</div>
+    <div class="stat-change">
+      <i data-feather="activity"></i>
+      <span>System operational</span>
+    </div>
+  </div>
+
+  <div class="stat-card info">
+    <div class="stat-header">
+      <span class="stat-label">Payment Channels</span>
+      <div class="stat-icon info">
+        <i data-feather="zap"></i>
+      </div>
+    </div>
+    <div class="stat-value">3+</div>
+    <div class="stat-change">
+      <i data-feather="layers"></i>
+      <span>MTN, Airtel, Card</span>
+    </div>
+  </div>
+</div>
+
+<!-- API Quick Start -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="code"></i>
+      Quick Start - Create a Charge
+    </h3>
+  </div>
+
+  <p class="text-muted mb-2">Use your API keys to initiate a collection transaction:</p>
+
+  <pre><code>curl -X POST http://localhost:5000/v1/charges \
   -H "Authorization: Bearer sk_test_demo123" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
@@ -15,11 +95,123 @@
     "customer": {"phone": "+256700123456"},
     "reference": "order-001"
   }'</code></pre>
+</div>
 
-<h2>Merchants ({{ merchants|length }})</h2>
-<ul>
-  {% for m in merchants %}
-    <li><a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}">{{ m.name }}</a> &mdash; <code>{{ m.public_key }}</code></li>
-  {% endfor %}
-</ul>
+<!-- Merchants List -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="briefcase"></i>
+      Registered Merchants ({{ merchants|length }})
+    </h3>
+  </div>
+
+  {% if merchants %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Merchant Name</th>
+          <th>Public Key</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in merchants %}
+        <tr>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div style="width: 40px; height: 40px; background: var(--gradient-primary); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600;">
+                {{ m.name[0] }}
+              </div>
+              <div>
+                <div style="font-weight: 500; color: var(--gray-900);">{{ m.name }}</div>
+                <div style="font-size: 0.875rem; color: var(--gray-600);">ID: {{ m.id }}</div>
+              </div>
+            </div>
+          </td>
+          <td><code>{{ m.public_key }}</code></td>
+          <td>
+            <span class="badge succeeded">Active</span>
+          </td>
+          <td>
+            <a href="{{ url_for('dashboard.merchant_detail', merchant_id=m.id) }}" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">
+              <i data-feather="arrow-right"></i>
+              View Dashboard
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem;"></i>
+    <p>No merchants registered yet</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Features Grid -->
+<div class="grid-2">
+  <div class="card">
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+      <i data-feather="trending-up" style="color: var(--success);"></i>
+      Collections (Money In)
+    </h3>
+    <ul style="list-style: none; padding: 0; margin: 0;">
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--success); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Accept payments via MTN MoMo, Airtel Money, and cards</span>
+      </li>
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--success); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Webhook notifications with HMAC signature</span>
+      </li>
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--success); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Idempotency key support for safe retries</span>
+      </li>
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--success); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Double-entry ledger accounting</span>
+      </li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+      <i data-feather="send" style="color: var(--info);"></i>
+      Disbursements (Money Out)
+    </h3>
+    <ul style="list-style: none; padding: 0; margin: 0;">
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--info); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Send payouts to mobile money accounts</span>
+      </li>
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--info); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Bulk CSV upload for mass payouts</span>
+      </li>
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--info); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Real-time balance checks</span>
+      </li>
+      <li style="padding: 0.5rem 0; display: flex; align-items: start; gap: 0.5rem;">
+        <i data-feather="check" style="color: var(--info); width: 18px; height: 18px; margin-top: 2px;"></i>
+        <span>Automatic reconciliation</span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Re-initialize Feather Icons after content load
+  feather.replace();
+</script>
 {% endblock %}

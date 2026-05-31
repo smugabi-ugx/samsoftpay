@@ -1,96 +1,516 @@
 {% extends "base.html" %}
+
+{% block title %}{{ merchant.name }}{% endblock %}
+
 {% block content %}
-<h1>{{ merchant.name }}</h1>
-<p><code>public_key={{ merchant.public_key }}</code> &middot; <code>secret_key={{ merchant.secret_key }}</code></p>
+<!-- Page Header -->
+<div class="page-header" style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 1.5rem;">
+  <div>
+    <h1 class="page-title" style="display: flex; align-items: center; gap: 1rem;">
+      <div style="width: 56px; height: 56px; background: var(--gradient-primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; font-weight: 700;">
+        {{ merchant.name[0] }}
+      </div>
+      {{ merchant.name }}
+    </h1>
+    <!-- API Keys Section -->
+    <div style="margin-top: 1rem;">
+      <div style="margin-bottom: 0.75rem;">
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Public Key</div>
+        <div class="api-key-display">
+          <code id="publicKey">{{ merchant.public_key }}</code>
+          <button class="copy-btn" onclick="copyToClipboard('publicKey', this)" title="Copy to clipboard">
+            <i data-feather="copy" style="width: 16px; height: 16px;"></i>
+          </button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Secret Key</div>
+        <div class="api-key-display" style="border-color: var(--danger); background: rgba(239, 68, 68, 0.05);">
+          <code id="secretKey" style="color: var(--danger);">{{ merchant.secret_key }}</code>
+          <button class="copy-btn" onclick="copyToClipboard('secretKey', this)" title="Copy to clipboard">
+            <i data-feather="copy" style="width: 16px; height: 16px;"></i>
+          </button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; font-size: 0.8125rem; color: var(--gray-600);">
+          <i data-feather="shield" style="width: 14px; height: 14px; color: var(--danger);"></i>
+          <span>Keep your secret key secure. Never share it publicly or commit it to version control.</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<p>
-  <a href="{{ url_for('dashboard.new_link_form', merchant_id=merchant.id) }}"
-     style="display:inline-block; padding:0.5rem 1rem; background:#1a1814; color:white; border-radius:3px; text-decoration:none; margin-right:0.5rem;">
-    + Payment link
-  </a>
-  <a href="{{ url_for('dashboard.new_payout_form', merchant_id=merchant.id) }}"
-     style="display:inline-block; padding:0.5rem 1rem; background:#1a7f37; color:white; border-radius:3px; text-decoration:none; margin-right:0.5rem;">
-    Send payout
-  </a>
-  <a href="{{ url_for('dashboard.bulk_payout_form', merchant_id=merchant.id) }}"
-     style="display:inline-block; padding:0.5rem 1rem; background:#0a66c2; color:white; border-radius:3px; text-decoration:none;">
-    Bulk payouts (CSV)
-  </a>
-</p>
-
-<div class="card">
-  <div>Pending balance</div>
-  <div class="balance">{{ "{:,}".format(pending_balance) }} {{ "UGX" }}</div>
+  <div class="btn-group">
+    <a href="{{ url_for('dashboard.new_link_form', merchant_id=merchant.id) }}" class="btn btn-primary">
+      <i data-feather="link"></i>
+      Payment Link
+    </a>
+    <a href="{{ url_for('dashboard.new_payout_form', merchant_id=merchant.id) }}" class="btn btn-success">
+      <i data-feather="send"></i>
+      Send Payout
+    </a>
+    <a href="{{ url_for('dashboard.bulk_payout_form', merchant_id=merchant.id) }}" class="btn btn-info">
+      <i data-feather="upload"></i>
+      Bulk CSV
+    </a>
+  </div>
 </div>
-<div class="card">
-  <div>Available (settled, awaiting payout)</div>
-  <div class="balance">{{ "{:,}".format(available_balance) }} {{ "UGX" }}</div>
+
+<!-- Security Best Practices Alert -->
+<div class="alert alert-info">
+  <i data-feather="shield" class="alert-icon"></i>
+  <div>
+    <strong style="display: block; margin-bottom: 0.25rem;">Security Best Practices</strong>
+    <ul style="margin: 0.5rem 0 0 0; padding-left: 1.25rem; line-height: 1.6;">
+      <li>Webhook signatures are verified using HMAC-SHA256</li>
+      <li>All API requests must use HTTPS in production</li>
+      <li>Implement IP whitelisting for added security</li>
+      <li>Rotate your API keys regularly (every 90 days recommended)</li>
+    </ul>
+  </div>
 </div>
 
-<h2>Recent transactions</h2>
-<table>
-  <tr><th>ID</th><th>When</th><th>Amount</th><th>Fee</th><th>Channel</th><th>Status</th><th>Ref</th></tr>
+<!-- Balance Cards -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Pending Balance</span>
+      <div class="stat-icon warning">
+        <i data-feather="clock"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ "{:,}".format(pending_balance) }} <span style="font-size: 1.25rem; font-weight: 500; color: var(--gray-600);">UGX</span></div>
+    <div class="stat-change">
+      <i data-feather="info"></i>
+      <span>Awaiting settlement</span>
+    </div>
+  </div>
+
+  <div class="stat-card success">
+    <div class="stat-header">
+      <span class="stat-label">Available Balance</span>
+      <div class="stat-icon success">
+        <i data-feather="check-circle"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ "{:,}".format(available_balance) }} <span style="font-size: 1.25rem; font-weight: 500; color: var(--gray-600);">UGX</span></div>
+    <div class="stat-change positive">
+      <i data-feather="trending-up"></i>
+      <span>Ready for payout</span>
+    </div>
+  </div>
+
+  <div class="stat-card info">
+    <div class="stat-header">
+      <span class="stat-label">Total Transactions</span>
+      <div class="stat-icon info">
+        <i data-feather="activity"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ txns|length }}</div>
+    <div class="stat-change">
+      <i data-feather="database"></i>
+      <span>All time</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Payouts Sent</span>
+      <div class="stat-icon primary">
+        <i data-feather="arrow-up-right"></i>
+      </div>
+    </div>
+    <div class="stat-value">{{ payouts|length }}</div>
+    <div class="stat-change">
+      <i data-feather="send"></i>
+      <span>Disbursements</span>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="grid-2 mb-3">
+  <!-- Transaction Status Chart -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <i data-feather="pie-chart"></i>
+        Transaction Status
+      </h3>
+    </div>
+    <canvas id="statusChart" style="max-height: 300px;"></canvas>
+  </div>
+
+  <!-- Channel Distribution Chart -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title">
+        <i data-feather="bar-chart-2"></i>
+        Payment Channels
+      </h3>
+    </div>
+    <canvas id="channelChart" style="max-height: 300px;"></canvas>
+  </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="credit-card"></i>
+      Recent Transactions
+    </h3>
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ txns|length }} total</span>
+      {% set pending_count = txns|selectattr('status.value', 'in', ['pending', 'authorized'])|list|length %}
+      {% if pending_count > 0 %}
+      <form method="post" action="{{ url_for('dashboard.sweep_pending') }}" style="margin: 0;">
+        <button type="submit" class="btn btn-outline" style="padding: 0.375rem 0.75rem; font-size: 0.8125rem; color: var(--warning);">
+          <i data-feather="refresh-cw"></i>
+          Resolve {{ pending_count }} Pending
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if txns %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Transaction ID</th>
+          <th>Date & Time</th>
+          <th>Amount</th>
+          <th>Fee</th>
+          <th>Channel</th>
+          <th>Status</th>
+          <th>Reference</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in txns %}
+        <tr>
+          <td><code style="font-size: 0.8125rem;">{{ t.public_id }}</code></td>
+          <td>
+            <div style="font-size: 0.875rem;">{{ t.created_at.strftime("%Y-%m-%d") }}</div>
+            <div style="font-size: 0.8125rem; color: var(--gray-600);">{{ t.created_at.strftime("%H:%M:%S") }}</div>
+          </td>
+          <td style="font-weight: 600; color: var(--gray-900);">{{ "{:,}".format(t.amount) }} UGX</td>
+          <td style="color: var(--gray-600);">{{ "{:,}".format(t.fee_amount) }}</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i data-feather="smartphone" style="width: 16px; height: 16px; color: var(--primary);"></i>
+              <span>{{ t.channel.value }}</span>
+            </div>
+          </td>
+          <td><span class="badge {{ t.status.value }}">{{ t.status.value }}</span></td>
+          <td style="color: var(--gray-600); font-size: 0.875rem;">{{ t.merchant_reference or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+    <p>No transactions yet</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Payouts -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="arrow-up-right"></i>
+      Payouts
+    </h3>
+    <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ payouts|length }} total</span>
+  </div>
+
+  {% if payouts %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Payout ID</th>
+          <th>Date & Time</th>
+          <th>Amount</th>
+          <th>Channel</th>
+          <th>Recipient</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payouts %}
+        <tr>
+          <td><code style="font-size: 0.8125rem;">{{ p.public_id }}</code></td>
+          <td>
+            <div style="font-size: 0.875rem;">{{ p.created_at.strftime("%Y-%m-%d") }}</div>
+            <div style="font-size: 0.8125rem; color: var(--gray-600);">{{ p.created_at.strftime("%H:%M:%S") }}</div>
+          </td>
+          <td style="font-weight: 600; color: var(--danger);">-{{ "{:,}".format(p.amount) }} UGX</td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <i data-feather="smartphone" style="width: 16px; height: 16px; color: var(--success);"></i>
+              <span>{{ p.channel.value }}</span>
+            </div>
+          </td>
+          <td>
+            <div style="font-weight: 500;">{{ p.recipient_phone }}</div>
+            <div style="font-size: 0.8125rem; color: var(--gray-600);">{{ p.recipient_name or "—" }}</div>
+          </td>
+          <td><span class="badge {{ p.status.value }}">{{ p.status.value }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+    <p>No payouts yet</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Payment Links -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="link"></i>
+      Payment Links
+    </h3>
+    <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ links|length }} total</span>
+  </div>
+
+  {% if links %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Link ID</th>
+          <th>Amount</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in links %}
+        <tr>
+          <td><code style="font-size: 0.8125rem;">{{ l.public_id }}</code></td>
+          <td style="font-weight: 600;">{{ "{:,}".format(l.amount) }} {{ l.currency }}</td>
+          <td>{{ l.description or "—" }}</td>
+          <td>
+            {% if l.transaction_id %}
+              <span class="badge succeeded">Paid</span>
+            {% elif not l.is_active %}
+              <span class="badge failed">Inactive</span>
+            {% else %}
+              <span class="badge pending">Open</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('checkout.checkout_page', public_id=l.public_id) }}" target="_blank" class="btn btn-primary" style="padding: 0.375rem 0.75rem; font-size: 0.8125rem;">
+              <i data-feather="external-link"></i>
+              Open Link
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+    <p>No payment links created yet</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Webhook Deliveries -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title">
+      <i data-feather="bell"></i>
+      Webhook Deliveries
+    </h3>
+    <span class="badge" style="background: var(--gray-100); color: var(--gray-700);">{{ webhooks|length }} total</span>
+  </div>
+
+  {% if webhooks %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Webhook URL</th>
+          <th>Status</th>
+          <th>Attempts</th>
+          <th>Last Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in webhooks %}
+        <tr>
+          <td>{{ w.id }}</td>
+          <td><code style="font-size: 0.8125rem;">{{ w.url }}</code></td>
+          <td><span class="badge {% if w.status == 'sent' %}succeeded{% elif w.status == 'failed' %}failed{% else %}pending{% endif %}">{{ w.status }}</span></td>
+          <td>{{ w.attempts }}</td>
+          <td>
+            {% if w.last_response_code %}
+              <span class="badge {% if w.last_response_code == 200 %}succeeded{% else %}failed{% endif %}">{{ w.last_response_code }}</span>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+    <i data-feather="inbox" style="width: 48px; height: 48px; margin-bottom: 1rem; opacity: 0.5;"></i>
+    <p>No webhook deliveries yet</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Re-initialize Feather Icons
+  feather.replace();
+
+  // Copy to clipboard function
+  function copyToClipboard(elementId, button) {
+    const element = document.getElementById(elementId);
+    const text = element.textContent;
+
+    navigator.clipboard.writeText(text).then(() => {
+      // Success feedback
+      const originalHTML = button.innerHTML;
+      button.innerHTML = '<i data-feather="check" style="width: 16px; height: 16px;"></i>';
+      button.classList.add('copied');
+      feather.replace();
+
+      setTimeout(() => {
+        button.innerHTML = originalHTML;
+        button.classList.remove('copied');
+        feather.replace();
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      alert('Failed to copy to clipboard');
+    });
+  }
+
+  // Prepare transaction data for charts
+  // Count statuses and channels
+  const statusCounts = {};
+  const channelCounts = {};
+
   {% for t in txns %}
-    <tr>
-      <td><code>{{ t.public_id }}</code></td>
-      <td>{{ t.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-      <td>{{ "{:,}".format(t.amount) }}</td>
-      <td>{{ "{:,}".format(t.fee_amount) }}</td>
-      <td>{{ t.channel.value }}</td>
-      <td class="status-{{ t.status.value }}">{{ t.status.value }}</td>
-      <td>{{ t.merchant_reference or "" }}</td>
-    </tr>
-  {% endfor %}
-</table>
+    // Count statuses
+    const status_{{ loop.index }} = "{{ t.status.value }}";
+    statusCounts[status_{{ loop.index }}] = (statusCounts[status_{{ loop.index }}] || 0) + 1;
 
-<h2>Payouts</h2>
-<table>
-  <tr><th>ID</th><th>When</th><th>Amount</th><th>Channel</th><th>Recipient</th><th>Status</th></tr>
-  {% for p in payouts %}
-    <tr>
-      <td><code>{{ p.public_id }}</code></td>
-      <td>{{ p.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
-      <td>{{ "{:,}".format(p.amount) }}</td>
-      <td>{{ p.channel.value }}</td>
-      <td>{{ p.recipient_phone }}</td>
-      <td class="status-{{ p.status.value }}">{{ p.status.value }}</td>
-    </tr>
+    // Count channels
+    const channel_{{ loop.index }} = "{{ t.channel.value }}";
+    channelCounts[channel_{{ loop.index }}] = (channelCounts[channel_{{ loop.index }}] || 0) + 1;
   {% endfor %}
-</table>
 
-<h2>Payment links</h2>
-<table>
-  <tr><th>Link ID</th><th>Amount</th><th>Description</th><th>Status</th><th>URL</th></tr>
-  {% for l in links %}
-    <tr>
-      <td><code>{{ l.public_id }}</code></td>
-      <td>{{ "{:,}".format(l.amount) }} {{ l.currency }}</td>
-      <td>{{ l.description or "—" }}</td>
-      <td>
-        {% if l.transaction_id %}
-          paid
-        {% elif not l.is_active %}
-          inactive
-        {% else %}
-          open
-        {% endif %}
-      </td>
-      <td><a href="{{ url_for('checkout.checkout_page', public_id=l.public_id) }}" target="_blank">open</a></td>
-    </tr>
-  {% endfor %}
-</table>
+  // Status Chart
+  const statusCtx = document.getElementById('statusChart');
+  if (statusCtx && Object.keys(statusCounts).length > 0) {
+    new Chart(statusCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(statusCounts).map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+        datasets: [{
+          data: Object.values(statusCounts),
+          backgroundColor: [
+            'rgba(16, 185, 129, 0.8)',  // succeeded
+            'rgba(245, 158, 11, 0.8)',  // pending/authorized
+            'rgba(239, 68, 68, 0.8)',   // failed
+            'rgba(99, 102, 241, 0.8)'   // other
+          ],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              padding: 15,
+              font: {
+                family: "'Inter', sans-serif",
+                size: 12
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 
-<h2>Webhook deliveries</h2>
-<table>
-  <tr><th>ID</th><th>URL</th><th>Status</th><th>Attempts</th><th>Last code</th></tr>
-  {% for w in webhooks %}
-    <tr>
-      <td>{{ w.id }}</td>
-      <td><code>{{ w.url }}</code></td>
-      <td>{{ w.status }}</td>
-      <td>{{ w.attempts }}</td>
-      <td>{{ w.last_response_code or "-" }}</td>
-    </tr>
-  {% endfor %}
-</table>
+  // Channel Chart
+  const channelCtx = document.getElementById('channelChart');
+  if (channelCtx && Object.keys(channelCounts).length > 0) {
+    new Chart(channelCtx, {
+      type: 'bar',
+      data: {
+        labels: Object.keys(channelCounts).map(c => c.replace('_', ' ').toUpperCase()),
+        datasets: [{
+          label: 'Transactions',
+          data: Object.values(channelCounts),
+          backgroundColor: 'rgba(99, 102, 241, 0.8)',
+          borderRadius: 8,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              precision: 0,
+              font: {
+                family: "'Inter', sans-serif"
+              }
+            },
+            grid: {
+              color: 'rgba(0, 0, 0, 0.05)'
+            }
+          },
+          x: {
+            ticks: {
+              font: {
+                family: "'Inter', sans-serif"
+              }
+            },
+            grid: {
+              display: false
+            }
+          }
+        }
+      }
+    });
+  }
+</script>
 {% endblock %}

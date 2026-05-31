@@ -280,6 +280,7 @@ def bulk_payout_submit(merchant_id: int):
             continue
 
     batch.status = "done"
+    batch.succeeded_count = created
     batch.failed_count = failed
     db.session.commit()
 
@@ -290,3 +291,14 @@ def bulk_payout_submit(merchant_id: int):
 def reconciliation():
     report = run_reconciliation()
     return render_template("reconciliation.html", report=report)
+
+
+@bp.post("/admin/sweep-pending")
+def sweep_pending():
+    """Expire stale PENDING/AUTHORIZED transactions and redirect back."""
+    from ..services.sweep import sweep_stale_transactions
+    result = sweep_stale_transactions(stale_minutes=10)
+    return redirect(
+        url_for("dashboard.reconciliation", swept=result["swept"],
+                succeeded=result["succeeded"], failed=result["failed"])
+    )
