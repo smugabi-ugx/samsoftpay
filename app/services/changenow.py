@@ -65,7 +65,7 @@ def get_estimate(*, from_coin: str, amount_ugx: int) -> dict:
     if from_coin in ("usdtbsc", "usdteth"):
         return {"estimated_amount": usd_amount, "coin": from_coin}
 
-    url = f"{_BASE}/exchange-amount/{usd_amount}/usdt_{from_coin}"
+    url = f"{_BASE}/exchange-amount/{usd_amount}/{from_coin}_usdt"
     params = {"api_key": api_key} if api_key else {}
     try:
         resp = _req.get(url, params=params, timeout=8)
@@ -137,6 +137,9 @@ def create_exchange(
         return CryptoOrderResult(accepted=False, reason=str(exc))
 
 
+_mock_poll_counts: dict = {}   # exchange_id → poll count
+
+
 def get_status(exchange_id: str) -> str:
     """Poll ChangeNow for exchange status.
 
@@ -144,7 +147,10 @@ def get_status(exchange_id: str) -> str:
     """
     api_key = current_app.config.get("CHANGENOW_API_KEY", "")
     if not api_key or exchange_id.startswith("cn_mock_"):
-        return "finished"  # mock always succeeds
+        # Mock: return waiting for first 3 polls, then finished
+        count = _mock_poll_counts.get(exchange_id, 0) + 1
+        _mock_poll_counts[exchange_id] = count
+        return "finished" if count >= 3 else "waiting"
 
     try:
         resp = _req.get(

@@ -13,8 +13,11 @@ def calculate_fee(*, amount: int, channel: Channel, currency: str = "UGX") -> in
         raise ValueError(f"unsupported currency: {currency}")
     if channel in (Channel.MTN_MOMO, Channel.AIRTEL_MONEY):
         return min(max(COLLECTION_MIN, int(amount * COLLECTION_RATE)), COLLECTION_CAP)
-    if channel == Channel.CARD:
+    if channel in (Channel.CARD, Channel.VISA):
         return int(amount * 0.029) + 200
+    if channel == Channel.CRYPTO:
+        # ChangeNow charges ~0.5% network fee; we pass it through + 0.5% margin
+        return max(COLLECTION_MIN, int(amount * 0.01))
     raise ValueError(f"no fee rule for channel {channel}")
 
 

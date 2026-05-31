@@ -1,6 +1,8 @@
 """Merchant auth: signup, login, logout, email verification, 2FA."""
+import hmac
 import re
 import secrets
+from urllib.parse import urlparse
 
 from flask import (
     Blueprint, flash, redirect, render_template,
@@ -11,7 +13,7 @@ from flask_login import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import Merchant
 from ..services.email_service import generate_otp, otp_expiry, send_otp
 from ..utils import verified_required
@@ -19,6 +21,18 @@ from ..utils import verified_required
 bp = Blueprint("auth", __name__)
 
 _PENDING_2FA_KEY = "_pending_2fa_id"
+
+
+def _safe_redirect(next_url: str | None, fallback: str) -> str:
+    """Return next_url only if it is a relative path (no host) to prevent open redirect."""
+    if next_url and urlparse(next_url).netloc == "":
+        return next_url
+    return fallback
+
+
+def _otp_matches(stored: str, provided: str) -> bool:
+    """Constant-time OTP comparison to prevent timing attacks."""
+    return hmac.compare_digest(stored, provided)
 
 
 def _make_handle(name: str) -> str:
@@ -42,11 +56,15 @@ def signup_page():
 
 
 @bp.post("/signup")
+@limiter.limit("5 per minute")
 def signup():
     name        = request.form.get("name", "").strip()
     email       = request.form.get("email", "").strip().lower()
     password    = request.form.get("password", "")
-    webhook_url = request.form.get("webhook_url", "").strip() or None
+    raw_webhook = request.form.get("webhook_url", "").strip()
+    if raw_webhook and not re.match(r"^https?://", raw_webhook):
+        raw_webhook = ""   # reject non-http(s) URLs — prevents SSRF
+    webhook_url = raw_webhook or None
 
     error = None
     if not name:
@@ -73,7 +91,7 @@ def signup():
         secret_key="sk_live_" + secrets.token_urlsafe(28),
         test_public_key="pk_test_" + secrets.token_urlsafe(20),
         test_secret_key="sk_test_" + secrets.token_urlsafe(28),
-        kyc_status="verified",
+        kyc_status="pending",
         webhook_url=webhook_url,
         handle=raw_handle if raw_handle else _make_handle(name),
         email_verified=False,
@@ -110,7 +128,7 @@ def verify_email():
 
     if (
         not m.otp_code
-        or m.otp_code != code
+        or not _otp_matches(m.otp_code, code)
         or not m.otp_expires_at
         or datetime.now(timezone.utc) > m.otp_expires_at.replace(tzinfo=timezone.utc)
     ):
@@ -147,6 +165,7 @@ def login_page():
 
 
 @bp.post("/login")
+@limiter.limit("10 per minute")
 def login():
     email    = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
@@ -171,8 +190,7 @@ def login():
 
     # 2FA disabled or email not yet verified — log straight in
     login_user(merchant, remember=True)
-    next_url = request.args.get("next")
-    return redirect(next_url or url_for("auth.account"))
+    return redirect(_safe_redirect(request.args.get("next"), url_for("auth.account")))
 
 
 # ---------- 2FA verification ----------
@@ -185,6 +203,7 @@ def verify_2fa_page():
 
 
 @bp.post("/verify-2fa")
+@limiter.limit("10 per minute")
 def verify_2fa():
     pending_id = session.get(_PENDING_2FA_KEY)
     if not pending_id:
@@ -196,7 +215,7 @@ def verify_2fa():
 
     if not m or (
         not m.otp_code
-        or m.otp_code != code
+        or not _otp_matches(m.otp_code, code)
         or not m.otp_expires_at
         or datetime.now(timezone.utc) > m.otp_expires_at.replace(tzinfo=timezone.utc)
     ):
@@ -207,8 +226,7 @@ def verify_2fa():
     db.session.commit()
     session.pop(_PENDING_2FA_KEY, None)
     login_user(m, remember=True)
-    next_url = request.args.get("next")
-    return redirect(next_url or url_for("auth.account"))
+    return redirect(_safe_redirect(request.args.get("next"), url_for("auth.account")))
 
 
 @bp.post("/verify-2fa/resend")

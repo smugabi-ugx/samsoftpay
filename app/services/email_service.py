@@ -1,9 +1,5 @@
-"""Email sending — OTPs and notifications.
-
-If MAIL_HOST is not configured the code falls back to printing the OTP
-to the console, which is perfect for local development.
-"""
-import random
+"""Email sending — OTPs and notifications."""
+import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
@@ -13,7 +9,7 @@ from flask import current_app
 
 
 def generate_otp() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    return f"{secrets.randbelow(1_000_000):06d}"   # cryptographically secure
 
 
 def otp_expiry() -> datetime:
@@ -35,7 +31,7 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
     <h1 style="color:white;margin:0;font-size:1.5rem;">Samsoftpay</h1>
   </div>
   <h2 style="color:#0f172a;">Your verification code</h2>
-  <p style="color:#475569;">Use the code below to complete your action. It expires in <strong>10 minutes</strong>.</p>
+  <p style="color:#475569;">Use the code below. It expires in <strong>10 minutes</strong>.</p>
   <div style="background:#f1f5f9;border-radius:8px;padding:1.5rem;text-align:center;margin:1.5rem 0;">
     <span style="font-size:2.5rem;font-weight:700;letter-spacing:0.3em;color:#6366f1;font-family:monospace;">{otp}</span>
   </div>
@@ -53,25 +49,28 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
         print(f"{'='*55}\n")
         return
 
-    port = int(current_app.config.get("MAIL_PORT", 587))
+    port     = int(current_app.config.get("MAIL_PORT", 587))
     username = current_app.config.get("MAIL_USERNAME", "")
     password = current_app.config.get("MAIL_PASSWORD", "")
     from_addr = current_app.config.get("MAIL_FROM", username)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"Samsoftpay <{from_addr}>"
-    msg["To"] = to_email
+    msg["From"]    = f"Samsoftpay <{from_addr}>"
+    msg["To"]      = to_email
     msg.attach(MIMEText(plain, "plain"))
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(html,  "html"))
 
     try:
-        with smtplib.SMTP(host, port) as server:
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port)
+        else:
+            server = smtplib.SMTP(host, port)
             server.ehlo()
-            if port != 465:
-                server.starttls()
-            if username:
-                server.login(username, password)
-            server.sendmail(from_addr, to_email, msg.as_string())
+            server.starttls()
+        if username:
+            server.login(username, password)
+        server.sendmail(from_addr, to_email, msg.as_string())
+        server.quit()
     except Exception as exc:
         print(f"[EMAIL ERROR] Failed to send to {to_email}: {exc} — OTP was: {otp}")

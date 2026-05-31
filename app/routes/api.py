@@ -248,10 +248,12 @@ def get_payout(public_id: str):
 @bp.post("/payment-links")
 @limiter.limit("30 per minute")
 def create_payment_link():
+    import re as _re
     import uuid as _uuid
     from flask import url_for
     from ..models import PaymentLink
 
+    _check_timestamp()
     merchant = _auth()
     body = request.get_json(silent=True) or {}
 
@@ -264,15 +266,21 @@ def create_payment_link():
     if amount <= 0:
         abort(400, description="amount must be positive")
 
+    # Validate redirect URLs — only allow http(s) to prevent stored XSS
+    def _safe_url(val):
+        if val and not _re.match(r"^https?://", str(val)):
+            abort(400, description=f"success_url and cancel_url must start with https://")
+        return val or None
+
     link = PaymentLink(
         public_id=f"lnk_{_uuid.uuid4().hex[:16]}",
         merchant_id=merchant.id,
         amount=amount,
         currency=currency,
-        description=body.get("description"),
-        reference=body.get("reference"),
-        success_url=body.get("success_url"),
-        cancel_url=body.get("cancel_url"),
+        description=str(body.get("description") or "")[:255] or None,
+        reference=str(body.get("reference") or "")[:120] or None,
+        success_url=_safe_url(body.get("success_url")),
+        cancel_url=_safe_url(body.get("cancel_url")),
         allow_multiple_uses=bool(body.get("allow_multiple_uses", False)),
     )
     db.session.add(link)

@@ -115,4 +115,27 @@ def get_adapter(channel: Channel) -> RailAdapter:
         return AirtelMoneyAdapter()
     if channel == Channel.CARD:
         return CardAdapter()
+    if channel in (Channel.VISA, Channel.CRYPTO):
+        # ChangeNow/Flutterwave have already confirmed settlement before
+        # create_charge is called for these channels. Return a passthrough
+        # adapter that immediately marks the transaction succeeded.
+        return _PassthroughAdapter(channel)
     raise ValueError(f"unknown channel: {channel}")
+
+
+class _PassthroughAdapter(RailAdapter):
+    """No-op rail for channels settled externally (Visa/Flutterwave, ChangeNow crypto)."""
+    def __init__(self, channel: Channel):
+        self.channel = channel
+
+    def initiate(self, txn) -> InitiateResult:
+        from .orchestrator import complete_transaction
+        import threading
+        app = current_app._get_current_object()
+        txn_id = txn.id
+        ref = txn.merchant_reference or f"{self.channel.value}_{txn.public_id}"
+        def _fire():
+            with app.app_context():
+                complete_transaction(txn_id, success=True, rail_reference=ref)
+        threading.Timer(0.1, _fire).start()
+        return InitiateResult(rail_reference=ref, accepted=True)

@@ -14,7 +14,11 @@ def log_event(
     resource_id: str | None = None,
     detail: dict | None = None,
 ) -> None:
-    """Write one audit entry. Safe to call mid-request; flushes with the session."""
+    """Write one audit entry and commit immediately.
+
+    Uses its own try/except so an audit write failure never breaks the
+    request, and so entries are persisted even when the caller aborts().
+    """
     entry = AuditLog(
         event=event,
         merchant_id=merchant_id,
@@ -22,11 +26,14 @@ def log_event(
         resource_id=resource_id,
         detail=json.dumps(detail) if detail else None,
     )
-    db.session.add(entry)
+    try:
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _client_ip() -> str:
-    """Best-effort client IP — respects X-Forwarded-For behind a proxy."""
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()

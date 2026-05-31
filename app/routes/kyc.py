@@ -18,7 +18,7 @@ from ..utils import verified_required
 
 bp = Blueprint("kyc", __name__, url_prefix="/kyc")
 
-_UPLOAD_FOLDER = os.path.join("instance", "kyc_uploads")
+_UPLOAD_FOLDER = None   # resolved at request time via current_app.instance_path
 _ALLOWED = {"pdf", "jpg", "jpeg", "png", "doc", "docx"}
 
 DOC_TYPES = [
@@ -44,6 +44,11 @@ def _get_or_create_app() -> KYCApplication:
     return app
 
 
+def _upload_root() -> str:
+    from flask import current_app
+    return os.path.join(current_app.instance_path, "kyc_uploads")
+
+
 def _save_file(f) -> tuple[str, str]:
     """Save uploaded file safely. Returns (original_filename, stored_filename)."""
     orig = secure_filename(f.filename)
@@ -51,7 +56,7 @@ def _save_file(f) -> tuple[str, str]:
     if ext not in _ALLOWED:
         raise ValueError(f"File type .{ext} not allowed.")
     stored = f"{uuid.uuid4().hex}.{ext}"
-    folder = os.path.join(_UPLOAD_FOLDER, str(current_user.id))
+    folder = os.path.join(_upload_root(), str(current_user.id))
     os.makedirs(folder, exist_ok=True)
     f.save(os.path.join(folder, stored))
     return orig, stored
@@ -84,6 +89,7 @@ def step1():
 @verified_required
 def step1_save():
     app = _get_or_create_app()
+    if app.status != "draft": abort(403)
     app.company_name       = request.form.get("company_name", "").strip()
     app.tin                = request.form.get("tin", "").strip()
     app.registration_number = request.form.get("registration_number", "").strip()
@@ -110,6 +116,7 @@ def step2():
 @verified_required
 def step2_add_director():
     app = _get_or_create_app()
+    if app.status != "draft": abort(403)
     director = KYCDirector(
         application_id=app.id,
         full_name=request.form.get("full_name", "").strip(),
@@ -161,6 +168,7 @@ def step3():
 @verified_required
 def step3_upload():
     app = _get_or_create_app()
+    if app.status != "draft": abort(403)
     f = request.files.get("document")
     doc_type = request.form.get("doc_type", "other")
     if not f or not f.filename:
@@ -186,6 +194,7 @@ def step3_delete(doc_id: int):
     doc = KYCDocument.query.filter_by(id=doc_id, application_id=app.id).first_or_404()
     # Delete file from disk
     path = os.path.join(_UPLOAD_FOLDER, str(current_user.id), doc.stored_filename)
+    path = os.path.join(_upload_root(), str(current_user.id), doc.stored_filename)
     if os.path.exists(path):
         os.remove(path)
     db.session.delete(doc)
@@ -216,6 +225,7 @@ def step4():
 @verified_required
 def step4_save():
     app = _get_or_create_app()
+    if app.status != "draft": abort(403)
     app.bank_name      = request.form.get("bank_name", "").strip()
     app.bank_branch    = request.form.get("bank_branch", "").strip()
     app.account_number = request.form.get("account_number", "").strip()
@@ -239,6 +249,7 @@ def step5():
 @verified_required
 def step5_save():
     app = _get_or_create_app()
+    if app.status != "draft": abort(403)
     app.ownership_structure     = request.form.get("ownership_structure", "private")
     app.is_listed               = bool(request.form.get("is_listed"))
     app.fatf_country_exposure   = bool(request.form.get("fatf_country_exposure"))
@@ -267,6 +278,17 @@ def submit():
     app = _get_or_create_app()
     if app.status != "draft":
         return redirect(url_for("kyc.kyc_home"))
+    # Server-side completeness check — cannot be bypassed by direct POST
+    missing = []
+    if not app.company_name:  missing.append("business information")
+    if not app.directors:     missing.append("at least one director")
+    if not app.documents:     missing.append("supporting documents")
+    if not app.bank_name:     missing.append("bank details")
+    if not app.ownership_structure: missing.append("AML/CFT questionnaire")
+    if missing:
+        return render_template("kyc/review.html", app=app,
+                               doc_types=dict(DOC_TYPES),
+                               error=f"Missing: {', '.join(missing)}")
     app.status = "submitted"
     app.submitted_at = datetime.now(timezone.utc)
     _touch(app)

@@ -134,6 +134,9 @@ def checkout_submit(public_id: str):
             selected_channel=channel.value,
         )
 
+    from flask import g
+    g.api_mode = "live"
+
     try:
         txn = create_charge(
             merchant=merchant,
@@ -266,7 +269,7 @@ def crypto_status_json(public_id: str):
                     merchant=merchant,
                     amount=link.amount,
                     currency=link.currency,
-                    channel=__import__("app.models", fromlist=["Channel"]).Channel.CRYPTO,
+                    channel=Channel.CRYPTO,
                     customer_phone=None,
                     customer_email=None,
                     merchant_reference=exchange_id,
