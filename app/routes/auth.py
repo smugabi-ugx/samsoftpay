@@ -97,23 +97,13 @@ def signup():
         kyc_status="pending",
         webhook_url=webhook_url,
         handle=raw_handle if raw_handle else _make_handle(name),
-        # Auto-verify when SMTP is not configured — user can still set up email later
-        email_verified=not smtp_configured,
-        otp_code=otp if smtp_configured else None,
-        otp_expires_at=otp_expiry() if smtp_configured else None,
+        email_verified=True,   # re-enable when email is working
+        otp_code=None,
+        otp_expires_at=None,
     )
     db.session.add(merchant)
     db.session.commit()
 
-    if smtp_configured:
-        send_otp(email, otp, purpose="verification")
-        login_user(merchant, remember=False)
-        return redirect(url_for("auth.verify_email_page"))
-
-    # No SMTP configured at all — skip verification (dev/local only)
-    merchant.email_verified = True
-    merchant.otp_code = None
-    db.session.commit()
     login_user(merchant, remember=False)
     return redirect(url_for("auth.account"))
 

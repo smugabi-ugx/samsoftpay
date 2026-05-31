@@ -18,11 +18,9 @@ def admin_required(f):
 
 
 def verified_required(f):
-    """Route requires email to be verified. Redirects to verify page if not."""
+    """Email verification wall — disabled while email service is being configured."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if current_user.is_authenticated and not current_user.email_verified:
-            return redirect(url_for("auth.verify_email_page"))
         return f(*args, **kwargs)
     return decorated
 
