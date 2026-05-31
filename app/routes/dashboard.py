@@ -98,6 +98,18 @@ def admin_update_merchant(merchant_id: int):
     return redirect(url_for("dashboard.list_merchants"))
 
 
+@bp.get("/admin/merchants/<int:merchant_id>/delete-confirm")
+@login_required
+@admin_required
+def admin_delete_confirm(merchant_id: int):
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    if m.email in ("smugabi@mail.com", "demo@samsoftpay.local", "smugabi@gmail.com"):
+        from flask import flash
+        flash("Cannot delete a protected admin account.", "error")
+        return redirect(url_for("dashboard.list_merchants"))
+    return render_template("admin_delete_confirm.html", merchant=m)
+
+
 @bp.post("/admin/merchants/<int:merchant_id>/delete")
 @login_required
 @admin_required

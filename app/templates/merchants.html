@@ -165,15 +165,13 @@
               {% endif %}
 
               <!-- Delete -->
-              {% if m.email not in ['smugabi@mail.com', 'demo@samsoftpay.local'] %}
-              <form method="POST" action="{{ url_for('dashboard.admin_delete_merchant', merchant_id=m.id) }}"
-                    onsubmit="return confirm('DELETE {{ m.name }}?\n\nThis removes the account and ALL their transactions, payouts, and balances. This cannot be undone.')">
-                <button type="submit" class="btn btn-outline"
-                        style="padding:.375rem .625rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);"
-                        title="Delete permanently">
-                  <i data-feather="trash-2" style="width:13px;height:13px;"></i>
-                </button>
-              </form>
+              {% if m.email not in ['smugabi@mail.com', 'smugabi@gmail.com', 'demo@samsoftpay.local'] %}
+              <a href="{{ url_for('dashboard.admin_delete_confirm', merchant_id=m.id) }}"
+                 class="btn btn-outline"
+                 style="padding:.375rem .625rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);"
+                 title="Delete permanently">
+                <i data-feather="trash-2" style="width:13px;height:13px;"></i>
+              </a>
               {% endif %}
             </div>
           </td>

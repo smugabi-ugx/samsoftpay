@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Delete {{ merchant.name }}{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:3rem auto;">
+  <div class="card" style="border-top:4px solid var(--danger);">
+    <div style="text-align:center;padding:1.5rem 1rem 1rem;">
+      <div style="font-size:3rem;margin-bottom:1rem;">🗑️</div>
+      <h2 style="font-family:'Urbanist',sans-serif;font-size:1.375rem;font-weight:800;color:var(--gray-900);margin-bottom:.5rem;">
+        Delete {{ merchant.name }}?
+      </h2>
+      <p style="color:var(--gray-500);font-size:.9375rem;margin-bottom:.5rem;">
+        <strong>{{ merchant.email }}</strong> · ID {{ merchant.id }}
+      </p>
+      <div class="alert alert-danger" style="text-align:left;margin:1.5rem 0;">
+        <i data-feather="alert-triangle" class="alert-icon"></i>
+        <div>
+          <strong>This is permanent.</strong> Deletes the account plus all their
+          transactions, payouts, balances, KYC documents, gift cards,
+          subscriptions, and ledger entries. Cannot be undone.
+        </div>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('dashboard.admin_delete_merchant', merchant_id=merchant.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="display:flex;gap:.75rem;">
+        <a href="{{ url_for('dashboard.list_merchants') }}"
+           class="btn btn-outline" style="flex:1;justify-content:center;">
+          Cancel
+        </a>
+        <button type="submit" class="btn"
+                style="flex:1;background:var(--danger);color:white;justify-content:center;">
+          <i data-feather="trash-2"></i> Yes, Delete Permanently
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
