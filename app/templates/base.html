@@ -1024,9 +1024,23 @@
     </main>
   </div>
 
+  <!-- CSRF: inject token into all POST forms automatically -->
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <script>
     // Initialize Feather Icons
     feather.replace();
+
+    // Auto-inject CSRF token into every POST form
+    const _csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    if (_csrf) {
+      document.querySelectorAll('form').forEach(f => {
+        if (!f.querySelector('[name="csrf_token"]')) {
+          const h = document.createElement('input');
+          h.type = 'hidden'; h.name = 'csrf_token'; h.value = _csrf;
+          f.appendChild(h);
+        }
+      });
+    }
 
     // Add animation classes to elements as they appear
     document.addEventListener('DOMContentLoaded', function() {

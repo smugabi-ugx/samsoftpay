@@ -351,6 +351,26 @@
         </div>
       </div>
 
+      <!-- Gift card / voucher -->
+      {% if voucher_applied %}
+      <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:.875rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;font-size:.9rem;color:#065f46;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Gift card applied: <strong>{{ link.currency }} {{ "{:,}".format(voucher_discount) }}</strong> off.
+        You pay <strong>{{ link.currency }} {{ "{:,}".format(link.amount - voucher_discount) }}</strong>.
+      </div>
+      {% else %}
+      <div class="field" style="margin-top:.25rem;">
+        <label class="section-title" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.5rem;display:block;">Gift Card / Voucher</label>
+        <form method="POST" action="{{ url_for('checkout.apply_voucher', public_id=link.public_id) }}" style="display:flex;gap:.5rem;">
+          <input type="text" name="code" placeholder="Enter code (e.g. SAMF-X4K2-9WQP)"
+                 style="flex:1;border:2px solid var(--line);border-radius:10px;padding:0 1rem;height:48px;font-size:.9375rem;font-family:inherit;outline:none;transition:border-color .2s;"
+                 onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--line)'">
+          <button type="submit" style="height:48px;padding:0 1rem;background:var(--bg);border:2px solid var(--line);border-radius:10px;font-weight:600;font-size:.875rem;cursor:pointer;white-space:nowrap;font-family:inherit;">Apply</button>
+        </form>
+        {% if voucher_error %}<p style="color:var(--danger);font-size:.8125rem;margin-top:.375rem;">{{ voucher_error }}</p>{% endif %}
+      </div>
+      {% endif %}
+
       <!-- Email (always shown) -->
       <div class="field" style="margin-top:0.5rem;">
         <label for="email">Email <span style="font-weight:400;text-transform:none;">(optional, for receipt)</span></label>

@@ -22,12 +22,16 @@ bp = Blueprint("dashboard", __name__)
 @bp.get("/")
 def index():
     from flask_login import current_user
-    if current_user.is_authenticated and current_user.role == "admin":
-        merchants = Merchant.query.all()
-    elif current_user.is_authenticated:
-        merchants = Merchant.query.filter_by(id=current_user.id).all()
-    else:
-        merchants = []
+    if current_user.is_authenticated:
+        return redirect(url_for("auth.account"))
+    return render_template("landing.html")
+
+
+@bp.get("/home")
+@login_required
+@admin_required
+def admin_index():
+    merchants = Merchant.query.all()
     return render_template("index.html", merchants=merchants)
 
 

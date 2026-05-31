@@ -83,6 +83,8 @@ def checkout_page(public_id: str):
             "checkout_inactive.html", link=link, merchant=merchant
         )
 
+    from flask import session
+    voucher_data = session.get(f"voucher_{public_id}", {})
     return render_template(
         "checkout.html",
         link=link,
@@ -94,6 +96,8 @@ def checkout_page(public_id: str):
             ("crypto",       "Crypto (BTC/ETH/USDT…)", "crypto"),
         ],
         crypto_url=url_for("checkout.crypto_checkout", public_id=link.public_id),
+        voucher_applied=bool(voucher_data),
+        voucher_discount=voucher_data.get("discount", 0),
     )
 
 
@@ -134,13 +138,43 @@ def checkout_submit(public_id: str):
             selected_channel=channel.value,
         )
 
-    from flask import g
+    from flask import g, session
     g.api_mode = "live"
+
+    # Apply gift card discount if one was validated
+    charge_amount = link.amount
+    voucher_data = session.get(f"voucher_{public_id}", {})
+    if voucher_data:
+        from ..services.giftcards import redeem_gift_card
+        discount = voucher_data.get("discount", 0)
+        ok, msg, _ = redeem_gift_card(voucher_data["code"], discount)
+        if ok:
+            charge_amount = max(0, link.amount - discount)
+            session.pop(f"voucher_{public_id}", None)
+
+    if charge_amount == 0:
+        # Fully covered by gift card — mark as succeeded without a rail charge
+        from ..models import TxnStatus
+        import uuid as _uuid
+        from ..extensions import db as _db
+        from ..models import Transaction as _Txn
+        txn_obj = _Txn(
+            public_id=f"txn_{_uuid.uuid4().hex[:16]}",
+            merchant_id=merchant.id,
+            amount=link.amount, fee_amount=0,
+            currency=link.currency, channel=channel,
+            status=TxnStatus.SUCCEEDED, is_test=False,
+            merchant_reference=link.reference or link.public_id,
+        )
+        _db.session.add(txn_obj)
+        link.transaction_id = txn_obj.id
+        _db.session.commit()
+        return redirect(url_for("checkout.status_page", public_id=public_id))
 
     try:
         txn = create_charge(
             merchant=merchant,
-            amount=link.amount,
+            amount=charge_amount,
             currency=link.currency,
             channel=channel,
             customer_phone=customer_phone or None,
@@ -201,6 +235,40 @@ def _channel_options():
 
 
 # ── Crypto checkout (ChangeNow) ────────────────────────────────────────
+
+@bp.post("/pay/<public_id>/apply-voucher")
+def apply_voucher(public_id: str):
+    """Validate a gift card code and store the discount in the session."""
+    from flask import session
+    from ..services.giftcards import redeem_gift_card
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or not link.is_active:
+        abort(404)
+    code = request.form.get("code", "").strip().upper()
+    merchant = db.session.get(Merchant, link.merchant_id)
+    # Peek at the card without redeeming yet
+    from ..models import GiftCard
+    from datetime import datetime, timezone
+    card = GiftCard.query.filter_by(code=code, merchant_id=link.merchant_id).first()
+    error = None
+    if not card:
+        error = "Gift card code not found."
+    elif not card.is_active:
+        error = "This gift card is not active."
+    elif card.balance <= 0:
+        error = "This gift card has no remaining balance."
+    elif card.expires_at and datetime.now(timezone.utc) > card.expires_at.replace(tzinfo=timezone.utc):
+        error = "This gift card has expired."
+
+    if error:
+        return render_template("checkout.html", link=link, merchant=merchant,
+                               channels=_channel_options(),
+                               crypto_url=url_for("checkout.crypto_checkout", public_id=public_id),
+                               voucher_error=error)
+    discount = min(card.balance, link.amount)
+    session[f"voucher_{public_id}"] = {"code": code, "discount": discount}
+    return redirect(url_for("checkout.checkout_page", public_id=public_id))
+
 
 @bp.get("/pay/<public_id>/crypto")
 def crypto_checkout(public_id: str):

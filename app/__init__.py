@@ -86,6 +86,7 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes.docs import bp as docs_bp
     from .routes.kyc import bp as kyc_bp
     from .routes.giftcards import bp as giftcards_bp
+    from .routes.seo import bp as seo_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(dash_bp)
@@ -95,6 +96,14 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(docs_bp)
     app.register_blueprint(kyc_bp)
     app.register_blueprint(giftcards_bp)
+    app.register_blueprint(seo_bp)
+
+    # CSRF protection for all browser-facing forms
+    from flask_wtf.csrf import CSRFProtect
+    csrf = CSRFProtect(app)
+    # Exempt the API blueprint — it uses Bearer tokens, not cookies
+    csrf.exempt(api_bp)
+    csrf.exempt(inbound_bp)
 
     from . import cli  # noqa: F401
     cli.register(app)

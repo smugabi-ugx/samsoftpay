@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- SEO: Primary -->
+  <title>Samsoftpay — East Africa Payment Gateway | MTN MoMo, Airtel, Visa, Crypto</title>
+  <meta name="description" content="Accept payments across Uganda and East Africa. MTN MoMo, Airtel Money, Visa/Mastercard and crypto — one API, one dashboard. 1.5% collection fee, no monthly charges. Sign up free.">
+  <meta name="keywords" content="payment gateway Uganda, MTN MoMo API, Airtel Money integration, East Africa payments, mobile money API, payment links Uganda, crypto payments Uganda">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="{{ request.host_url }}">
+
+  <!-- SEO: Open Graph (Facebook, WhatsApp, LinkedIn) -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Samsoftpay — Accept Payments Across East Africa">
+  <meta property="og:description" content="MTN MoMo, Airtel Money, Visa/Mastercard and crypto. One API, instant settlement, bank-grade security. No monthly fees.">
+  <meta property="og:url" content="{{ request.host_url }}">
+  <meta property="og:site_name" content="Samsoftpay">
+  <meta property="og:locale" content="en_UG">
+
+  <!-- SEO: Twitter/X Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Samsoftpay — East Africa Payment Gateway">
+  <meta name="twitter:description" content="Accept MTN MoMo, Airtel Money, Visa and crypto. 1.5% fee, no monthly charges. Free API keys in 60 seconds.">
+
+  <!-- JSON-LD Structured Data (AI + search engine readable) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Samsoftpay",
+    "url": "{{ request.host_url }}",
+    "description": "Payment gateway for East Africa. Accept MTN MoMo, Airtel Money, Visa/Mastercard and cryptocurrency payments via a single REST API.",
+    "applicationCategory": "FinanceApplication",
+    "applicationSubCategory": "Payment Processing",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "UGX",
+      "description": "Free to start. 1.5% collection fee, UGX 750 per payout. No monthly charges."
+    },
+    "featureList": [
+      "MTN Mobile Money (MoMo)",
+      "Airtel Money",
+      "Visa and Mastercard",
+      "Cryptocurrency (BTC, ETH, USDT)",
+      "Bulk payouts via CSV",
+      "Shareable payment links",
+      "Real-time webhooks with HMAC signatures",
+      "Sandbox and live modes",
+      "2-factor authentication",
+      "KYC verification portal"
+    ],
+    "provider": {
+      "@type": "Organization",
+      "name": "Samsoftpay",
+      "areaServed": ["UG", "KE", "TZ", "RW"]
+    }
+  }
+  </script>
+
+  <!-- FAQ schema for AI search -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {"@type":"Question","name":"How much does Samsoftpay charge?","acceptedAnswer":{"@type":"Answer","text":"1.5% per collection (minimum UGX 200, capped at UGX 5,000). UGX 750 flat fee per payout. No monthly or setup fees."}},
+      {"@type":"Question","name":"Which payment methods does Samsoftpay support?","acceptedAnswer":{"@type":"Answer","text":"MTN Mobile Money, Airtel Money, Visa, Mastercard, Bitcoin, Ethereum, USDT and other cryptocurrencies via ChangeNow."}},
+      {"@type":"Question","name":"How do I integrate Samsoftpay?","acceptedAnswer":{"@type":"Answer","text":"Sign up, copy your test API keys, and make a POST to /v1/charges with a Bearer token and Idempotency-Key header. Full documentation at /docs."}},
+      {"@type":"Question","name":"Does Samsoftpay work in Uganda?","acceptedAnswer":{"@type":"Answer","text":"Yes. Samsoftpay is built for Uganda first — supporting MTN MoMo Uganda and Airtel Money Uganda — with expansion to Kenya, Tanzania and Rwanda."}}
+    ]
+  }
+  </script>
+
+  <meta name="theme-color" content="#6366f1">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome 6 Free (Web Awesome compatible icon names) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Web Awesome: swap in your kit URL from webawesome.com -->
+  <!-- <script type="module" src="https://early.webawesome.com/webawesome@2.0.0-alpha.10/dist/webawesome.loader.js"></script> -->
+
+  <style>
+    :root {
+      --purple: #6366f1;
+      --purple-dark: #4f46e5;
+      --purple-light: #a5b4fc;
+      --violet: #764ba2;
+      --green: #10b981;
+      --mtn: #ffcb05;
+      --airtel: #e60000;
+      --ink: #0f172a;
+      --body: #1e293b;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --bg: #f8fafc;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', sans-serif; color: var(--body); background: white; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+
+    /* ── NAVBAR ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: all .3s;
+    }
+    .nav.scrolled {
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+      padding: .75rem 2rem;
+      box-shadow: 0 1px 16px rgba(0,0,0,.06);
+    }
+    .nav-logo { display: flex; align-items: center; gap: .625rem; font-weight: 800; font-size: 1.125rem; color: white; text-decoration: none; }
+    .nav.scrolled .nav-logo { color: var(--ink); }
+    .nav-logo-icon {
+      width: 34px; height: 34px; background: linear-gradient(135deg,#667eea,#764ba2);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    }
+    .nav-links { display: flex; align-items: center; gap: 2rem; }
+    .nav-link { color: rgba(255,255,255,.8); text-decoration: none; font-size: .9375rem; font-weight: 500; transition: color .2s; }
+    .nav.scrolled .nav-link { color: var(--muted); }
+    .nav-link:hover { color: white; }
+    .nav.scrolled .nav-link:hover { color: var(--purple); }
+    .nav-cta {
+      background: white; color: var(--purple); padding: .5rem 1.25rem;
+      border-radius: 8px; font-weight: 700; font-size: .9375rem; text-decoration: none;
+      transition: all .2s;
+    }
+    .nav.scrolled .nav-cta { background: var(--purple); color: white; }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,.3); }
+    @media (max-width:768px) { .nav-links { display: none; } }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      background: linear-gradient(160deg, #0f0c29 0%, #1a0533 35%, #24243e 70%, #0f172a 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 8rem 1.5rem 5rem;
+      position: relative; overflow: hidden;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 20% 50%, rgba(99,102,241,.25) 0%, transparent 60%),
+                  radial-gradient(ellipse at 80% 20%, rgba(118,75,162,.2) 0%, transparent 50%);
+    }
+
+    /* Animated grid lines */
+    .hero-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(99,102,241,.08) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(99,102,241,.08) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse at center, black 40%, transparent 80%);
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: rgba(99,102,241,.15); border: 1px solid rgba(99,102,241,.35);
+      color: var(--purple-light); padding: .4rem 1rem; border-radius: 99px;
+      font-size: .8125rem; font-weight: 600; margin-bottom: 1.75rem;
+      position: relative; z-index: 1;
+      animation: fadeInDown .6s ease-out;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 7vw, 5rem);
+      font-weight: 900; line-height: 1.05; letter-spacing: -.03em;
+      color: white; margin-bottom: 1.5rem;
+      position: relative; z-index: 1;
+      animation: fadeInUp .7s ease-out .1s both;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(135deg, #a5b4fc, #c4b5fd, #818cf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: rgba(255,255,255,.65); max-width: 600px; line-height: 1.7;
+      margin-bottom: 2.5rem; position: relative; z-index: 1;
+      animation: fadeInUp .7s ease-out .2s both;
+    }
+
+    .hero-actions {
+      display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;
+      margin-bottom: 4rem; position: relative; z-index: 1;
+      animation: fadeInUp .7s ease-out .3s both;
+    }
+    .btn-hero-primary {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white; padding: .9rem 2rem; border-radius: 10px;
+      font-weight: 700; font-size: 1rem; text-decoration: none;
+      display: inline-flex; align-items: center; gap: .5rem;
+      box-shadow: 0 8px 24px rgba(99,102,241,.4);
+      transition: all .2s;
+    }
+    .btn-hero-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(99,102,241,.5); }
+    .btn-hero-secondary {
+      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      color: white; padding: .9rem 2rem; border-radius: 10px;
+      font-weight: 600; font-size: 1rem; text-decoration: none;
+      display: inline-flex; align-items: center; gap: .5rem;
+      backdrop-filter: blur(8px); transition: all .2s;
+    }
+    .btn-hero-secondary:hover { background: rgba(255,255,255,.18); transform: translateY(-2px); }
+
+    /* Payment method badges */
+    .hero-channels {
+      display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; justify-content: center;
+      position: relative; z-index: 1;
+      animation: fadeInUp .7s ease-out .4s both;
+    }
+    .channel-chip {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.8); padding: .375rem .875rem; border-radius: 99px;
+      font-size: .8125rem; font-weight: 600;
+      backdrop-filter: blur(8px);
+      transition: all .2s;
+    }
+    .channel-chip:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.25); }
+    .channel-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-mtn { background: var(--mtn); }
+    .dot-airtel { background: var(--airtel); }
+    .dot-visa { background: #1a1f71; }
+    .dot-crypto { background: #f7931a; }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      background: white; border-bottom: 1px solid var(--line);
+      padding: 1.75rem 2rem;
+      display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
+    }
+    .stat-item {
+      padding: .5rem 2.5rem; text-align: center;
+      border-right: 1px solid var(--line);
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-num { font-size: 1.75rem; font-weight: 800; color: var(--ink); line-height: 1; }
+    .stat-num span { background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { font-size: .8125rem; color: var(--muted); margin-top: .25rem; font-weight: 500; }
+    @media (max-width:640px) { .stat-item { border-right: none; border-bottom: 1px solid var(--line); width: 50%; } }
+
+    /* ── SECTIONS ── */
+    section { padding: 5rem 1.5rem; }
+    .section-badge {
+      display: inline-flex; align-items: center; gap: .375rem;
+      background: rgba(99,102,241,.08); border: 1px solid rgba(99,102,241,.2);
+      color: var(--purple); padding: .35rem .875rem; border-radius: 99px;
+      font-size: .8125rem; font-weight: 600; margin-bottom: 1rem;
+    }
+    .section-title { font-size: clamp(1.75rem, 4vw, 2.75rem); font-weight: 800; letter-spacing: -.025em; color: var(--ink); margin-bottom: 1rem; }
+    .section-sub { font-size: 1.0625rem; color: var(--muted); max-width: 600px; line-height: 1.7; }
+    .section-header { text-align: center; margin-bottom: 3.5rem; }
+
+    /* ── FEATURES ── */
+    .features { background: var(--bg); }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .feature-card {
+      background: white; border-radius: 16px; padding: 1.75rem;
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+      transition: all .3s;
+      opacity: 0; transform: translateY(24px);
+    }
+    .feature-card.visible { opacity: 1; transform: translateY(0); }
+    .feature-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,.08); transform: translateY(-3px); }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; margin-bottom: 1.125rem;
+    }
+    .feature-icon.purple { background: rgba(99,102,241,.1); color: var(--purple); }
+    .feature-icon.green { background: rgba(16,185,129,.1); color: var(--green); }
+    .feature-icon.orange { background: rgba(245,158,11,.1); color: #d97706; }
+    .feature-icon.blue { background: rgba(59,130,246,.1); color: #2563eb; }
+    .feature-icon.pink { background: rgba(236,72,153,.1); color: #db2777; }
+    .feature-icon.teal { background: rgba(20,184,166,.1); color: #0d9488; }
+    .feature-card h3 { font-size: 1.0625rem; font-weight: 700; color: var(--ink); margin-bottom: .5rem; }
+    .feature-card p { font-size: .9rem; color: var(--muted); line-height: 1.65; }
+
+    /* ── HOW IT WORKS ── */
+    .steps { max-width: 900px; margin: 0 auto; }
+    .step { display: flex; gap: 2rem; align-items: flex-start; margin-bottom: 3rem; opacity: 0; transform: translateX(-20px); transition: all .5s; }
+    .step.visible { opacity: 1; transform: translateX(0); }
+    .step-num {
+      width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.125rem; font-weight: 800; color: white;
+      box-shadow: 0 4px 16px rgba(99,102,241,.35);
+    }
+    .step-content h3 { font-size: 1.125rem; font-weight: 700; color: var(--ink); margin-bottom: .5rem; }
+    .step-content p { color: var(--muted); line-height: 1.7; }
+
+    /* ── CODE DEMO ── */
+    .code-section { background: linear-gradient(160deg, #0f0c29 0%, #1a0533 100%); color: white; }
+    .code-section .section-title { color: white; }
+    .code-section .section-sub { color: rgba(255,255,255,.6); }
+    .code-wrap { max-width: 780px; margin: 0 auto; }
+    .code-tabs {
+      display: flex; gap: 0; background: rgba(255,255,255,.05);
+      border-radius: 10px 10px 0 0; padding: .5rem .5rem 0;
+    }
+    .code-tab {
+      padding: .5rem 1rem; font-size: .8125rem; font-weight: 600;
+      color: rgba(255,255,255,.5); cursor: pointer; border-radius: 6px 6px 0 0;
+      transition: all .15s;
+    }
+    .code-tab.active { background: #1e293b; color: white; }
+    .code-block {
+      background: #0d1117; border-radius: 0 0 12px 12px;
+      padding: 1.75rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: .875rem; line-height: 1.7;
+    }
+    .code-block .kw { color: #ff7b72; }
+    .code-block .str { color: #a5d6ff; }
+    .code-block .fn { color: #d2a8ff; }
+    .code-block .cm { color: #8b949e; }
+    .code-block .num { color: #79c0ff; }
+    .code-block .var { color: #ffa657; }
+
+    /* ── PRICING ── */
+    .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; max-width: 900px; margin: 0 auto; }
+    .price-card {
+      border-radius: 16px; padding: 2rem; text-align: center;
+      border: 1px solid var(--line); background: white;
+      transition: all .3s;
+    }
+    .price-card.featured { background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; box-shadow: 0 12px 40px rgba(99,102,241,.3); }
+    .price-card.featured .price-label, .price-card.featured .price-note { color: rgba(255,255,255,.75); }
+    .price-amount { font-size: 2.5rem; font-weight: 800; letter-spacing: -.03em; }
+    .price-unit { font-size: 1rem; font-weight: 500; opacity: .7; }
+    .price-label { color: var(--muted); font-size: .875rem; margin-top: .25rem; }
+    .price-note { color: var(--muted); font-size: .8125rem; margin-top: 1rem; line-height: 1.6; }
+
+    /* ── DEVELOPER ── */
+    .dev-section { background: var(--bg); }
+    .dev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; max-width: 1000px; margin: 0 auto; align-items: center; }
+    @media (max-width:768px) { .dev-grid { grid-template-columns: 1fr; } }
+    .dev-features { list-style: none; }
+    .dev-feature { display: flex; gap: .75rem; padding: .875rem 0; border-bottom: 1px solid var(--line); align-items: center; }
+    .dev-feature:last-child { border-bottom: none; }
+    .dev-feature i { color: var(--green); width: 20px; }
+    .dev-feature-text { font-size: .9375rem; color: var(--body); }
+
+    /* ── TRUST ── */
+    .trust-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; max-width: 800px; margin: 0 auto; }
+    .trust-chip {
+      display: flex; align-items: center; gap: .5rem;
+      background: white; border: 1px solid var(--line); border-radius: 10px;
+      padding: .75rem 1.25rem; font-size: .9rem; font-weight: 500; color: var(--body);
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .trust-chip i { color: var(--green); }
+
+    /* ── CTA ── */
+    .cta-section {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 6rem 1.5rem; text-align: center; color: white;
+    }
+    .cta-section h2 { font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 800; letter-spacing: -.025em; margin-bottom: 1rem; }
+    .cta-section p { font-size: 1.125rem; opacity: .8; max-width: 520px; margin: 0 auto 2.5rem; line-height: 1.7; }
+    .btn-cta-primary {
+      background: white; color: var(--purple);
+      padding: 1rem 2.5rem; border-radius: 10px;
+      font-weight: 800; font-size: 1.0625rem; text-decoration: none;
+      display: inline-block;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+      transition: all .2s;
+    }
+    .btn-cta-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,.3); }
+
+    /* ── FAQ ── */
+    .faq-list { max-width: 700px; margin: 0 auto; }
+    .faq-item { border-bottom: 1px solid var(--line); }
+    .faq-q {
+      width: 100%; text-align: left; padding: 1.25rem 0;
+      font-size: 1rem; font-weight: 600; color: var(--ink);
+      background: none; border: none; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 1rem;
+    }
+    .faq-q i { color: var(--muted); transition: transform .2s; flex-shrink: 0; }
+    .faq-item.open .faq-q i { transform: rotate(180deg); }
+    .faq-a { display: none; padding-bottom: 1.25rem; color: var(--muted); line-height: 1.7; font-size: .9375rem; }
+    .faq-item.open .faq-a { display: block; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--ink); color: rgba(255,255,255,.6);
+      padding: 4rem 2rem 2rem;
+    }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 3rem; max-width: 1100px; margin: 0 auto 3rem; }
+    @media (max-width:768px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+    .footer-brand { font-size: 1.125rem; font-weight: 800; color: white; display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    .footer-desc { font-size: .875rem; line-height: 1.7; max-width: 280px; }
+    footer h4 { color: white; font-size: .875rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1rem; }
+    footer ul { list-style: none; }
+    footer li { margin-bottom: .625rem; }
+    footer a { color: rgba(255,255,255,.55); text-decoration: none; font-size: .875rem; transition: color .15s; }
+    footer a:hover { color: white; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,.08); padding-top: 1.5rem; max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-size: .8125rem; }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeInDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }
+
+    .channel-chip { animation: fadeInUp .5s ease-out both; }
+    .channel-chip:nth-child(1) { animation-delay: .4s; }
+    .channel-chip:nth-child(2) { animation-delay: .5s; }
+    .channel-chip:nth-child(3) { animation-delay: .6s; }
+    .channel-chip:nth-child(4) { animation-delay: .7s; }
+  </style>
+</head>
+<body>
+
+<!-- ── NAVBAR ── -->
+<nav class="nav" id="navbar">
+  <a class="nav-logo" href="/">
+    <div class="nav-logo-icon">
+      <i class="fa-solid fa-gem" style="color:white;font-size:.875rem;"></i>
+    </div>
+    Samsoftpay
+  </a>
+  <div class="nav-links">
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="{{ url_for('docs.docs') }}" class="nav-link">Docs</a>
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('auth.account') }}" class="nav-link">Dashboard</a>
+    {% else %}
+    <a href="{{ url_for('auth.login_page') }}" class="nav-link">Sign In</a>
+    {% endif %}
+    <a href="{{ url_for('auth.signup_page') }}" class="nav-cta">Get API Keys Free</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-grid"></div>
+
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    East Africa's developer-first payment gateway
+  </div>
+
+  <h1>Accept payments<br><span>across East Africa</span></h1>
+
+  <p class="hero-sub">
+    MTN MoMo, Airtel Money, Visa/Mastercard and crypto — one API,
+    one dashboard, instant settlement. Built for Uganda and beyond.
+  </p>
+
+  <div class="hero-actions">
+    <a href="{{ url_for('auth.signup_page') }}" class="btn-hero-primary">
+      <i class="fa-solid fa-rocket"></i> Start for Free
+    </a>
+    <a href="{{ url_for('docs.docs') }}" class="btn-hero-secondary">
+      <i class="fa-solid fa-code"></i> View API Docs
+    </a>
+  </div>
+
+  <div class="hero-channels">
+    <span class="channel-chip"><span class="dot dot-mtn"></span> MTN MoMo</span>
+    <span class="channel-chip"><span class="dot dot-airtel"></span> Airtel Money</span>
+    <span class="channel-chip"><span class="dot dot-visa"></span> Visa / Mastercard</span>
+    <span class="channel-chip"><span class="dot dot-crypto"></span> Crypto</span>
+  </div>
+</section>
+
+<!-- ── STATS ── -->
+<div class="stats-bar">
+  <div class="stat-item"><div class="stat-num"><span>1.5%</span></div><div class="stat-label">Collection fee</div></div>
+  <div class="stat-item"><div class="stat-num"><span>UGX 750</span></div><div class="stat-label">Per payout (flat)</div></div>
+  <div class="stat-item"><div class="stat-num"><span>5</span></div><div class="stat-label">Payment channels</div></div>
+  <div class="stat-item"><div class="stat-num"><span>0</span></div><div class="stat-label">Monthly fees</div></div>
+  <div class="stat-item"><div class="stat-num"><span>60s</span></div><div class="stat-label">To get API keys</div></div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section class="features" id="features">
+  <div class="section-header">
+    <div class="section-badge"><i class="fa-solid fa-stars"></i> Everything you need</div>
+    <h2 class="section-title">Built for serious merchants</h2>
+    <p class="section-sub">Everything a payment gateway should have — collections, disbursements, compliance, and a developer experience your team will love.</p>
+  </div>
+
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon purple"><i class="fa-solid fa-mobile-screen-button"></i></div>
+      <h3>Mobile Money Collections</h3>
+      <p>Accept MTN MoMo and Airtel Money payments. Customers get a USSD prompt on their phone — no app needed.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green"><i class="fa-solid fa-credit-card"></i></div>
+      <h3>Visa &amp; Mastercard</h3>
+      <p>Full card acceptance with 3DS security. Powered by Flutterwave — licensed in Uganda, no countries blocked.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon orange"><i class="fa-brands fa-bitcoin"></i></div>
+      <h3>Crypto Payments</h3>
+      <p>Accept BTC, ETH, USDT and more via ChangeNow. Instant conversion — merchants always settle in UGX.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon blue"><i class="fa-solid fa-paper-plane"></i></div>
+      <h3>Bulk Payouts</h3>
+      <p>Send money to hundreds of recipients at once. Upload a CSV, verify the total, fire. Perfect for salaries and supplier payments.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon pink"><i class="fa-solid fa-link"></i></div>
+      <h3>Payment Links</h3>
+      <p>Create a link, share on TikTok or WhatsApp. Customers pay without ever writing a line of code. Your storefront in 30 seconds.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon teal"><i class="fa-solid fa-gift"></i></div>
+      <h3>Gift Cards &amp; Vouchers</h3>
+      <p>Issue redeemable gift cards with custom amounts and expiry dates. Partial redemption supported.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon purple"><i class="fa-solid fa-rotate"></i></div>
+      <h3>Subscriptions</h3>
+      <p>Create weekly, monthly or yearly billing plans. Customers subscribe once, we charge automatically.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon green"><i class="fa-solid fa-shield-halved"></i></div>
+      <h3>KYC Verification Portal</h3>
+      <p>Bank-of-Uganda-ready KYC wizard. Upload certificates, director IDs, AML questionnaire — all in one flow.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon orange"><i class="fa-solid fa-webhook"></i></div>
+      <h3>HMAC Webhooks</h3>
+      <p>Every payment event is signed and delivered. Verify with <code>X-Samsoftpay-Signature</code>. Retry with exponential backoff.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section>
+  <div class="section-header">
+    <div class="section-badge"><i class="fa-solid fa-list-ol"></i> Simple integration</div>
+    <h2 class="section-title">Live in three steps</h2>
+    <p class="section-sub">Designed for vibe coders and experienced engineers alike. Copy, paste, go.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Sign up and get your keys</h3>
+        <p>Create an account in under 60 seconds. You immediately get test and live API keys. No approval needed to start building — test in sandbox for free.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Integrate with one endpoint</h3>
+        <p>POST to <code>/v1/charges</code> with your Bearer token, an Idempotency-Key, and the customer's phone. We handle the rest — prompt delivery, status polling, webhooks.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>Go live and get paid</h3>
+        <p>Swap <code>sk_test_</code> for <code>sk_live_</code>, complete KYC verification, and you're live. Funds settle to your bank on a rolling basis.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CODE DEMO ── -->
+<section class="code-section">
+  <div class="section-header">
+    <div class="section-badge" style="background:rgba(99,102,241,.2);border-color:rgba(99,102,241,.4);color:#a5b4fc;"><i class="fa-solid fa-terminal"></i> Simple API</div>
+    <h2 class="section-title">Charge a customer in 10 lines</h2>
+    <p class="section-sub" style="margin:0 auto;">Works with Python, JavaScript, PHP, or any language that speaks HTTP.</p>
+  </div>
+
+  <div class="code-wrap">
+    <div class="code-tabs">
+      <span class="code-tab active">Python</span>
+      <span class="code-tab">JavaScript</span>
+      <span class="code-tab">cURL</span>
+    </div>
+    <div class="code-block">
+<span class="kw">import</span> requests, time, uuid
+
+response = requests.<span class="fn">post</span>(
+    <span class="str">"https://yourdomain.com/v1/charges"</span>,
+    headers={
+        <span class="str">"Authorization"</span>: <span class="str">"Bearer sk_live_YOUR_KEY"</span>,
+        <span class="str">"Idempotency-Key"</span>: str(uuid.<span class="fn">uuid4</span>()),
+        <span class="str">"X-Timestamp"</span>: str(int(time.<span class="fn">time</span>())),
+    },
+    json={
+        <span class="str">"amount"</span>: <span class="num">10000</span>,       <span class="cm"># UGX 10,000</span>
+        <span class="str">"currency"</span>: <span class="str">"UGX"</span>,
+        <span class="str">"channel"</span>: <span class="str">"mtn_momo"</span>,
+        <span class="str">"customer"</span>: {<span class="str">"phone"</span>: <span class="str">"256700123456"</span>},
+        <span class="str">"reference"</span>: <span class="str">"order-001"</span>,
+    }
+)
+<span class="cm"># → {"id": "txn_abc123", "mode": "live", "status": "authorized", "fee": 200}</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ── -->
+<section id="pricing">
+  <div class="section-header">
+    <div class="section-badge"><i class="fa-solid fa-tag"></i> Transparent pricing</div>
+    <h2 class="section-title">Simple, honest fees</h2>
+    <p class="section-sub">No monthly fees. No setup fees. No hidden charges. Pay only when you transact.</p>
+  </div>
+
+  <div class="pricing-grid">
+    <div class="price-card featured">
+      <div class="price-amount">1.5%<span class="price-unit"></span></div>
+      <div class="price-label" style="color:rgba(255,255,255,.7);">per collection</div>
+      <div class="price-note" style="color:rgba(255,255,255,.65);">Minimum UGX 200 · capped at UGX 5,000. Applies to MTN MoMo, Airtel, Visa, Mastercard and Crypto.</div>
+    </div>
+    <div class="price-card">
+      <div class="price-amount">UGX 750</div>
+      <div class="price-label">per payout</div>
+      <div class="price-note">Flat fee per disbursement. Fully refunded if the payout fails. No fee on the amount — just UGX 750 flat.</div>
+    </div>
+    <div class="price-card">
+      <div class="price-amount">UGX 0</div>
+      <div class="price-label">monthly fee</div>
+      <div class="price-note">No monthly charge. No setup fee. No minimum volume. Sign up free and start testing immediately in sandbox.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DEVELOPER ── -->
+<section class="dev-section">
+  <div class="section-header">
+    <div class="section-badge"><i class="fa-solid fa-code"></i> Developer experience</div>
+    <h2 class="section-title">Built for builders</h2>
+    <p class="section-sub">Everything a developer needs — sandbox mode, test keys, idempotency, webhooks, and docs with live examples.</p>
+  </div>
+
+  <div class="dev-grid">
+    <ul class="dev-features">
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Test and live mode — same API, different keys</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Idempotency keys — safe retries, no double charges</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Replay protection — X-Timestamp header, 5-min window</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Rate limiting — per API key, not per IP</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Webhook signatures — HMAC-SHA256, auto-retry 8×</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Double-entry ledger — every shilling tracked</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Reconciliation report — instant ledger health check</span></li>
+      <li class="dev-feature"><i class="fa-solid fa-check-circle"></i><span class="dev-feature-text">Audit log — every auth, charge, payout recorded</span></li>
+    </ul>
+    <div>
+      <a href="{{ url_for('docs.docs') }}" style="display:block;background:linear-gradient(135deg,#0f0c29,#1a0533);border-radius:16px;padding:2rem;text-decoration:none;transition:all .3s;" onmouseover="this.style.transform='translateY(-4px)'" onmouseout="this.style.transform='none'">
+        <div style="font-size:2rem;margin-bottom:1rem;">📖</div>
+        <h3 style="color:white;margin-bottom:.5rem;font-size:1.125rem;">Full API Reference</h3>
+        <p style="color:rgba(255,255,255,.6);font-size:.9rem;line-height:1.6;">Every endpoint documented with Python, JavaScript and cURL examples. Your live API keys are pre-filled when signed in.</p>
+        <div style="color:#a5b4fc;font-size:.875rem;margin-top:1rem;font-weight:600;">Read the docs →</div>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── TRUST ── -->
+<section style="background:white;padding:4rem 1.5rem;">
+  <div class="section-header">
+    <div class="section-badge"><i class="fa-solid fa-lock"></i> Bank-grade security</div>
+    <h2 class="section-title">Security you can cite</h2>
+    <p class="section-sub">From key management to webhook delivery — every touchpoint is hardened.</p>
+  </div>
+  <div class="trust-row">
+    <div class="trust-chip"><i class="fa-solid fa-lock"></i> HMAC-SHA256 webhooks</div>
+    <div class="trust-chip"><i class="fa-solid fa-shield-halved"></i> 2FA on all accounts</div>
+    <div class="trust-chip"><i class="fa-solid fa-clock"></i> Replay attack prevention</div>
+    <div class="trust-chip"><i class="fa-solid fa-gauge-high"></i> Per-key rate limiting</div>
+    <div class="trust-chip"><i class="fa-solid fa-file-shield"></i> KYC & AML compliance</div>
+    <div class="trust-chip"><i class="fa-solid fa-magnifying-glass"></i> Full audit trail</div>
+    <div class="trust-chip"><i class="fa-solid fa-flask"></i> Sandbox isolation</div>
+    <div class="trust-chip"><i class="fa-solid fa-key"></i> Test &amp; live key separation</div>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section id="faq" style="background:var(--bg);">
+  <div class="section-header">
+    <div class="section-badge"><i class="fa-solid fa-circle-question"></i> FAQ</div>
+    <h2 class="section-title">Common questions</h2>
+  </div>
+  <div class="faq-list">
+    {% for q, a in [
+      ("How much does Samsoftpay charge?", "1.5% per collection (minimum UGX 200, cap UGX 5,000). UGX 750 flat fee per payout. Zero monthly or setup fees."),
+      ("Which payment channels are supported?", "MTN Mobile Money, Airtel Money, Visa, Mastercard, and cryptocurrency (BTC, ETH, USDT, BNB, SOL) via ChangeNow instant exchange."),
+      ("Do I need to complete KYC to start?", "No — you can test immediately in sandbox mode with your test keys. KYC is required before going live and processing real money."),
+      ("How fast do I get paid?", "Collections settle to your merchant_available balance after the rail confirms. Payouts hit the recipient's MoMo wallet within minutes."),
+      ("Can non-technical sellers use this?", "Yes — create a payment link from your account, share the URL on TikTok or WhatsApp. Customers pay without you writing any code."),
+      ("Is Samsoftpay available outside Uganda?", "We're built for Uganda first. Kenya, Tanzania and Rwanda support is on the roadmap."),
+    ] %}
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        {{ q }} <i class="fa-solid fa-chevron-down"></i>
+      </button>
+      <div class="faq-a">{{ a }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section class="cta-section">
+  <h2>Start accepting payments today</h2>
+  <p>Sign up in 60 seconds. Free API keys. No monthly fee. No approval required to test.</p>
+  <a href="{{ url_for('auth.signup_page') }}" class="btn-cta-primary">
+    <i class="fa-solid fa-rocket"></i> Create Free Account
+  </a>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-grid">
+    <div>
+      <div class="footer-brand">
+        <div style="width:28px;height:28px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+          <i class="fa-solid fa-gem" style="color:white;font-size:.625rem;"></i>
+        </div>
+        Samsoftpay
+      </div>
+      <p class="footer-desc">East Africa's developer-first payment gateway. Accept MTN MoMo, Airtel, Visa, Mastercard and crypto from one simple API.</p>
+    </div>
+    <div>
+      <h4>Product</h4>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="{{ url_for('docs.docs') }}">API Docs</a></li>
+        <li><a href="{{ url_for('auth.signup_page') }}">Sign Up</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Developers</h4>
+      <ul>
+        <li><a href="{{ url_for('docs.docs') }}#charges">Charges API</a></li>
+        <li><a href="{{ url_for('docs.docs') }}#payouts">Payouts API</a></li>
+        <li><a href="{{ url_for('docs.docs') }}#webhooks">Webhooks</a></li>
+        <li><a href="{{ url_for('docs.docs') }}#authentication">Authentication</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Company</h4>
+      <ul>
+        <li><a href="{{ url_for('auth.signup_page') }}">Get Started</a></li>
+        <li><a href="{{ url_for('kyc.kyc_home') }}">KYC Verification</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 Samsoftpay. Built for East Africa.</span>
+    <span>Sandbox available — test free, go live when ready.</span>
+  </div>
+</footer>
+
+<script>
+  // Navbar scroll effect
+  const nav = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 40);
+  });
+
+  // Scroll animations via Intersection Observer
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.feature-card, .step').forEach(el => observer.observe(el));
+
+  // FAQ accordion
+  function toggleFaq(btn) {
+    btn.closest('.faq-item').classList.toggle('open');
+  }
+
+  // Stagger feature cards
+  document.querySelectorAll('.feature-card').forEach((card, i) => {
+    card.style.transitionDelay = `${i * 0.07}s`;
+  });
+
+  // Stagger steps
+  document.querySelectorAll('.step').forEach((step, i) => {
+    step.style.transitionDelay = `${i * 0.15}s`;
+  });
+</script>
+</body>
+</html>
