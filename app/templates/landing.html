@@ -66,6 +66,11 @@
 
       /* Easing */
       --ease: cubic-bezier(0.4,0,0.2,1);
+
+      /* Premium gradients */
+      --grad-brand: linear-gradient(135deg, #5759a8, #764ba2);
+      --grad-accent: linear-gradient(135deg, #10b981, #059669);
+      --grad-shine: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -164,8 +169,19 @@
       font-family: 'Lexend', sans-serif; font-weight: 500; font-size: 1rem;
       transition: all .2s var(--ease);
       box-shadow: var(--shadow-sm);
+      position: relative; overflow: hidden;
     }
-    .btn-filled:hover { background: var(--brand-dk); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .btn-filled::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--grad-shine);
+      background-size: 200% 100%;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .btn-filled:hover::after { opacity: 1; animation: shine .6s ease; }
+    @keyframes shine { from{background-position:200%} to{background-position:-200%} }
+    .btn-filled:hover { background: var(--brand-dk); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(45,46,88,.25); }
     .btn-text {
       display: inline-flex; align-items: center; gap: 8px;
       color: var(--ink-2); font-family: 'Lexend', sans-serif;
@@ -195,6 +211,81 @@
     }
     .hero-stat-label { font-size: .8125rem; color: var(--ink-3); font-weight: 400; }
     @media (max-width: 520px) { .hero-stat { border-right: none; border-bottom: 1px solid var(--line); padding: var(--s2) 0; } }
+
+    /* ── FLOATING HERO CARD ── */
+    .hero-visual {
+      margin-top: var(--s7); max-width: 900px; margin-left: auto; margin-right: auto;
+      position: relative;
+    }
+    .hero-card {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: var(--r-xl);
+      padding: var(--s4);
+      box-shadow: 0 24px 80px rgba(26,26,60,.12), 0 0 0 1px rgba(87,89,168,.06);
+      display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3);
+    }
+    @media(max-width:640px){.hero-card{grid-template-columns:1fr;}}
+    .hc-panel {
+      background: var(--bg-soft); border-radius: var(--r-lg);
+      padding: var(--s3); border: 1px solid var(--line);
+    }
+    .hc-label { font-size: .75rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: var(--s2); }
+    .hc-amount {
+      font-family: 'Urbanist', sans-serif;
+      font-size: 2.25rem; font-weight: 900; color: var(--ink); letter-spacing: -.03em; line-height: 1;
+      margin-bottom: 4px;
+    }
+    .hc-sub { font-size: .8125rem; color: var(--ink-3); }
+    .hc-bar { height: 4px; background: var(--line); border-radius: 2px; margin: var(--s2) 0; overflow: hidden; }
+    .hc-bar-fill { height: 100%; border-radius: 2px; background: var(--grad-brand); width: 72%; }
+    .hc-txn { display: flex; align-items: center; gap: var(--s2); padding: 10px; background: white; border-radius: var(--r-md); border: 1px solid var(--line); margin-bottom: var(--s1); }
+    .hc-txn:last-child { margin-bottom: 0; }
+    .hc-txn-ico { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .875rem; flex-shrink: 0; }
+    .hc-txn-info { flex: 1; min-width: 0; }
+    .hc-txn-name { font-size: .8125rem; font-weight: 600; color: var(--ink); }
+    .hc-txn-ch { font-size: .75rem; color: var(--ink-3); }
+    .hc-txn-amt { font-size: .875rem; font-weight: 700; white-space: nowrap; }
+    .hc-txn-amt.pos { color: var(--accent); }
+    .hc-status { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 600; padding: 3px 8px; border-radius: 99px; }
+    .hc-status.ok { background: var(--accent-lt); color: #065f46; }
+    .hc-status.pend { background: #fef9c3; color: #854d0e; }
+
+    /* Float cards */
+    .float-badge {
+      position: absolute; background: white;
+      border: 1px solid var(--line); border-radius: var(--r-md);
+      padding: 10px 14px; box-shadow: var(--shadow-md);
+      display: flex; align-items: center; gap: 8px;
+      font-size: .8125rem; font-weight: 600; color: var(--ink);
+      animation: float-badge 4s ease-in-out infinite;
+    }
+    @keyframes float-badge { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .float-badge.left { left: -20px; top: 30%; }
+    .float-badge.right { right: -20px; bottom: 25%; animation-delay: 2s; }
+    @media(max-width:640px){.float-badge{display:none;}}
+
+    /* ── TESTIMONIALS ── */
+    .testi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--s2); }
+    @media(max-width:860px){.testi-grid{grid-template-columns:1fr;}}
+    .testi-card {
+      background: var(--bg-card); border: 1px solid var(--line);
+      border-radius: var(--r-lg); padding: var(--s4);
+      opacity: 0; transform: translateY(16px); transition: all .5s var(--ease);
+    }
+    .testi-card.visible { opacity: 1; transform: translateY(0); }
+    .testi-stars { display: flex; gap: 3px; margin-bottom: var(--s2); }
+    .testi-star { color: #f59e0b; font-size: .875rem; }
+    .testi-text { font-size: .9375rem; color: var(--ink-2); line-height: 1.75; font-weight: 300; margin-bottom: var(--s3); font-style: italic; }
+    .testi-author { display: flex; align-items: center; gap: var(--s2); }
+    .testi-avatar {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      background: var(--grad-brand);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Urbanist', sans-serif; font-weight: 700; font-size: .9rem; color: white;
+    }
+    .testi-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
+    .testi-role { font-size: .8125rem; color: var(--ink-3); }
 
     /* ── SECTION DIVIDER (Narvi-style wave) ── */
     .wave-divider { display: block; width: 100%; overflow: hidden; line-height: 0; }
@@ -259,15 +350,26 @@
       border: 1px solid var(--line);
       border-radius: var(--r-lg);
       padding: var(--s4);
-      transition: all .25s var(--ease);
+      transition: all .3s var(--ease);
       opacity: 0; transform: translateY(16px);
+      position: relative; overflow: hidden;
+    }
+    .feat-card::before {
+      content: '';
+      position: absolute; inset: -1px;
+      border-radius: var(--r-lg);
+      background: var(--grad-brand);
+      opacity: 0;
+      transition: opacity .3s var(--ease);
+      z-index: -1;
     }
     .feat-card.visible { opacity: 1; transform: translateY(0); }
     .feat-card:hover {
-      border-color: var(--line-2);
-      box-shadow: var(--shadow-lg);
-      transform: translateY(-3px);
+      border-color: transparent;
+      box-shadow: 0 12px 48px rgba(87,89,168,.15);
+      transform: translateY(-4px);
     }
+    .feat-card:hover::before { opacity: 1; }
     .feat-icon {
       width: 48px; height: 48px; border-radius: var(--r-md);
       display: flex; align-items: center; justify-content: center;
@@ -546,10 +648,90 @@
     </a>
   </div>
   <div class="hero-stats">
-    <div class="hero-stat"><div class="hero-stat-num">1.5%</div><div class="hero-stat-label">Collection fee</div></div>
+    <div class="hero-stat"><div class="hero-stat-num" data-count="1.5" data-suffix="%">1.5%</div><div class="hero-stat-label">Collection fee</div></div>
     <div class="hero-stat"><div class="hero-stat-num">UGX 0</div><div class="hero-stat-label">Monthly fee</div></div>
-    <div class="hero-stat"><div class="hero-stat-num">5</div><div class="hero-stat-label">Payment channels</div></div>
+    <div class="hero-stat"><div class="hero-stat-num" data-count="5">5</div><div class="hero-stat-label">Payment channels</div></div>
     <div class="hero-stat"><div class="hero-stat-num">60s</div><div class="hero-stat-label">To get API keys</div></div>
+  </div>
+
+  <!-- Floating UI mockup -->
+  <div class="hero-visual anim">
+    <div class="float-badge left">
+      <span style="color:var(--accent);font-size:1rem;">✓</span> Payment received
+    </div>
+    <div class="float-badge right">
+      <span style="font-size:1rem;">🔒</span> Secured &amp; signed
+    </div>
+    <div class="hero-card">
+      <div class="hc-panel">
+        <div class="hc-label">Today's collections</div>
+        <div class="hc-amount">UGX 4.2M</div>
+        <div class="hc-sub">+18% vs yesterday</div>
+        <div class="hc-bar"><div class="hc-bar-fill"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--ink-3);">
+          <span>72% of daily target</span><span>UGX 5.8M goal</span>
+        </div>
+        <div style="margin-top:var(--s3);">
+          <div style="display:flex;gap:var(--s2);">
+            <div style="flex:1;background:white;border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s2);text-align:center;">
+              <div style="font-family:'Urbanist',sans-serif;font-size:1.125rem;font-weight:800;color:var(--ink);">47</div>
+              <div style="font-size:.75rem;color:var(--ink-3);">Transactions</div>
+            </div>
+            <div style="flex:1;background:white;border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s2);text-align:center;">
+              <div style="font-family:'Urbanist',sans-serif;font-size:1.125rem;font-weight:800;color:var(--accent);">94%</div>
+              <div style="font-size:.75rem;color:var(--ink-3);">Success rate</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="hc-label" style="margin-bottom:var(--s2);">Live transactions</div>
+        <div class="hc-txn">
+          <div class="hc-txn-ico" style="background:#fff7ed;">📱</div>
+          <div class="hc-txn-info">
+            <div class="hc-txn-name">Mary Namutebi</div>
+            <div class="hc-txn-ch">MTN MoMo · 2s ago</div>
+          </div>
+          <div>
+            <div class="hc-txn-amt pos">+ UGX 85,000</div>
+            <span class="hc-status ok">Succeeded</span>
+          </div>
+        </div>
+        <div class="hc-txn">
+          <div class="hc-txn-ico" style="background:#eff6ff;">💳</div>
+          <div class="hc-txn-info">
+            <div class="hc-txn-name">Tech Solutions Ltd</div>
+            <div class="hc-txn-ch">Visa · 14s ago</div>
+          </div>
+          <div>
+            <div class="hc-txn-amt pos">+ UGX 320,000</div>
+            <span class="hc-status ok">Succeeded</span>
+          </div>
+        </div>
+        <div class="hc-txn">
+          <div class="hc-txn-ico" style="background:#fffbeb;">₿</div>
+          <div class="hc-txn-info">
+            <div class="hc-txn-name">David Ochieng</div>
+            <div class="hc-txn-ch">USDT · 41s ago</div>
+          </div>
+          <div>
+            <div class="hc-txn-amt pos">+ UGX 210,000</div>
+            <span class="hc-status pend">Processing</span>
+          </div>
+        </div>
+        <div class="hc-txn">
+          <div class="hc-txn-ico" style="background:#fdf4ff;">📤</div>
+          <div class="hc-txn-info">
+            <div class="hc-txn-name">Payout — 12 agents</div>
+            <div class="hc-txn-ch">Bulk · Airtel · 2m ago</div>
+          </div>
+          <div>
+            <div class="hc-txn-amt" style="color:var(--ink-2);">− UGX 1.1M</div>
+            <span class="hc-status ok">Sent</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -592,6 +774,35 @@
         <span class="feat-link">Learn more
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- ── TESTIMONIALS ── -->
+<section class="section-soft">
+  <div class="wrap">
+    <div class="section-header center anim">
+      <div class="eyebrow">Loved by builders</div>
+      <h2 class="section-title">What merchants are saying</h2>
+    </div>
+    <div class="testi-grid">
+      {% for initials, name, role, text in [
+        ('MK','Michael Kato','E-commerce founder, Kampala','"Finally a payment gateway built for Uganda. The API docs are the clearest I have ever seen. We were live collecting MTN MoMo in under an hour."'),
+        ('SN','Sarah Namutebi','School Administrator, Masaka','"We use the bill collection feature for school fees. Parents look up their child by student ID and pay from their phone. No queues, no cash."'),
+        ('JO','James Ochieng','Freelance developer, Nairobi','"The sandbox mode is brilliant. I built the entire integration in test mode then flipped to live keys in production. Zero surprises."'),
+      ] %}
+      <div class="testi-card">
+        <div class="testi-stars">{% for _ in range(5) %}<span class="testi-star">★</span>{% endfor %}</div>
+        <div class="testi-text">{{ text }}</div>
+        <div class="testi-author">
+          <div class="testi-avatar">{{ initials }}</div>
+          <div>
+            <div class="testi-name">{{ name }}</div>
+            <div class="testi-role">{{ role }}</div>
+          </div>
+        </div>
       </div>
       {% endfor %}
     </div>
@@ -728,15 +939,29 @@ resp = requests.<span class="fn">post</span>(
           <div class="price-amount">1.5%</div>
           <div class="price-label">per transaction</div>
         </div>
-        <div class="price-note">Minimum UGX 200 · capped at UGX 5,000. Applies to MoMo, Airtel, Visa, Mastercard and Crypto.</div>
+        <div class="price-note" style="margin-bottom:var(--s3);">Min UGX 200 · cap UGX 5,000. Applies to MoMo, Airtel, Visa, MC and Crypto.</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          {% for f in ['MTN MoMo & Airtel Money','Visa / Mastercard','Crypto via ChangeNow','Payment links','Bill collection'] %}
+          <li style="display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--ink-2);">
+            <span style="color:var(--accent);font-size:1rem;">✓</span> {{ f }}
+          </li>
+          {% endfor %}
+        </ul>
       </div>
       <div class="price-card featured">
         <div class="price-top">
-          <div class="price-tag">Monthly fee</div>
+          <div class="price-tag">Platform</div>
           <div class="price-amount">UGX 0</div>
-          <div class="price-label">always free</div>
+          <div class="price-label">monthly fee, always</div>
         </div>
-        <div class="price-note">No setup fee. No minimum volume. Sandbox is always free — go live only when ready.</div>
+        <div class="price-note" style="margin-bottom:var(--s3);">No setup fee. No minimum volume. Sandbox always free.</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          {% for f in ['Unlimited API calls','Sandbox mode free','Test + live key pairs','2FA on all accounts','KYC portal included'] %}
+          <li style="display:flex;align-items:center;gap:8px;font-size:.875rem;color:rgba(255,255,255,.75);">
+            <span style="color:#6ee7b7;font-size:1rem;">✓</span> {{ f }}
+          </li>
+          {% endfor %}
+        </ul>
       </div>
       <div class="price-card">
         <div class="price-top">
@@ -744,9 +969,21 @@ resp = requests.<span class="fn">post</span>(
           <div class="price-amount">750 <span class="price-num">UGX</span></div>
           <div class="price-label">flat fee per payout</div>
         </div>
-        <div class="price-note">Fully refunded if the payout fails. No percentage on the amount — just UGX 750 flat.</div>
+        <div class="price-note" style="margin-bottom:var(--s3);">Fully refunded if payout fails. No percentage on amount.</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          {% for f in ['Single payouts','Bulk CSV payouts','Subscription billing','Auto-retry on fail','Full audit trail'] %}
+          <li style="display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--ink-2);">
+            <span style="color:var(--accent);font-size:1rem;">✓</span> {{ f }}
+          </li>
+          {% endfor %}
+        </ul>
       </div>
     </div>
+
+    <p style="text-align:center;margin-top:var(--s4);font-size:.9rem;color:var(--ink-3);">
+      All prices in UGX. Uganda VAT (18%) applied separately when you enable it in Tax Settings.
+      <a href="{{ url_for('auth.signup_page') }}" style="color:var(--brand);font-weight:600;"> Start free →</a>
+    </p>
   </div>
 </section>
 
