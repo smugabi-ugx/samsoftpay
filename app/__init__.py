@@ -48,6 +48,12 @@ def create_app(config: dict | None = None) -> Flask:
         ),
         MOMO_DISBURSEMENT_API_USER=os.environ.get("MOMO_DISBURSEMENT_API_USER", ""),
         MOMO_DISBURSEMENT_API_KEY=os.environ.get("MOMO_DISBURSEMENT_API_KEY", ""),
+        # ---- Email / 2FA ----
+        MAIL_HOST=os.environ.get("MAIL_HOST", ""),
+        MAIL_PORT=int(os.environ.get("MAIL_PORT", "587")),
+        MAIL_USERNAME=os.environ.get("MAIL_USERNAME", ""),
+        MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD", ""),
+        MAIL_FROM=os.environ.get("MAIL_FROM", "noreply@samsoftpay.com"),
     )
     if config:
         app.config.update(config)
@@ -81,4 +87,10 @@ def create_app(config: dict | None = None) -> Flask:
 
     from . import cli  # noqa: F401
     cli.register(app)
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        from flask import render_template as _rt
+        return _rt("403.html"), 403
+
     return app

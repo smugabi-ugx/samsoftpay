@@ -950,6 +950,24 @@
           </a>
         </div>
 
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+        <div class="nav-section">
+          <div class="nav-section-title">Admin</div>
+          <a href="{{ url_for('dashboard.admin_home') }}" class="nav-link {% if request.endpoint == 'dashboard.admin_home' %}active{% endif %}">
+            <i data-feather="shield"></i>
+            <span>Admin Dashboard</span>
+          </a>
+          <a href="{{ url_for('dashboard.list_merchants') }}" class="nav-link {% if request.endpoint == 'dashboard.list_merchants' %}active{% endif %}">
+            <i data-feather="users"></i>
+            <span>All Merchants</span>
+          </a>
+          <a href="{{ url_for('dashboard.reconciliation') }}" class="nav-link {% if request.endpoint == 'dashboard.reconciliation' %}active{% endif %}">
+            <i data-feather="check-circle"></i>
+            <span>Reconciliation</span>
+          </a>
+        </div>
+        {% endif %}
+
         <div class="nav-section">
           <div class="nav-section-title">Account</div>
           {% if current_user.is_authenticated %}

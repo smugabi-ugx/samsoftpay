@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Admin Dashboard</h1>
+  <p class="page-subtitle">System-wide overview — only visible to admins.</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Total Merchants</span>
+      <div class="stat-icon primary"><i data-feather="users"></i></div>
+    </div>
+    <div class="stat-value">{{ total_merchants }}</div>
+    <div class="stat-change positive"><i data-feather="trending-up"></i> <span>Registered accounts</span></div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-header">
+      <span class="stat-label">Total Transactions</span>
+      <div class="stat-icon success"><i data-feather="trending-up"></i></div>
+    </div>
+    <div class="stat-value">{{ total_txns }}</div>
+    <div class="stat-change positive"><i data-feather="check-circle"></i> <span>{{ total_succeeded }} succeeded</span></div>
+  </div>
+  <div class="stat-card info">
+    <div class="stat-header">
+      <span class="stat-label">Total Payouts</span>
+      <div class="stat-icon info"><i data-feather="send"></i></div>
+    </div>
+    <div class="stat-value">{{ total_payouts }}</div>
+    <div class="stat-change"><i data-feather="arrow-right"></i> <span>Disbursements</span></div>
+  </div>
+</div>
+
+<div class="btn-group mb-3">
+  <a href="{{ url_for('dashboard.list_merchants') }}" class="btn btn-primary">
+    <i data-feather="users"></i> All Merchants
+  </a>
+  <a href="{{ url_for('dashboard.reconciliation') }}" class="btn btn-outline">
+    <i data-feather="check-circle"></i> Reconciliation
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="activity"></i> Recent Audit Log</h3>
+    <span class="badge succeeded">Live</span>
+  </div>
+
+  {% if recent_audits %}
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Merchant</th>
+          <th>Resource</th>
+          <th>IP</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in recent_audits %}
+        <tr>
+          <td>
+            <span class="badge {% if 'failed' in log.event %}failed{% elif 'created' in log.event %}succeeded{% else %}pending{% endif %}">
+              {{ log.event }}
+            </span>
+          </td>
+          <td>{{ log.merchant_id or '—' }}</td>
+          <td><code style="font-size:0.8rem;">{{ log.resource_id or '—' }}</code></td>
+          <td><code style="font-size:0.8rem;">{{ log.actor_ip or '—' }}</code></td>
+          <td style="font-size:0.875rem;color:var(--gray-500);">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:2rem;color:var(--gray-500);">
+    <i data-feather="inbox" style="width:40px;height:40px;margin-bottom:0.75rem;"></i>
+    <p>No audit events yet.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}

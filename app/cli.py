@@ -37,6 +37,8 @@ def register(app: Flask) -> None:
                 test_public_key="pk_test_demo123",
                 test_secret_key="sk_test_demo123",
                 kyc_status="verified",
+                email_verified=True,
+                two_fa_enabled=False,
                 webhook_url="http://localhost:5000/inbound/mtn_momo",
             )
             db.session.add(m)
@@ -44,6 +46,20 @@ def register(app: Flask) -> None:
             print(f"created merchant id={m.id}")
             print(f"public_key={m.public_key}")
             print(f"secret_key={m.secret_key}")
+
+    @app.cli.command("make-admin")
+    def make_admin():
+        """Promote a merchant to the admin role (interactive)."""
+        import click
+        with app.app_context():
+            email = click.prompt("Merchant email")
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            m.role = "admin"
+            db.session.commit()
+            print(f"Done — {m.name} ({m.email}) is now an admin.")
 
     @app.cli.command("sweep-pending")
     def sweep_pending():

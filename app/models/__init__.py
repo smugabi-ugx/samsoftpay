@@ -82,6 +82,11 @@ class Merchant(UserMixin, db.Model):
     name = Column(String(200), nullable=False)
     email = Column(String(200), nullable=False, unique=True)
     password_hash = Column(String(256), nullable=True)
+    role = Column(String(20), default="merchant", nullable=False, index=True)  # merchant | admin
+    email_verified = Column(Boolean, default=False, nullable=False)
+    two_fa_enabled = Column(Boolean, default=True, nullable=False)
+    otp_code = Column(String(6), nullable=True)
+    otp_expires_at = Column(DateTime, nullable=True)
     public_key = Column(String(80), nullable=False, unique=True, index=True)
     secret_key = Column(String(80), nullable=False, unique=True, index=True)
     test_public_key = Column(String(80), nullable=True, unique=True, index=True)

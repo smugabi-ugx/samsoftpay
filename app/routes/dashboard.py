@@ -1,10 +1,8 @@
-"""Merchant-facing dashboard. Demo only — no auth beyond an in-URL merchant id.
-
-A real dashboard has login, MFA, RBAC, audit logs, etc.
-"""
+"""Dashboard routes — all protected by login + RBAC."""
 import uuid
 
 from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask_login import login_required
 
 from ..extensions import db
 from ..models import (
@@ -16,25 +14,60 @@ from ..models import (
     WebhookDelivery,
 )
 from ..services.reconciliation import run_reconciliation
+from ..utils import admin_required, merchant_or_admin, verified_required
 
 bp = Blueprint("dashboard", __name__)
 
 
 @bp.get("/")
 def index():
-    merchants = Merchant.query.all()
+    from flask_login import current_user
+    if current_user.is_authenticated and current_user.role == "admin":
+        merchants = Merchant.query.all()
+    elif current_user.is_authenticated:
+        merchants = Merchant.query.filter_by(id=current_user.id).all()
+    else:
+        merchants = []
     return render_template("index.html", merchants=merchants)
 
 
 @bp.get("/dashboard")
+@login_required
+@admin_required
 def list_merchants():
     merchants = Merchant.query.all()
     return render_template("merchants.html", merchants=merchants)
 
 
+@bp.get("/admin")
+@login_required
+@admin_required
+def admin_home():
+    from ..models import AuditLog, Payout, TxnStatus
+    total_merchants = Merchant.query.count()
+    total_txns      = Transaction.query.count()
+    total_succeeded = Transaction.query.filter_by(status=TxnStatus.SUCCEEDED).count()
+    total_payouts   = Payout.query.count()
+    recent_audits   = (
+        AuditLog.query.order_by(AuditLog.created_at.desc()).limit(20).all()
+    )
+    return render_template(
+        "admin.html",
+        total_merchants=total_merchants,
+        total_txns=total_txns,
+        total_succeeded=total_succeeded,
+        total_payouts=total_payouts,
+        recent_audits=recent_audits,
+    )
+
+
 @bp.get("/dashboard/<int:merchant_id>")
+@login_required
+@verified_required
 def merchant_detail(merchant_id: int):
     from ..models import Payout
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     txns = (
         Transaction.query.filter_by(merchant_id=merchant_id)
@@ -79,13 +112,21 @@ def merchant_detail(merchant_id: int):
 
 
 @bp.get("/dashboard/<int:merchant_id>/new-link")
+@login_required
+@verified_required
 def new_link_form(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     return render_template("new_link.html", merchant=merchant)
 
 
 @bp.post("/dashboard/<int:merchant_id>/new-link")
+@login_required
+@verified_required
 def new_link_submit(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     try:
         amount = int(request.form["amount"])
@@ -116,7 +157,11 @@ def new_link_submit(merchant_id: int):
 # ---------- Payout dashboard routes (single + bulk CSV) ----------
 
 @bp.get("/dashboard/<int:merchant_id>/new-payout")
+@login_required
+@verified_required
 def new_payout_form(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     # Show current available balance so the merchant knows what they can spend.
     avail = Account.query.filter_by(
@@ -129,9 +174,13 @@ def new_payout_form(merchant_id: int):
 
 
 @bp.post("/dashboard/<int:merchant_id>/new-payout")
+@login_required
+@verified_required
 def new_payout_submit(merchant_id: int):
     from ..models import Channel as _Channel
     from ..services.payouts import PayoutError, create_payout
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     avail = Account.query.filter_by(
         merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
@@ -162,7 +211,11 @@ def new_payout_submit(merchant_id: int):
 
 
 @bp.get("/dashboard/<int:merchant_id>/bulk-payout")
+@login_required
+@verified_required
 def bulk_payout_form(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     avail = Account.query.filter_by(
         merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
@@ -174,7 +227,11 @@ def bulk_payout_form(merchant_id: int):
 
 
 @bp.post("/dashboard/<int:merchant_id>/bulk-payout")
+@login_required
+@verified_required
 def bulk_payout_submit(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
     """Parse a CSV (name, phone, amount), validate, then create payouts for each row.
 
     CSV format: header row required. Columns: name, phone, amount.
@@ -288,12 +345,16 @@ def bulk_payout_submit(merchant_id: int):
 
 
 @bp.get("/admin/reconciliation")
+@login_required
+@admin_required
 def reconciliation():
     report = run_reconciliation()
     return render_template("reconciliation.html", report=report)
 
 
 @bp.post("/admin/sweep-pending")
+@login_required
+@admin_required
 def sweep_pending():
     """Expire stale PENDING/AUTHORIZED transactions and redirect back."""
     from ..services.sweep import sweep_stale_transactions
