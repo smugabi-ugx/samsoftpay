@@ -389,14 +389,24 @@ def toggle_2fa():
 
 @bp.get("/first-setup")
 def first_setup():
-    """One-time superadmin creation. Works only when NO admin exists yet."""
-    import secrets as _sec
+    """Fix admin account: update email to smugabi@gmail.com and reset password."""
     from werkzeug.security import generate_password_hash
     from flask import jsonify
+    import secrets as _sec
 
-    if Merchant.query.filter_by(role="admin").first():
-        return jsonify(error="Admin already exists. This route is disabled."), 403
+    admin = Merchant.query.filter_by(role="admin").first()
+    if admin:
+        # Update existing admin to the correct email and reset password
+        old_email = admin.email
+        admin.email         = "smugabi@gmail.com"
+        admin.password_hash = generate_password_hash("SamsoftAdmin2025!")
+        admin.email_verified = True
+        admin.two_fa_enabled = False
+        db.session.commit()
+        return jsonify(ok=True,
+            message=f"Admin updated from {old_email} to smugabi@gmail.com. Log in with SamsoftAdmin2025!")
 
+    # No admin yet — create one
     m = Merchant(
         name="Samsoftpay Admin",
         email="smugabi@gmail.com",
@@ -406,14 +416,12 @@ def first_setup():
         test_public_key="pk_test_admin_" + _sec.token_urlsafe(16),
         test_secret_key="sk_test_admin_" + _sec.token_urlsafe(20),
         handle="samsoftpay-admin",
-        role="admin",
-        kyc_status="verified",
-        email_verified=True,
-        two_fa_enabled=False,
+        role="admin", kyc_status="verified",
+        email_verified=True, two_fa_enabled=False,
     )
     db.session.add(m)
     db.session.commit()
-    return jsonify(ok=True, message="Admin created. Log in at /login with smugabi@gmail.com / SamsoftAdmin2025!")
+    return jsonify(ok=True, message="Admin created. Log in with smugabi@gmail.com / SamsoftAdmin2025!")
 
 
 @bp.get("/admin/verify-user/<int:merchant_id>")
