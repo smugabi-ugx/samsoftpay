@@ -944,8 +944,42 @@
             <i data-feather="check-circle"></i>
             <span>Reconciliation</span>
           </a>
+          <a href="{{ url_for('docs.docs') }}" class="nav-link {% if request.endpoint == 'docs.docs' %}active{% endif %}">
+            <i data-feather="book-open"></i>
+            <span>API Docs</span>
+          </a>
+        </div>
+
+        <div class="nav-section">
+          <div class="nav-section-title">Account</div>
+          {% if current_user.is_authenticated %}
+          <a href="{{ url_for('auth.account') }}" class="nav-link {% if request.endpoint == 'auth.account' %}active{% endif %}">
+            <i data-feather="user"></i>
+            <span>My Account</span>
+          </a>
+          <a href="{{ url_for('auth.logout') }}" class="nav-link">
+            <i data-feather="log-out"></i>
+            <span>Sign Out</span>
+          </a>
+          {% else %}
+          <a href="{{ url_for('auth.login_page') }}" class="nav-link {% if request.endpoint == 'auth.login_page' %}active{% endif %}">
+            <i data-feather="log-in"></i>
+            <span>Sign In</span>
+          </a>
+          <a href="{{ url_for('auth.signup_page') }}" class="nav-link {% if request.endpoint == 'auth.signup_page' %}active{% endif %}">
+            <i data-feather="user-plus"></i>
+            <span>Create Account</span>
+          </a>
+          {% endif %}
         </div>
       </nav>
+
+      {% if current_user.is_authenticated %}
+      <div style="padding:1rem 1.25rem;border-top:1px solid var(--gray-200);font-size:0.875rem;">
+        <div style="font-weight:600;color:var(--gray-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ current_user.name }}</div>
+        <div style="color:var(--gray-500);font-size:0.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ current_user.email }}</div>
+      </div>
+      {% endif %}
     </aside>
 
     <!-- Main Content -->

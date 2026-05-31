@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}My Account{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">My Account</h1>
+    <p class="page-subtitle">{{ current_user.name }} &mdash; {{ current_user.email }}</p>
+  </div>
+  <a href="{{ url_for('auth.logout') }}" class="btn btn-outline" style="font-size:0.875rem;padding:0.5rem 1rem;">
+    <i data-feather="log-out"></i> Sign Out
+  </a>
+</div>
+
+<!-- Status Banner -->
+<div class="alert alert-success" style="margin-bottom:2rem;">
+  <i data-feather="check-circle" class="alert-icon"></i>
+  <div>
+    <strong>Account Active</strong> — Your API keys are live and ready to use.
+    KYC status: <strong>{{ current_user.kyc_status }}</strong>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-header">
+      <span class="stat-label">Total Charges</span>
+      <div class="stat-icon primary"><i data-feather="trending-up"></i></div>
+    </div>
+    <div class="stat-value">{{ txn_count }}</div>
+    <div class="stat-change positive"><i data-feather="activity"></i> <span>{{ succeeded }} succeeded</span></div>
+  </div>
+  <div class="stat-card success">
+    <div class="stat-header">
+      <span class="stat-label">Total Payouts</span>
+      <div class="stat-icon success"><i data-feather="send"></i></div>
+    </div>
+    <div class="stat-value">{{ payout_count }}</div>
+    <div class="stat-change"><i data-feather="arrow-right"></i> <span>Disbursements sent</span></div>
+  </div>
+  <div class="stat-card info">
+    <div class="stat-header">
+      <span class="stat-label">Collection Fee</span>
+      <div class="stat-icon info"><i data-feather="percent"></i></div>
+    </div>
+    <div class="stat-value">1.5%</div>
+    <div class="stat-change"><i data-feather="info"></i> <span>Min UGX 200, cap UGX 5,000</span></div>
+  </div>
+</div>
+
+<!-- API Keys -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="key"></i> API Keys</h3>
+    <span class="env-badge live">Live</span>
+  </div>
+
+  <div class="alert alert-warning" style="margin-bottom:1.5rem;">
+    <i data-feather="alert-triangle" class="alert-icon"></i>
+    <div>Keep your <strong>Secret Key</strong> private. Never expose it in client-side code or public repositories.</div>
+  </div>
+
+  <div class="form-group">
+    <label class="form-label">Public Key</label>
+    <div class="api-key-display">
+      <code id="pub-key">{{ current_user.public_key }}</code>
+      <button class="copy-btn" onclick="copyKey('pub-key', this)" title="Copy">
+        <i data-feather="copy" style="width:14px;height:14px;"></i>
+      </button>
+    </div>
+    <div class="form-hint">Use this in client-side code to identify your account.</div>
+  </div>
+
+  <div class="form-group" style="margin-bottom:0;">
+    <label class="form-label">Secret Key</label>
+    <div class="api-key-display">
+      <code id="sec-key">{{ current_user.secret_key }}</code>
+      <button class="copy-btn" onclick="copyKey('sec-key', this)" title="Copy">
+        <i data-feather="copy" style="width:14px;height:14px;"></i>
+      </button>
+    </div>
+    <div class="form-hint">Use this in your server-side code as your <code>Bearer</code> token in API calls.</div>
+  </div>
+</div>
+
+<!-- Quick Integration -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="code"></i> Quick Integration</h3>
+    <a href="{{ url_for('docs.docs') }}" class="btn btn-primary" style="padding:0.5rem 1rem;font-size:0.875rem;">
+      <i data-feather="book-open"></i> Full Docs
+    </a>
+  </div>
+  <p class="text-muted mb-2">Make your first charge with your secret key:</p>
+  <pre><code>import requests, time, uuid
+
+response = requests.post(
+    "{{ request.host_url }}v1/charges",
+    headers={
+        "Authorization": "Bearer {{ current_user.secret_key }}",
+        "Idempotency-Key": str(uuid.uuid4()),
+        "X-Timestamp": str(int(time.time())),
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 5000,
+        "currency": "UGX",
+        "channel": "mtn_momo",
+        "customer": {"phone": "+256700123456"},
+        "reference": "order-001",
+    }
+)
+print(response.json())</code></pre>
+</div>
+
+<!-- Webhook Config -->
+{% if current_user.webhook_url %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="radio"></i> Webhook Endpoint</h3>
+    <span class="badge succeeded">Configured</span>
+  </div>
+  <div class="api-key-display">
+    <code>{{ current_user.webhook_url }}</code>
+  </div>
+  <div class="form-hint" style="margin-top:0.5rem;">
+    We send <code>X-Samsoftpay-Signature</code> with every event. Verify it with your <code>WEBHOOK_SIGNING_SECRET</code>.
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="radio"></i> Webhook Endpoint</h3>
+    <span class="badge pending">Not Set</span>
+  </div>
+  <p class="text-muted">No webhook URL configured. Add one to receive real-time payment events.</p>
+</div>
+{% endif %}
+
+<!-- Links -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="external-link"></i> Your Dashboard</h3>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="btn btn-primary">
+      <i data-feather="bar-chart-2"></i> View Transactions &amp; Balances
+    </a>
+    <a href="{{ url_for('docs.docs') }}" class="btn btn-outline">
+      <i data-feather="book-open"></i> API Documentation
+    </a>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+  function copyKey(id, btn) {
+    const text = document.getElementById(id).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.classList.add('copied');
+      btn.innerHTML = '<i data-feather="check" style="width:14px;height:14px;"></i>';
+      feather.replace();
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.innerHTML = '<i data-feather="copy" style="width:14px;height:14px;"></i>';
+        feather.replace();
+      }, 2000);
+    });
+  }
+</script>
+{% endblock %}

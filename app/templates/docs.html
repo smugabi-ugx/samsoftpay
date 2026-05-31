@@ -1,0 +1,473 @@
+{% extends "base.html" %}
+{% block title %}API Documentation{% endblock %}
+
+{% block extra_head %}
+<style>
+  .docs-layout { display: grid; grid-template-columns: 220px 1fr; gap: 2rem; align-items: start; }
+  .docs-nav { position: sticky; top: 2rem; }
+  .docs-nav-section { margin-bottom: 1.5rem; }
+  .docs-nav-title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-500); margin-bottom: 0.5rem; padding: 0 0.75rem; }
+  .docs-nav-link { display: block; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--gray-600); text-decoration: none; font-size: 0.9rem; transition: all 0.15s; }
+  .docs-nav-link:hover { background: var(--gray-100); color: var(--primary); }
+  .docs-nav-link.active { background: rgba(99,102,241,0.08); color: var(--primary); font-weight: 600; }
+
+  .docs-section { margin-bottom: 3rem; scroll-margin-top: 2rem; }
+  .docs-section h2 { font-size: 1.5rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 2px solid var(--gray-200); display: flex; align-items: center; gap: 0.5rem; }
+  .docs-section h3 { font-size: 1.0625rem; font-weight: 600; color: var(--gray-800); margin: 1.5rem 0 0.75rem; }
+  .docs-section p { color: var(--gray-600); line-height: 1.75; margin-bottom: 0.75rem; }
+
+  .endpoint-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--gray-900); color: #e2e8f0; padding: 0.625rem 1rem; border-radius: 8px; font-family: monospace; font-size: 0.9rem; margin-bottom: 1rem; }
+  .method { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; }
+  .method.post { background: #10b981; color: white; }
+  .method.get { background: #3b82f6; color: white; }
+
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 0; }
+  .tab { padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab:hover { color: var(--primary); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .tab-group { border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; margin: 1rem 0; }
+  .tab-group .tabs { padding: 0 1rem; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
+  .tab-group pre { margin: 0; border-radius: 0; }
+
+  .param-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.75rem 0; }
+  .param-table th { text-align: left; padding: 0.625rem 0.75rem; background: var(--gray-50); font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-600); border-bottom: 1px solid var(--gray-200); }
+  .param-table td { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--gray-100); vertical-align: top; color: var(--gray-700); }
+  .param-table tr:last-child td { border-bottom: none; }
+  .required { color: var(--danger); font-size: 0.75rem; font-weight: 600; }
+  .optional { color: var(--gray-400); font-size: 0.75rem; }
+
+  .callout { border-left: 3px solid var(--primary); background: rgba(99,102,241,0.05); padding: 1rem 1.25rem; border-radius: 0 8px 8px 0; margin: 1rem 0; font-size: 0.9375rem; color: var(--gray-700); }
+  .callout.warning { border-color: var(--warning); background: rgba(245,158,11,0.05); }
+  .callout.success { border-color: var(--success); background: rgba(16,185,129,0.05); }
+
+  .live-key-note { background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.9375rem; display: flex; align-items: center; gap: 0.75rem; }
+
+  @media (max-width: 900px) {
+    .docs-layout { grid-template-columns: 1fr; }
+    .docs-nav { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">API Documentation</h1>
+  <p class="page-subtitle">Everything you need to integrate Samsoftpay into your application.</p>
+</div>
+
+{% if current_user.is_authenticated %}
+<div class="live-key-note">
+  <i data-feather="zap" style="color:var(--primary);flex-shrink:0;"></i>
+  <span>You're signed in as <strong>{{ current_user.name }}</strong> — your live API keys are pre-filled in all examples below.</span>
+</div>
+{% else %}
+<div class="live-key-note">
+  <i data-feather="info" style="color:var(--primary);flex-shrink:0;"></i>
+  <span><a href="{{ url_for('auth.signup_page') }}" style="color:var(--primary);font-weight:600;">Create a free account</a> to see your live API keys pre-filled in all examples.</span>
+</div>
+{% endif %}
+
+<div class="docs-layout">
+  <!-- Inner Nav -->
+  <nav class="docs-nav card" style="padding:1.25rem;">
+    <div class="docs-nav-section">
+      <div class="docs-nav-title">Getting Started</div>
+      <a href="#authentication" class="docs-nav-link active">Authentication</a>
+      <a href="#headers" class="docs-nav-link">Required Headers</a>
+      <a href="#errors" class="docs-nav-link">Errors</a>
+    </div>
+    <div class="docs-nav-section">
+      <div class="docs-nav-title">Endpoints</div>
+      <a href="#charges" class="docs-nav-link">Charges</a>
+      <a href="#payouts" class="docs-nav-link">Payouts</a>
+      <a href="#payment-links" class="docs-nav-link">Payment Links</a>
+    </div>
+    <div class="docs-nav-section">
+      <div class="docs-nav-title">Webhooks</div>
+      <a href="#webhooks" class="docs-nav-link">Events</a>
+      <a href="#webhook-verify" class="docs-nav-link">Verification</a>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <div>
+
+    <!-- Authentication -->
+    <div class="docs-section" id="authentication">
+      <h2><i data-feather="lock" style="width:22px;height:22px;color:var(--primary);"></i> Authentication</h2>
+      <p>Samsoftpay uses <strong>Bearer token authentication</strong>. Pass your Secret Key in the <code>Authorization</code> header on every request.</p>
+      <div class="tab-group">
+        <div class="tabs">
+          <span class="tab active" onclick="switchTab(this, 'auth')">Python</span>
+          <span class="tab" onclick="switchTab(this, 'auth')">JavaScript</span>
+          <span class="tab" onclick="switchTab(this, 'auth')">cURL</span>
+        </div>
+        <div class="tab-content active">
+<pre><code>import requests
+
+headers = {
+    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Content-Type": "application/json",
+}</code></pre>
+        </div>
+        <div class="tab-content">
+<pre><code>const headers = {
+  "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+  "Content-Type": "application/json",
+};</code></pre>
+        </div>
+        <div class="tab-content">
+<pre><code>curl -H "Authorization: Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}" \
+     https://yourapp.onrender.com/v1/charges</code></pre>
+        </div>
+      </div>
+      <div class="callout warning">Never expose your Secret Key in client-side JavaScript, mobile apps, or public repos. Use environment variables.</div>
+    </div>
+
+    <!-- Required Headers -->
+    <div class="docs-section" id="headers">
+      <h2><i data-feather="sliders" style="width:22px;height:22px;color:var(--primary);"></i> Required Headers</h2>
+      <p>All <strong>POST</strong> requests require these additional headers:</p>
+      <table class="param-table">
+        <thead><tr><th>Header</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>Idempotency-Key</code> <span class="required">required</span></td>
+            <td>A unique UUID per request. Send the same key to safely retry without double-charging. Generate with <code>uuid.uuid4()</code> or <code>crypto.randomUUID()</code>.</td>
+          </tr>
+          <tr>
+            <td><code>X-Timestamp</code> <span class="required">required</span></td>
+            <td>Current Unix timestamp in seconds (<code>int(time.time())</code>). Requests older than 5 minutes are rejected to prevent replay attacks.</td>
+          </tr>
+        </tbody>
+      </table>
+<pre><code>import time, uuid
+
+headers = {
+    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Idempotency-Key": str(uuid.uuid4()),
+    "X-Timestamp": str(int(time.time())),
+    "Content-Type": "application/json",
+}</code></pre>
+    </div>
+
+    <!-- Charges -->
+    <div class="docs-section" id="charges">
+      <h2><i data-feather="trending-up" style="width:22px;height:22px;color:var(--primary);"></i> Charges</h2>
+      <p>Collect money from a customer via mobile money or card.</p>
+
+      <h3>Create a Charge</h3>
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/charges</div>
+      <table class="param-table">
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in UGX (minor units). Must be &gt; 0.</td></tr>
+          <tr><td><code>currency</code> <span class="optional">optional</span></td><td>string</td><td>Currently only <code>"UGX"</code>. Default: <code>"UGX"</code>.</td></tr>
+          <tr><td><code>channel</code> <span class="required">required</span></td><td>string</td><td><code>"mtn_momo"</code>, <code>"airtel_money"</code>, or <code>"card"</code>.</td></tr>
+          <tr><td><code>customer.phone</code> <span class="required">required</span></td><td>string</td><td>Customer's phone number. E.g. <code>"256700123456"</code>.</td></tr>
+          <tr><td><code>reference</code> <span class="optional">optional</span></td><td>string</td><td>Your internal order/reference ID.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="tab-group">
+        <div class="tabs">
+          <span class="tab active" onclick="switchTab(this, 'charge-create')">Python</span>
+          <span class="tab" onclick="switchTab(this, 'charge-create')">JavaScript</span>
+          <span class="tab" onclick="switchTab(this, 'charge-create')">cURL</span>
+        </div>
+        <div class="tab-content active">
+<pre><code>import requests, time, uuid
+
+resp = requests.post(
+    "{{ request.host_url }}v1/charges",
+    headers={
+        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Idempotency-Key": str(uuid.uuid4()),
+        "X-Timestamp": str(int(time.time())),
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 10000,
+        "currency": "UGX",
+        "channel": "mtn_momo",
+        "customer": {"phone": "256700123456"},
+        "reference": "order-001",
+    }
+)
+print(resp.json())
+# {"id": "txn_abc123", "status": "authorized", "amount": 10000, "fee": 200, ...}</code></pre>
+        </div>
+        <div class="tab-content">
+<pre><code>const resp = await fetch("{{ request.host_url }}v1/charges", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Idempotency-Key": crypto.randomUUID(),
+    "X-Timestamp": String(Math.floor(Date.now() / 1000)),
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    amount: 10000,
+    currency: "UGX",
+    channel: "mtn_momo",
+    customer: { phone: "256700123456" },
+    reference: "order-001",
+  }),
+});
+const data = await resp.json();
+console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
+        </div>
+        <div class="tab-content">
+<pre><code>curl -X POST {{ request.host_url }}v1/charges \
+  -H "Authorization: Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}" \
+  -H "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')" \
+  -H "X-Timestamp: $(date +%s)" \
+  -H "Content-Type: application/json" \
+  -d '{"amount":10000,"currency":"UGX","channel":"mtn_momo","customer":{"phone":"256700123456"}}'</code></pre>
+        </div>
+      </div>
+
+      <div class="callout success">A <code>1.5%</code> fee (min UGX 200, cap UGX 5,000) is automatically calculated and returned in the <code>fee</code> field. The merchant receives <code>amount - fee</code>.</div>
+
+      <h3>Get a Charge</h3>
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/charges/:id</div>
+      <pre><code>resp = requests.get(
+    "{{ request.host_url }}v1/charges/txn_abc123",
+    headers={"Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}"}
+)
+# status: "pending" | "authorized" | "succeeded" | "failed"</code></pre>
+    </div>
+
+    <!-- Payouts -->
+    <div class="docs-section" id="payouts">
+      <h2><i data-feather="send" style="width:22px;height:22px;color:var(--primary);"></i> Payouts</h2>
+      <p>Send money out to a recipient's mobile money wallet. The merchant must have sufficient available balance.</p>
+      <div class="callout">A flat <strong>UGX 750</strong> fee applies per payout. This is deducted from the merchant's available balance along with the payout amount. If the payout fails, both are fully refunded.</div>
+
+      <h3>Create a Payout</h3>
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/payouts</div>
+      <table class="param-table">
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in UGX to send.</td></tr>
+          <tr><td><code>channel</code> <span class="optional">optional</span></td><td>string</td><td><code>"mtn_momo"</code> (default).</td></tr>
+          <tr><td><code>recipient.phone</code> <span class="required">required</span></td><td>string</td><td>Recipient's phone number.</td></tr>
+          <tr><td><code>recipient.name</code> <span class="optional">optional</span></td><td>string</td><td>Recipient's display name.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="tab-group">
+        <div class="tabs">
+          <span class="tab active" onclick="switchTab(this, 'payout-create')">Python</span>
+          <span class="tab" onclick="switchTab(this, 'payout-create')">JavaScript</span>
+        </div>
+        <div class="tab-content active">
+<pre><code>resp = requests.post(
+    "{{ request.host_url }}v1/payouts",
+    headers={
+        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Idempotency-Key": str(uuid.uuid4()),
+        "X-Timestamp": str(int(time.time())),
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 50000,
+        "currency": "UGX",
+        "channel": "mtn_momo",
+        "recipient": {"phone": "256780000001", "name": "Jane Doe"},
+    }
+)
+print(resp.json())
+# {"id": "pout_xyz789", "status": "authorized", "fee": 750, ...}</code></pre>
+        </div>
+        <div class="tab-content">
+<pre><code>const resp = await fetch("{{ request.host_url }}v1/payouts", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Idempotency-Key": crypto.randomUUID(),
+    "X-Timestamp": String(Math.floor(Date.now() / 1000)),
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    amount: 50000,
+    currency: "UGX",
+    channel: "mtn_momo",
+    recipient: { phone: "256780000001", name: "Jane Doe" },
+  }),
+});</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Links -->
+    <div class="docs-section" id="payment-links">
+      <h2><i data-feather="link" style="width:22px;height:22px;color:var(--primary);"></i> Payment Links</h2>
+      <p>Generate a shareable URL your customers open to pay — no integration required on their end. Perfect for WhatsApp, SMS, and email.</p>
+
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/payment-links</div>
+      <table class="param-table">
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in UGX.</td></tr>
+          <tr><td><code>description</code> <span class="optional">optional</span></td><td>string</td><td>Shown to the customer on the payment page.</td></tr>
+          <tr><td><code>success_url</code> <span class="optional">optional</span></td><td>string</td><td>Redirect URL after successful payment.</td></tr>
+          <tr><td><code>allow_multiple_uses</code> <span class="optional">optional</span></td><td>boolean</td><td>If <code>true</code>, the link can be paid more than once. Default: <code>false</code>.</td></tr>
+        </tbody>
+      </table>
+
+<pre><code>resp = requests.post(
+    "{{ request.host_url }}v1/payment-links",
+    headers={
+        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 25000,
+        "description": "School Fees Payment",
+        "success_url": "https://yourapp.com/thank-you",
+    }
+)
+data = resp.json()
+print(data["url"])  # Share this link with your customer</code></pre>
+    </div>
+
+    <!-- Webhooks -->
+    <div class="docs-section" id="webhooks">
+      <h2><i data-feather="radio" style="width:22px;height:22px;color:var(--primary);"></i> Webhook Events</h2>
+      <p>Samsoftpay POSTs a JSON payload to your <code>webhook_url</code> whenever a charge or payout changes state. We retry up to 8 times with exponential backoff.</p>
+      <p>Respond with any <strong>2xx</strong> status code within 5 seconds to acknowledge receipt.</p>
+
+      <h3>Charge Events</h3>
+<pre><code>{
+  "event": "charge.succeeded",
+  "data": {
+    "id": "txn_abc123",
+    "amount": 10000,
+    "fee": 200,
+    "currency": "UGX",
+    "channel": "mtn_momo",
+    "status": "succeeded",
+    "merchant_reference": "order-001",
+    "completed_at": "2024-01-15T10:30:00+00:00"
+  }
+}</code></pre>
+      <p>Possible event values: <code>charge.succeeded</code>, <code>charge.failed</code>.</p>
+    </div>
+
+    <!-- Webhook Verification -->
+    <div class="docs-section" id="webhook-verify">
+      <h2><i data-feather="shield" style="width:22px;height:22px;color:var(--primary);"></i> Verifying Webhooks</h2>
+      <p>Every request includes an <code>X-Samsoftpay-Signature</code> header — an HMAC-SHA256 of the raw request body signed with your <code>WEBHOOK_SIGNING_SECRET</code>. Always verify it before processing.</p>
+
+      <div class="tab-group">
+        <div class="tabs">
+          <span class="tab active" onclick="switchTab(this, 'webhook-verify')">Python (Flask)</span>
+          <span class="tab" onclick="switchTab(this, 'webhook-verify')">Node.js (Express)</span>
+        </div>
+        <div class="tab-content active">
+<pre><code>import hmac, hashlib
+from flask import request, abort
+
+WEBHOOK_SECRET = "your_webhook_signing_secret"
+
+@app.post("/webhooks/samsoftpay")
+def handle_webhook():
+    sig = request.headers.get("X-Samsoftpay-Signature", "")
+    expected = hmac.new(
+        WEBHOOK_SECRET.encode(),
+        request.data,
+        hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected, sig):
+        abort(400, "invalid signature")
+
+    event = request.get_json()
+    if event["event"] == "charge.succeeded":
+        order_id = event["data"]["merchant_reference"]
+        # mark order as paid in your database
+        pass
+
+    return {"ok": True}</code></pre>
+        </div>
+        <div class="tab-content">
+<pre><code>const crypto = require("crypto");
+
+app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req, res) => {
+  const sig = req.headers["x-samsoftpay-signature"];
+  const expected = crypto
+    .createHmac("sha256", process.env.WEBHOOK_SECRET)
+    .update(req.body)
+    .digest("hex");
+
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) {
+    return res.status(400).send("invalid signature");
+  }
+
+  const event = JSON.parse(req.body);
+  if (event.event === "charge.succeeded") {
+    // mark order as paid
+  }
+  res.json({ ok: true });
+});</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Errors -->
+    <div class="docs-section" id="errors">
+      <h2><i data-feather="alert-circle" style="width:22px;height:22px;color:var(--primary);"></i> Errors</h2>
+      <p>All errors return JSON with an <code>error</code> field.</p>
+      <table class="param-table">
+        <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>400</code></td><td>Bad request — missing field, invalid value, or stale <code>X-Timestamp</code>.</td></tr>
+          <tr><td><code>401</code></td><td>Unauthorized — missing or invalid Bearer token.</td></tr>
+          <tr><td><code>404</code></td><td>Resource not found or belongs to a different merchant.</td></tr>
+          <tr><td><code>409</code></td><td>Idempotency key reused with a different request body.</td></tr>
+          <tr><td><code>429</code></td><td>Rate limit exceeded. Charges: 30/min. Payouts: 10/min.</td></tr>
+        </tbody>
+      </table>
+<pre><code># Error response shape
+{"error": "insufficient available balance: have 5000, need 50750 (amount 50000 + fee 750)"}</code></pre>
+    </div>
+
+  </div><!-- end content -->
+</div><!-- end docs-layout -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  feather.replace();
+
+  function switchTab(clickedTab, group) {
+    const tabGroup = clickedTab.closest('.tab-group') || clickedTab.closest('.docs-section');
+    const tabs = clickedTab.parentElement.querySelectorAll('.tab');
+    const contents = (clickedTab.closest('.tab-group') || clickedTab.closest('.docs-section')).querySelectorAll('.tab-content');
+    const idx = Array.from(tabs).indexOf(clickedTab);
+    tabs.forEach(t => t.classList.remove('active'));
+    contents.forEach(c => c.classList.remove('active'));
+    clickedTab.classList.add('active');
+    if (contents[idx]) contents[idx].classList.add('active');
+  }
+
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('.docs-section');
+  const navLinks = document.querySelectorAll('.docs-nav-link');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.docs-nav-link[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+{% endblock %}

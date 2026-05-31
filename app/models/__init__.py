@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from flask_login import UserMixin
 from sqlalchemy.orm import relationship
 
 from ..extensions import db
@@ -75,11 +76,12 @@ class AccountType(str, Enum):
 
 # ---------- Tenant / merchant ----------
 
-class Merchant(db.Model):
+class Merchant(UserMixin, db.Model):
     __tablename__ = "merchants"
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     email = Column(String(200), nullable=False, unique=True)
+    password_hash = Column(String(256), nullable=True)  # null for CLI-seeded merchants
     public_key = Column(String(80), nullable=False, unique=True, index=True)
     secret_key = Column(String(80), nullable=False, unique=True, index=True)
     webhook_url = Column(String(500), nullable=True)

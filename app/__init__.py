@@ -54,18 +54,29 @@ def create_app(config: dict | None = None) -> Flask:
 
     db.init_app(app)
 
-    from .extensions import limiter
+    from .extensions import limiter, login_manager
     limiter.init_app(app)
+    login_manager.init_app(app)
+
+    from .models import Merchant
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return db.session.get(Merchant, int(user_id))
 
     from .routes.api import bp as api_bp
     from .routes.dashboard import bp as dash_bp
     from .routes.webhooks_inbound import bp as inbound_bp
     from .routes.checkout import bp as checkout_bp
+    from .routes.auth import bp as auth_bp
+    from .routes.docs import bp as docs_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(dash_bp)
     app.register_blueprint(inbound_bp)
     app.register_blueprint(checkout_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(docs_bp)
 
     from . import cli  # noqa: F401
     cli.register(app)
