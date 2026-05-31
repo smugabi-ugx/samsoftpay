@@ -207,19 +207,11 @@
       z-index:200;padding:0 .75rem;
       align-items:center;justify-content:space-between;gap:.5rem;
     }
-    .mobile-back{
-      width:40px;height:40px;border-radius:10px;
-      background:var(--gray-100);border:none;cursor:pointer;
-      display:flex;align-items:center;justify-content:center;
-      color:var(--gray-700);transition:background .15s;flex-shrink:0;
-    }
-    .mobile-back:hover{background:var(--gray-200);}
-    .mobile-back:active{transform:scale(.93);}
     .mobile-brand{
       display:flex;align-items:center;gap:.5rem;
-      text-decoration:none;flex:1;justify-content:center;
+      text-decoration:none;flex:1;
     }
-    .mobile-brand img{width:26px;height:26px;border-radius:7px;object-fit:cover;}
+    .mobile-brand img{width:28px;height:28px;border-radius:7px;object-fit:cover;}
     .mobile-brand span{font-size:.9375rem;font-weight:700;color:var(--gray-900);}
     .hamburger{
       width:40px;height:40px;border-radius:10px;
@@ -548,6 +540,30 @@
     }
     @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 
+    /* breadcrumbs */
+    .breadcrumb{display:flex;align-items:center;gap:.375rem;font-size:.8125rem;color:var(--gray-400);margin-bottom:1.25rem;flex-wrap:wrap;}
+    .breadcrumb a{color:var(--gray-400);text-decoration:none;transition:color .15s;font-weight:500;}
+    .breadcrumb a:hover{color:var(--primary);}
+    .bc-sep{color:var(--gray-300);}
+    .bc-cur{color:var(--gray-600);font-weight:600;}
+
+    /* mini logo brand on pages */
+    .page-top-brand{display:flex;align-items:center;gap:.5rem;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--gray-200);}
+    .page-top-brand img{width:22px;height:22px;border-radius:5px;object-fit:cover;}
+    .page-top-brand span{font-size:.8125rem;font-weight:600;color:var(--gray-400);}
+    .page-top-brand .ptb-section{color:var(--gray-600);}
+
+    /* security mode banner */
+    .mode-banner{
+      display:flex;align-items:center;gap:.5rem;
+      border-radius:8px;padding:.5rem .875rem;
+      font-size:.75rem;font-weight:600;
+      margin-bottom:1.5rem;
+    }
+    .mode-banner svg{width:13px;height:13px;flex-shrink:0;}
+    .mode-banner.live{background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.18);color:#065f46;}
+    .mode-banner.test{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);color:#92400e;}
+
     /* ─────────────────────────────────────────────
        SCROLL-TO-TOP
     ───────────────────────────────────────────── */
@@ -613,20 +629,12 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" role="alert" aria-live="polite"></div>
 
-  <!-- MOBILE HEADER -->
+  <!-- MOBILE HEADER — logo centre, hamburger right (Capital One style) -->
   <header class="mobile-header">
-    <!-- Back button — shows when not on home, uses browser history -->
-    <button class="mobile-back" id="mobile-back" onclick="history.back()" aria-label="Go back"
-            style="display:none;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-           stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
-        <polyline points="15 18 9 12 15 6"/>
-      </svg>
-    </button>
     <a class="mobile-brand"
        href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}">
       <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
-      <span id="mobile-page-title">{% block page_title %}Samsoftpay{% endblock %}</span>
+      <span>Samsoftpay</span>
     </a>
     <button class="hamburger" id="hamburger" aria-label="Open menu">
       <span></span><span></span><span></span>
@@ -708,6 +716,9 @@
           <a href="{{ url_for('bills.tax_settings') }}" class="nav-link {% if 'tax' in request.endpoint %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="percent"></i><span>Tax Settings</span>
           </a>
+          <a href="{{ url_for('wallet.wallet_home') }}" class="nav-link {% if 'wallet.' in request.endpoint %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="dollar-sign"></i><span>Wallet &amp; Withdrawals</span>
+          </a>
           {% endif %}
         </div>
 
@@ -725,6 +736,9 @@
           </a>
           <a href="{{ url_for('kyc.admin_list') }}" class="nav-link {% if 'kyc.admin' in request.endpoint %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="user-check"></i><span>KYC Review</span>
+          </a>
+          <a href="{{ url_for('wallet.admin_withdrawals') }}" class="nav-link {% if request.endpoint == 'wallet.admin_withdrawals' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="send"></i><span>Withdrawals</span>
           </a>
         </div>
         {% endif %}
@@ -760,6 +774,24 @@
 
     <!-- MAIN CONTENT -->
     <main class="main-content" id="main-content">
+
+      <!-- Page top brand + breadcrumb (fintech-style, no back button) -->
+      {% if current_user.is_authenticated %}
+      <div class="page-top-brand">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+        <span>Samsoftpay</span>
+        {% if request.endpoint != 'auth.account' and request.endpoint != 'dashboard.merchant_detail' %}
+        <span class="bc-sep">/</span>
+        <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="ptb-section"
+           style="color:var(--gray-500);text-decoration:none;font-size:.8125rem;font-weight:600;transition:color .15s;"
+           onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--gray-500)'">
+          Dashboard
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% block breadcrumb %}{% endblock %}
       {% block content %}{% endblock %}
     </main>
 
@@ -840,23 +872,8 @@
     // ── FEATHER ICONS ──
     feather.replace({ 'stroke-width': 2 });
 
-    // ── BACK BUTTON (mobile) ──
-    // Show back button when there's something to go back to
-    const mobileBack = document.getElementById('mobile-back');
-    if (mobileBack) {
-      // If we navigated here (history.length > 1) and we're not on a root page
-      const rootPages = ['/', '/login', '/signup', '/docs'];
-      const isRoot = rootPages.includes(location.pathname) ||
-                     location.pathname.startsWith('/pay/@') ||
-                     location.pathname === '/account';
-      if (history.length > 1 && !isRoot) {
-        mobileBack.style.display = 'flex';
-      } else {
-        // Space holder so brand stays centered
-        mobileBack.style.visibility = 'hidden';
-        mobileBack.style.display = 'flex';
-      }
-    }
+    // Navigation: logo always links to merchant dashboard (or landing for guests)
+    // Breadcrumbs show current position — no browser back button dependency
 
     // ── CSRF INJECTION ──
     const _csrf = document.querySelector('meta[name="csrf-token"]')?.content;

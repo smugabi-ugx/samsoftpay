@@ -17,8 +17,16 @@ from .extensions import db
 
 def create_app(config: dict | None = None) -> Flask:
     app = Flask(__name__, template_folder="templates")
+    from datetime import timedelta
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-do-not-use-in-prod"),
+        # ── Secure session cookies (Capital One / AMEX standard) ──────────────
+        SESSION_COOKIE_NAME="ssp_sid",          # obscure the framework name
+        SESSION_COOKIE_HTTPONLY=True,            # JS cannot read the cookie
+        SESSION_COOKIE_SAMESITE="Lax",          # CSRF mitigation
+        SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
+        PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),  # idle timeout
+        SESSION_REFRESH_EACH_REQUEST=True,       # reset 30-min window on activity
         SQLALCHEMY_DATABASE_URI=os.environ.get(
             "DATABASE_URL", "sqlite:///samsoftpay.db"
         ),
@@ -88,6 +96,7 @@ def create_app(config: dict | None = None) -> Flask:
     from .routes.giftcards import bp as giftcards_bp
     from .routes.seo import bp as seo_bp
     from .routes.subscriptions import bp as subs_bp
+    from .routes.wallet import bp as wallet_bp
     from .routes.bills import bp as bills_bp
 
     app.register_blueprint(api_bp)
@@ -100,6 +109,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(giftcards_bp)
     app.register_blueprint(seo_bp)
     app.register_blueprint(subs_bp)
+    app.register_blueprint(wallet_bp)
     app.register_blueprint(bills_bp)
 
     # CSRF protection for authenticated browser forms

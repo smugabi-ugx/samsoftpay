@@ -89,6 +89,11 @@ class Merchant(UserMixin, db.Model):
     two_fa_enabled = Column(Boolean, default=True, nullable=False)
     otp_code = Column(String(6), nullable=True)
     otp_expires_at = Column(DateTime, nullable=True)
+    otp_attempts = Column(Integer, default=0, nullable=False)   # wrong OTP counter
+    login_attempts = Column(Integer, default=0, nullable=False) # wrong password counter
+    locked_until = Column(DateTime, nullable=True)              # account lock expiry
+    last_login_ip = Column(String(45), nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
     public_key = Column(String(80), nullable=False, unique=True, index=True)
     secret_key = Column(String(80), nullable=False, unique=True, index=True)
     test_public_key = Column(String(80), nullable=True, unique=True, index=True)
@@ -324,6 +329,65 @@ class PayoutBatch(db.Model):
     failed_count = Column(Integer, nullable=False, default=0)
     status = Column(String(20), default="pending", nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+
+# ──────────────────────────────────────────────────────────────
+# Settlement Accounts & Withdrawals
+# ──────────────────────────────────────────────────────────────
+
+class SettlementAccount(db.Model):
+    """A verified account the merchant withdraws their balance to.
+
+    Must be verified by admin before withdrawals are permitted.
+    Mirrors what real PSPs require: a named MoMo or bank account
+    that matches the KYC-verified business name.
+    """
+    __tablename__ = "settlement_accounts"
+    id = Column(Integer, primary_key=True)
+    public_id   = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    # account_type: momo_mtn | momo_airtel | bank | crypto
+    account_type   = Column(String(20), nullable=False)
+    account_number = Column(String(100), nullable=False)  # phone no or bank acct no
+    account_name   = Column(String(200), nullable=False)
+    bank_name      = Column(String(100), nullable=True)   # for bank accounts
+    is_verified    = Column(Boolean, default=False, nullable=False)
+    is_primary     = Column(Boolean, default=False, nullable=False)
+    verified_at    = Column(DateTime, nullable=True)
+    verified_by    = Column(Integer, ForeignKey("merchants.id"), nullable=True)
+    created_at     = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("ix_settlement_merchant", "merchant_id"),
+    )
+
+
+class WithdrawalRequest(db.Model):
+    """A merchant request to withdraw their available balance to a settlement account.
+
+    Flow: merchant requests → admin approves → payout created via MoMo/bank rail.
+    """
+    __tablename__ = "withdrawal_requests"
+    id = Column(Integer, primary_key=True)
+    public_id             = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id           = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    settlement_account_id = Column(Integer, ForeignKey("settlement_accounts.id"), nullable=False)
+    amount     = Column(BigInteger, nullable=False)
+    fee_amount = Column(BigInteger, nullable=False, default=0)
+    currency   = Column(String(3), nullable=False, default="UGX")
+    status     = Column(String(20), default="pending", nullable=False, index=True)
+    # pending | approved | processing | completed | rejected | cancelled
+    payout_id  = Column(Integer, ForeignKey("payouts.id"), nullable=True)
+    notes      = Column(Text, nullable=True)
+    admin_notes= Column(Text, nullable=True)
+    processed_at = Column(DateTime, nullable=True)
+    created_at   = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    settlement_account = relationship("SettlementAccount")
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_withdrawal_amount_positive"),
+    )
 
 
 # ──────────────────────────────────────────────────────────────

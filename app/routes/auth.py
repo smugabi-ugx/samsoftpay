@@ -124,7 +124,11 @@ def verify_email():
 
     code = request.form.get("code", "").strip()
     m = db.session.get(Merchant, current_user.id)
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, timedelta
+
+    if _is_locked(m):
+        logout_user()
+        return render_template("login.html", error="Account locked due to too many OTP attempts. Try again in 30 minutes.")
 
     if (
         not m.otp_code
@@ -132,11 +136,22 @@ def verify_email():
         or not m.otp_expires_at
         or datetime.now(timezone.utc) > m.otp_expires_at.replace(tzinfo=timezone.utc)
     ):
-        return render_template("verify_email.html", error="Invalid or expired code. Try resending.")
+        m.otp_attempts = (m.otp_attempts or 0) + 1
+        if m.otp_attempts >= _MAX_OTP_ATTEMPTS:
+            m.locked_until = datetime.now(timezone.utc) + timedelta(minutes=_LOCK_MINUTES)
+            m.otp_code = None
+            db.session.commit()
+            logout_user()
+            return render_template("login.html", error="Account locked: too many incorrect codes.")
+        db.session.commit()
+        remaining = _MAX_OTP_ATTEMPTS - m.otp_attempts
+        return render_template("verify_email.html",
+            error=f"Invalid or expired code. {remaining} attempt(s) remaining.")
 
     m.email_verified = True
     m.otp_code = None
     m.otp_expires_at = None
+    m.otp_attempts = 0
     db.session.commit()
     return redirect(url_for("auth.account"))
 
@@ -164,32 +179,94 @@ def login_page():
     return render_template("login.html")
 
 
+_MAX_LOGIN_ATTEMPTS = 5
+_LOCK_MINUTES       = 30
+_MAX_OTP_ATTEMPTS   = 5
+
+
+def _is_locked(m) -> bool:
+    """True if the account is currently locked out."""
+    from datetime import datetime, timezone
+    if m.locked_until:
+        if datetime.now(timezone.utc) < m.locked_until.replace(tzinfo=timezone.utc):
+            return True
+        # Lock expired — reset
+        m.locked_until    = None
+        m.login_attempts  = 0
+        m.otp_attempts    = 0
+        db.session.commit()
+    return False
+
+
+def _client_ip_auth() -> str:
+    fwd = request.headers.get("X-Forwarded-For")
+    return (fwd.split(",")[0].strip() if fwd else request.remote_addr) or "unknown"
+
+
 @bp.post("/login")
 @limiter.limit("10 per minute")
 def login():
+    from datetime import datetime, timezone, timedelta
     email    = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
     merchant = Merchant.query.filter_by(email=email).first()
 
-    if (
-        not merchant
-        or not merchant.password_hash
-        or not check_password_hash(merchant.password_hash, password)
-    ):
+    # Always use a constant-time check even for non-existent accounts
+    dummy_hash = "pbkdf2:sha256:600000$x$" + "a" * 64
+    if merchant and merchant.password_hash:
+        pwd_ok = check_password_hash(merchant.password_hash, password)
+    else:
+        check_password_hash(dummy_hash, password)   # timing attack prevention
+        pwd_ok = False
+
+    if not merchant or not merchant.password_hash or not pwd_ok:
+        if merchant:
+            if _is_locked(merchant):
+                return render_template("login.html",
+                    error="Account locked. Too many failed attempts. Try again in 30 minutes.")
+            merchant.login_attempts = (merchant.login_attempts or 0) + 1
+            if merchant.login_attempts >= _MAX_LOGIN_ATTEMPTS:
+                merchant.locked_until = datetime.now(timezone.utc) + timedelta(minutes=_LOCK_MINUTES)
+                db.session.commit()
+                # Alert the account owner
+                send_otp(merchant.email, "LOCK",
+                         purpose="login")  # reuse channel; email_service handles subject
+                return render_template("login.html",
+                    error=f"Account locked for {_LOCK_MINUTES} minutes after {_MAX_LOGIN_ATTEMPTS} failed attempts. A notification has been sent to your email.")
+            db.session.commit()
         return render_template("login.html", error="Invalid email or password.", form=request.form)
 
+    # Password correct — check lockout
+    if _is_locked(merchant):
+        return render_template("login.html",
+            error="Account locked. Too many failed attempts. Try again in 30 minutes.")
+
+    # Reset failed counter on success
+    merchant.login_attempts = 0
+    merchant.locked_until   = None
+
+    # Log IP; alert if this is a new IP address
+    incoming_ip = _client_ip_auth()
+    new_device  = merchant.last_login_ip and merchant.last_login_ip != incoming_ip
+    merchant.last_login_ip = incoming_ip
+    merchant.last_login_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    if new_device:
+        send_otp(merchant.email, "🔔",
+                 purpose="login")   # triggers a "new login" style email
+
     if merchant.two_fa_enabled and merchant.email_verified:
-        # Step 1 done — send OTP for step 2
         otp = generate_otp()
-        merchant.otp_code = otp
+        merchant.otp_code      = otp
         merchant.otp_expires_at = otp_expiry()
+        merchant.otp_attempts  = 0
         db.session.commit()
         send_otp(merchant.email, otp, purpose="login")
         session[_PENDING_2FA_KEY] = merchant.id
         return redirect(url_for("auth.verify_2fa_page"))
 
-    # 2FA disabled or email not yet verified — log straight in
-    login_user(merchant, remember=True)
+    login_user(merchant, remember=False)   # no persistent cookies by default
     return redirect(_safe_redirect(request.args.get("next"), url_for("auth.account")))
 
 
@@ -213,13 +290,27 @@ def verify_2fa():
     m = db.session.get(Merchant, pending_id)
     from datetime import datetime, timezone
 
-    if not m or (
+    if not m or _is_locked(m):
+        session.pop(_PENDING_2FA_KEY, None)
+        return render_template("login.html", error="Account locked. Try again in 30 minutes.")
+
+    if (
         not m.otp_code
         or not _otp_matches(m.otp_code, code)
         or not m.otp_expires_at
         or datetime.now(timezone.utc) > m.otp_expires_at.replace(tzinfo=timezone.utc)
     ):
-        return render_template("verify_2fa.html", error="Invalid or expired code.")
+        from datetime import timedelta
+        m.otp_attempts = (m.otp_attempts or 0) + 1
+        if m.otp_attempts >= _MAX_OTP_ATTEMPTS:
+            m.locked_until = datetime.now(timezone.utc) + timedelta(minutes=_LOCK_MINUTES)
+            m.otp_code = None
+            db.session.commit()
+            session.pop(_PENDING_2FA_KEY, None)
+            return render_template("login.html", error="Account locked: too many incorrect codes. Try again in 30 minutes.")
+        db.session.commit()
+        remaining = _MAX_OTP_ATTEMPTS - m.otp_attempts
+        return render_template("verify_2fa.html", error=f"Incorrect code. {remaining} attempt(s) remaining.")
 
     m.otp_code = None
     m.otp_expires_at = None

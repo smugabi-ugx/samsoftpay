@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Withdrawal Management{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('dashboard.admin_home') }}">Admin</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-cur">Withdrawals</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'warning' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="page-header">
+  <h1 class="page-title">Withdrawal Management</h1>
+  <p class="page-subtitle">Verify settlement accounts and approve withdrawal requests.</p>
+</div>
+
+<!-- Pending settlement account verifications -->
+{% if unverified %}
+<div class="card" style="border-left:4px solid var(--warning);">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="shield"></i> Accounts Awaiting Verification ({{ unverified|length }})</h3>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Merchant</th><th>Type</th><th>Account</th><th>Name</th><th>Added</th><th></th></tr></thead>
+      <tbody>
+        {% for a in unverified %}
+        {% set m = a.merchant_id %}
+        <tr>
+          <td><strong>{{ a.merchant_id }}</strong></td>
+          <td><span class="badge pending">{{ a.account_type.replace('_',' ').title() }}</span></td>
+          <td><code>{{ a.account_number }}</code></td>
+          <td>{{ a.account_name }}</td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ a.created_at.strftime('%d %b %Y') }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('wallet.admin_verify_account', acct_id=a.id) }}">
+              <button type="submit" class="btn btn-success" style="padding:.375rem .75rem;font-size:.8125rem;">
+                <i data-feather="check"></i> Verify
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Pending withdrawal requests -->
+{% if pending_wrs %}
+<div class="card" style="border-left:4px solid var(--primary);">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="clock"></i> Pending Withdrawals ({{ pending_wrs|length }})</h3>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Merchant</th><th>Amount</th><th>To Account</th><th>Requested</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for w in pending_wrs %}
+        <tr>
+          <td><strong>#{{ w.merchant_id }}</strong></td>
+          <td>
+            <strong>UGX {{ "{:,}".format(w.amount) }}</strong>
+            <br><small class="text-muted">Fee: UGX {{ "{:,}".format(w.fee_amount) }}</small>
+          </td>
+          <td>
+            {% if w.settlement_account %}
+            <div style="font-size:.875rem;">
+              {{ w.settlement_account.account_type.replace('_',' ').title() }}<br>
+              <code>{{ w.settlement_account.account_number }}</code><br>
+              <span style="color:var(--gray-500);">{{ w.settlement_account.account_name }}</span>
+            </div>
+            {% endif %}
+          </td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ w.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td>
+            <div style="display:flex;gap:.375rem;flex-wrap:wrap;">
+              <form method="POST" action="{{ url_for('wallet.admin_approve_withdrawal', wr_id=w.id) }}">
+                <button type="submit" class="btn btn-success" style="padding:.375rem .75rem;font-size:.8125rem;">
+                  <i data-feather="check-circle"></i> Approve
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('wallet.admin_reject_withdrawal', wr_id=w.id) }}"
+                    onsubmit="return confirm('Reject this withdrawal?')">
+                <input type="hidden" name="reason" value="Rejected by admin">
+                <button type="submit" class="btn btn-outline" style="padding:.375rem .75rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);">
+                  <i data-feather="x-circle"></i> Reject
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:2rem;color:var(--gray-500);">
+  <i data-feather="check-circle" style="width:40px;height:40px;margin-bottom:.75rem;color:var(--success);"></i>
+  <p>No pending withdrawal requests.</p>
+</div>
+{% endif %}
+
+<!-- All withdrawals history -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="list"></i> All Withdrawals</h3></div>
+  {% if all_wrs %}
+  <div class="table-container">
+    <table>
+      <thead><tr><th>ID</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Date</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for w in all_wrs %}
+        <tr>
+          <td><code style="font-size:.8rem;">{{ w.public_id[:12] }}…</code></td>
+          <td>#{{ w.merchant_id }}</td>
+          <td>UGX {{ "{:,}".format(w.amount) }}</td>
+          <td>
+            <span class="badge {{ 'succeeded' if w.status == 'completed' else 'pending' if w.status in ('pending','processing') else 'failed' if w.status in ('rejected','cancelled') else 'pending' }}">
+              {{ w.status.title() }}
+            </span>
+          </td>
+          <td style="font-size:.875rem;color:var(--gray-500);">{{ w.created_at.strftime('%d %b %Y') }}</td>
+          <td style="font-size:.8125rem;color:var(--gray-500);">{{ w.admin_notes[:40] ~ '…' if w.admin_notes and w.admin_notes|length > 40 else w.admin_notes or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">No withdrawals yet.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
