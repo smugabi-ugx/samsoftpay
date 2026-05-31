@@ -387,6 +387,35 @@ def toggle_2fa():
     return redirect(url_for("auth.account"))
 
 
+@bp.get("/first-setup")
+def first_setup():
+    """One-time superadmin creation. Works only when NO admin exists yet."""
+    import secrets as _sec
+    from werkzeug.security import generate_password_hash
+    from flask import jsonify
+
+    if Merchant.query.filter_by(role="admin").first():
+        return jsonify(error="Admin already exists. This route is disabled."), 403
+
+    m = Merchant(
+        name="Samsoftpay Admin",
+        email="smugabi@mail.com",
+        password_hash=generate_password_hash("SamsoftAdmin2025!"),
+        public_key="pk_live_admin_" + _sec.token_urlsafe(16),
+        secret_key="sk_live_admin_" + _sec.token_urlsafe(20),
+        test_public_key="pk_test_admin_" + _sec.token_urlsafe(16),
+        test_secret_key="sk_test_admin_" + _sec.token_urlsafe(20),
+        handle="samsoftpay-admin",
+        role="admin",
+        kyc_status="verified",
+        email_verified=True,
+        two_fa_enabled=False,
+    )
+    db.session.add(m)
+    db.session.commit()
+    return jsonify(ok=True, message="Admin created. Log in at /login with smugabi@mail.com / SamsoftAdmin2025!")
+
+
 @bp.get("/admin/verify-user/<int:merchant_id>")
 @login_required
 def admin_verify_user(merchant_id: int):
