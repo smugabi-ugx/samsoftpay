@@ -3,805 +3,407 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Samsoftpay — East Africa Payment Gateway | MTN MoMo, Airtel, Visa, Crypto</title>
-  <meta name="description" content="Accept payments across Uganda and East Africa. MTN MoMo, Airtel Money, Visa/Mastercard and crypto — one API, one dashboard. 1.5% collection fee, no monthly charges. Sign up free.">
+  <title>Samsoftpay — East Africa Payment Gateway</title>
+  <meta name="description" content="Accept MTN MoMo, Airtel Money, Visa/Mastercard and crypto payments across East Africa. One API, one dashboard. 1.5% fee, no monthly charges.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="{{ request.host_url }}">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Samsoftpay — Accept Payments Across East Africa">
-  <meta property="og:description" content="MTN MoMo, Airtel Money, Visa/Mastercard and crypto. One API, instant settlement. No monthly fees.">
+  <meta property="og:title" content="Samsoftpay — East Africa Payment Gateway">
+  <meta property="og:description" content="MTN MoMo, Airtel, Visa and crypto. One API, instant settlement. No monthly fees.">
   <meta property="og:url" content="{{ request.host_url }}">
   <meta property="og:image" content="{{ url_for('static', filename='img/logo.png', _external=True) }}">
-  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","description":"Payment gateway for East Africa — MTN MoMo, Airtel Money, Visa/Mastercard and crypto.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG","KE","TZ","RW"]}}</script>
 
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","url":"{{ request.host_url }}","description":"Payment gateway for East Africa — MTN MoMo, Airtel Money, Visa/Mastercard and crypto.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX","description":"1.5% collection fee, no monthly charges"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG","KE","TZ","RW"]}}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How much does Samsoftpay charge?","acceptedAnswer":{"@type":"Answer","text":"1.5% per collection (minimum UGX 200, capped at UGX 5,000). UGX 750 flat fee per payout. No monthly or setup fees."}},{"@type":"Question","name":"Which payment methods does Samsoftpay support?","acceptedAnswer":{"@type":"Answer","text":"MTN Mobile Money, Airtel Money, Visa, Mastercard, Bitcoin, Ethereum, USDT and other cryptocurrencies."}}]}</script>
-
-  <!-- Narvi-inspired fonts: Urbanist (headings) + Lexend (body) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&family=Lexend:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&family=Lexend:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 
   <style>
-    /* ── DESIGN TOKENS (Narvi-inspired) ── */
     :root {
-      /* Backgrounds */
-      --bg:        #ffffff;
-      --bg-soft:   #f6f6f9;
-      --bg-softer: #efeffb;
-      --bg-card:   #ffffff;
-
-      /* Brand */
-      --brand:     #5759a8;
-      --brand-dk:  #2d2e58;
-      --brand-lt:  #adb0ff;
-      --accent:    #10b981;   /* neon green — Narvi-style bright accent */
-      --accent-lt: #d1fae5;
-
-      /* Text */
-      --ink:       #1f203d;
-      --ink-2:     #494e6e;
-      --ink-3:     #787ea5;
-      --ink-4:     #b5b6d9;
-
-      /* Borders */
-      --line:      #e4e5ed;
-      --line-2:    #dddff8;
-
-      /* Shadows */
-      --shadow-sm: 0 2px 8px rgba(26,26,60,.06);
-      --shadow-md: 0 4px 24px rgba(26,26,60,.08);
-      --shadow-lg: 0 8px 48px rgba(26,26,60,.10);
-
-      /* Radius */
-      --r-sm:  6px;
-      --r-md:  12px;
-      --r-lg:  20px;
-      --r-xl:  32px;
-
-      /* Spacing scale (8px base) */
-      --s1:  8px;  --s2: 16px;  --s3: 24px;  --s4: 32px;
-      --s5: 40px;  --s6: 48px;  --s7: 64px;  --s8: 96px; --s9: 112px;
-
-      /* Easing */
-      --ease: cubic-bezier(0.4,0,0.2,1);
-
-      /* Premium gradients */
-      --grad-brand: linear-gradient(135deg, #5759a8, #764ba2);
-      --grad-accent: linear-gradient(135deg, #10b981, #059669);
-      --grad-shine: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.45) 50%, transparent 60%);
+      --ink:   #1a1b2e;
+      --ink2:  #4a4e6e;
+      --ink3:  #8b8faa;
+      --line:  #e8e9f0;
+      --bg:    #ffffff;
+      --soft:  #f7f7fb;
+      --brand: #5759a8;
+      --green: #10b981;
+      --green-lt: #d1fae5;
+      --r: 16px;
+      --ease: cubic-bezier(.4,0,.2,1);
     }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; font-size: 16px; }
-    body {
-      font-family: 'Lexend', system-ui, sans-serif;
-      font-weight: 400;
-      color: var(--ink-2);
-      background: var(--bg);
-      -webkit-font-smoothing: antialiased;
-      overflow-x: hidden;
-    }
-    h1,h2,h3,h4,h5 { font-family: 'Urbanist', sans-serif; color: var(--ink); letter-spacing: -0.02em; }
-    a { text-decoration: none; }
-    img { max-width: 100%; display: block; }
-
-    /* ── LAYOUT ── */
-    .wrap { max-width: 1160px; margin: 0 auto; padding: 0 var(--s3); }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:'Lexend',sans-serif;color:var(--ink2);background:var(--bg);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+    h1,h2,h3,h4{font-family:'Urbanist',sans-serif;color:var(--ink);letter-spacing:-.025em}
+    a{text-decoration:none;color:inherit}
+    .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
 
     /* ── NAV ── */
-    .nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-      background: rgba(255,255,255,.88);
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--line);
-      transition: background .3s var(--ease);
+    .nav{
+      position:fixed;top:0;left:0;right:0;z-index:100;
+      padding:0 24px;height:64px;
+      display:flex;align-items:center;justify-content:space-between;
+      background:rgba(255,255,255,.9);
+      backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--line);
     }
-    .nav-inner {
-      max-width: 1160px; margin: 0 auto; padding: 0 var(--s3);
-      height: 68px; display: flex; align-items: center; justify-content: space-between;
+    .nav-brand{display:flex;align-items:center;gap:10px;}
+    .nav-brand img{width:30px;height:30px;border-radius:7px;object-fit:cover;}
+    .nav-brand span{font-family:'Urbanist',sans-serif;font-weight:700;font-size:1.0625rem;color:var(--ink);}
+    .nav-links{display:flex;align-items:center;gap:32px;}
+    .nav-link{font-size:.9rem;font-weight:400;color:var(--ink3);transition:color .2s;}
+    .nav-link:hover{color:var(--ink);}
+    .nav-btn{
+      display:inline-flex;align-items:center;gap:7px;
+      background:var(--ink);color:#fff;
+      padding:10px 20px;border-radius:8px;
+      font-family:'Lexend',sans-serif;font-weight:500;font-size:.9rem;
+      transition:all .2s var(--ease);
     }
-    .nav-logo { display: flex; align-items: center; gap: 10px; }
-    .nav-logo img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
-    .nav-logo-name {
-      font-family: 'Urbanist', sans-serif;
-      font-weight: 700; font-size: 1.125rem;
-      color: var(--ink); letter-spacing: -0.02em;
-    }
-    .nav-links { display: flex; align-items: center; gap: var(--s4); }
-    .nav-link {
-      font-size: .9375rem; font-weight: 500; color: var(--ink-2);
-      transition: color .2s var(--ease);
-    }
-    .nav-link:hover { color: var(--brand); }
-    .nav-cta {
-      display: inline-flex; align-items: center; gap: var(--s1);
-      background: var(--ink); color: #fff;
-      padding: 10px 20px; border-radius: var(--r-sm);
-      font-family: 'Lexend', sans-serif; font-weight: 500; font-size: .9375rem;
-      transition: all .2s var(--ease);
-    }
-    .nav-cta:hover { background: var(--brand-dk); transform: translateY(-1px); }
-    .nav-cta svg { width: 16px; height: 16px; }
-    @media (max-width: 768px) { .nav-links { display: none; } }
+    .nav-btn:hover{background:var(--brand);transform:translateY(-1px);}
+    .nav-btn svg{width:14px;height:14px;}
+    @media(max-width:740px){.nav-links{display:none;}}
 
     /* ── HERO ── */
-    .hero {
-      padding: calc(68px + var(--s9)) var(--s3) var(--s9);
-      text-align: center;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(87,89,168,.08) 0%, transparent 70%),
-        var(--bg);
+    .hero{
+      padding:calc(64px + 80px) 24px 64px;
+      text-align:center;
+      background:radial-gradient(ellipse 100% 60% at 50% 0%,rgba(87,89,168,.06),transparent);
     }
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: var(--accent-lt); color: #065f46;
-      padding: 6px 14px; border-radius: 99px;
-      font-size: .8125rem; font-weight: 600; font-family: 'Lexend', sans-serif;
-      margin-bottom: var(--s4);
+    .hero-pill{
+      display:inline-flex;align-items:center;gap:7px;
+      background:var(--green-lt);color:#065f46;
+      padding:5px 14px;border-radius:99px;
+      font-size:.8125rem;font-weight:600;margin-bottom:28px;
     }
-    .hero-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
-    .hero h1 {
-      font-size: clamp(2.75rem, 6vw, 5rem);
-      font-weight: 900; line-height: 1.05;
-      color: var(--ink); margin-bottom: var(--s3);
-      max-width: 800px; margin-left: auto; margin-right: auto;
+    .hero-pill-dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+    .hero h1{
+      font-size:clamp(2.75rem,7vw,5.5rem);
+      font-weight:900;line-height:1.03;
+      color:var(--ink);margin-bottom:20px;
     }
-    .hero h1 em {
-      font-style: normal;
-      color: var(--brand);
+    .hero h1 b{color:var(--brand);}
+    .hero-sub{
+      font-size:clamp(.9375rem,2vw,1.125rem);
+      color:var(--ink3);line-height:1.7;font-weight:300;
+      max-width:520px;margin:0 auto 36px;
     }
-    .hero-sub {
-      font-size: clamp(1rem, 2vw, 1.1875rem);
-      color: var(--ink-3); line-height: 1.75;
-      max-width: 560px; margin: 0 auto var(--s5);
-      font-weight: 300;
+    .hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:48px;}
+    .btn-dark{
+      display:inline-flex;align-items:center;gap:8px;
+      background:var(--ink);color:#fff;
+      padding:14px 28px;border-radius:10px;
+      font-family:'Lexend',sans-serif;font-weight:500;font-size:1rem;
+      box-shadow:0 4px 16px rgba(26,27,46,.18);
+      transition:all .2s var(--ease);position:relative;overflow:hidden;
     }
-    .hero-actions {
-      display: flex; gap: var(--s2); flex-wrap: wrap;
-      justify-content: center; margin-bottom: var(--s7);
+    .btn-dark::after{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.2) 50%,transparent 60%);
+      opacity:0;transition:opacity .3s;
     }
-    .btn-filled {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: var(--ink); color: #fff;
-      padding: 14px 28px; border-radius: var(--r-sm);
-      font-family: 'Lexend', sans-serif; font-weight: 500; font-size: 1rem;
-      transition: all .2s var(--ease);
-      box-shadow: var(--shadow-sm);
-      position: relative; overflow: hidden;
+    .btn-dark:hover{background:var(--brand);transform:translateY(-2px);box-shadow:0 8px 28px rgba(87,89,168,.3);}
+    .btn-dark:hover::after{opacity:1;}
+    .btn-dark svg{width:16px;height:16px;transition:transform .2s;}
+    .btn-dark:hover svg{transform:translateX(3px);}
+    .btn-ghost{
+      display:inline-flex;align-items:center;gap:8px;
+      color:var(--ink2);font-family:'Lexend',sans-serif;
+      font-weight:500;font-size:1rem;padding:14px 4px;
+      transition:color .2s var(--ease);
     }
-    .btn-filled::after {
-      content: '';
-      position: absolute; inset: 0;
-      background: var(--grad-shine);
-      background-size: 200% 100%;
-      opacity: 0;
-      transition: opacity .3s;
-    }
-    .btn-filled:hover::after { opacity: 1; animation: shine .6s ease; }
-    @keyframes shine { from{background-position:200%} to{background-position:-200%} }
-    .btn-filled:hover { background: var(--brand-dk); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(45,46,88,.25); }
-    .btn-text {
-      display: inline-flex; align-items: center; gap: 8px;
-      color: var(--ink-2); font-family: 'Lexend', sans-serif;
-      font-weight: 500; font-size: 1rem;
-      padding: 14px 4px;
-      transition: color .2s var(--ease);
-    }
-    .btn-text:hover { color: var(--brand); }
-    .btn-text svg { width: 18px; height: 18px; transition: transform .2s var(--ease); }
-    .btn-text:hover svg { transform: translateX(3px); }
+    .btn-ghost:hover{color:var(--brand);}
+    .btn-ghost svg{width:16px;height:16px;transition:transform .2s;}
+    .btn-ghost:hover svg{transform:translateX(3px);}
 
-    /* Hero stats row */
-    .hero-stats {
-      display: flex; justify-content: center; flex-wrap: wrap; gap: 0;
-      border-top: 1px solid var(--line); padding-top: var(--s5);
-      max-width: 700px; margin: 0 auto;
+    /* Channels */
+    .channels{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+    .ch{
+      display:inline-flex;align-items:center;gap:7px;
+      background:var(--bg);border:1px solid var(--line);
+      color:var(--ink2);padding:7px 14px;border-radius:99px;
+      font-size:.8125rem;font-weight:500;
+      box-shadow:0 1px 4px rgba(0,0,0,.04);
     }
-    .hero-stat {
-      flex: 1; min-width: 140px; padding: 0 var(--s3);
-      border-right: 1px solid var(--line); text-align: center;
-    }
-    .hero-stat:last-child { border-right: none; }
-    .hero-stat-num {
-      font-family: 'Urbanist', sans-serif;
-      font-size: 2rem; font-weight: 800; color: var(--ink); line-height: 1;
-      margin-bottom: 4px;
-    }
-    .hero-stat-label { font-size: .8125rem; color: var(--ink-3); font-weight: 400; }
-    @media (max-width: 520px) { .hero-stat { border-right: none; border-bottom: 1px solid var(--line); padding: var(--s2) 0; } }
+    .ch-dot{width:8px;height:8px;border-radius:50%;}
 
-    /* ── FLOATING HERO CARD ── */
-    .hero-visual {
-      margin-top: var(--s7); max-width: 900px; margin-left: auto; margin-right: auto;
-      position: relative;
+    /* ── STATS ── */
+    .stats{
+      display:flex;justify-content:center;flex-wrap:wrap;
+      border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+      background:var(--soft);
     }
-    .hero-card {
-      background: white;
-      border: 1px solid var(--line);
-      border-radius: var(--r-xl);
-      padding: var(--s4);
-      box-shadow: 0 24px 80px rgba(26,26,60,.12), 0 0 0 1px rgba(87,89,168,.06);
-      display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3);
-    }
-    @media(max-width:640px){.hero-card{grid-template-columns:1fr;}}
-    .hc-panel {
-      background: var(--bg-soft); border-radius: var(--r-lg);
-      padding: var(--s3); border: 1px solid var(--line);
-    }
-    .hc-label { font-size: .75rem; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: var(--s2); }
-    .hc-amount {
-      font-family: 'Urbanist', sans-serif;
-      font-size: 2.25rem; font-weight: 900; color: var(--ink); letter-spacing: -.03em; line-height: 1;
-      margin-bottom: 4px;
-    }
-    .hc-sub { font-size: .8125rem; color: var(--ink-3); }
-    .hc-bar { height: 4px; background: var(--line); border-radius: 2px; margin: var(--s2) 0; overflow: hidden; }
-    .hc-bar-fill { height: 100%; border-radius: 2px; background: var(--grad-brand); width: 72%; }
-    .hc-txn { display: flex; align-items: center; gap: var(--s2); padding: 10px; background: white; border-radius: var(--r-md); border: 1px solid var(--line); margin-bottom: var(--s1); }
-    .hc-txn:last-child { margin-bottom: 0; }
-    .hc-txn-ico { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .875rem; flex-shrink: 0; }
-    .hc-txn-info { flex: 1; min-width: 0; }
-    .hc-txn-name { font-size: .8125rem; font-weight: 600; color: var(--ink); }
-    .hc-txn-ch { font-size: .75rem; color: var(--ink-3); }
-    .hc-txn-amt { font-size: .875rem; font-weight: 700; white-space: nowrap; }
-    .hc-txn-amt.pos { color: var(--accent); }
-    .hc-status { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 600; padding: 3px 8px; border-radius: 99px; }
-    .hc-status.ok { background: var(--accent-lt); color: #065f46; }
-    .hc-status.pend { background: #fef9c3; color: #854d0e; }
+    .stat{flex:1;min-width:140px;padding:28px 24px;text-align:center;border-right:1px solid var(--line);}
+    .stat:last-child{border-right:none;}
+    .stat-n{font-family:'Urbanist',sans-serif;font-size:2.25rem;font-weight:900;color:var(--ink);line-height:1;margin-bottom:4px;}
+    .stat-l{font-size:.8125rem;color:var(--ink3);font-weight:400;}
+    @media(max-width:600px){.stat{border-right:none;border-bottom:1px solid var(--line);}.stat:last-child{border-bottom:none;}}
 
-    /* Float cards */
-    .float-badge {
-      position: absolute; background: white;
-      border: 1px solid var(--line); border-radius: var(--r-md);
-      padding: 10px 14px; box-shadow: var(--shadow-md);
-      display: flex; align-items: center; gap: 8px;
-      font-size: .8125rem; font-weight: 600; color: var(--ink);
-      animation: float-badge 4s ease-in-out infinite;
+    /* ── FEATURES ── */
+    .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+    @media(max-width:840px){.feat-grid{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:520px){.feat-grid{grid-template-columns:1fr;}}
+    .feat{
+      background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:28px 24px;
+      transition:all .25s var(--ease);
+      opacity:0;transform:translateY(14px);
     }
-    @keyframes float-badge { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-    .float-badge.left { left: -20px; top: 30%; }
-    .float-badge.right { right: -20px; bottom: 25%; animation-delay: 2s; }
-    @media(max-width:640px){.float-badge{display:none;}}
-
-    /* ── TESTIMONIALS ── */
-    .testi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--s2); }
-    @media(max-width:860px){.testi-grid{grid-template-columns:1fr;}}
-    .testi-card {
-      background: var(--bg-card); border: 1px solid var(--line);
-      border-radius: var(--r-lg); padding: var(--s4);
-      opacity: 0; transform: translateY(16px); transition: all .5s var(--ease);
-    }
-    .testi-card.visible { opacity: 1; transform: translateY(0); }
-    .testi-stars { display: flex; gap: 3px; margin-bottom: var(--s2); }
-    .testi-star { color: #f59e0b; font-size: .875rem; }
-    .testi-text { font-size: .9375rem; color: var(--ink-2); line-height: 1.75; font-weight: 300; margin-bottom: var(--s3); font-style: italic; }
-    .testi-author { display: flex; align-items: center; gap: var(--s2); }
-    .testi-avatar {
-      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
-      background: var(--grad-brand);
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Urbanist', sans-serif; font-weight: 700; font-size: .9rem; color: white;
-    }
-    .testi-name { font-weight: 600; font-size: .9rem; color: var(--ink); }
-    .testi-role { font-size: .8125rem; color: var(--ink-3); }
-
-    /* ── SECTION DIVIDER (Narvi-style wave) ── */
-    .wave-divider { display: block; width: 100%; overflow: hidden; line-height: 0; }
-    .wave-divider svg { display: block; width: 100%; }
-
-    /* ── SECTIONS ── */
-    section { padding: var(--s9) var(--s3); }
-    .section-soft { background: var(--bg-soft); }
-    .eyebrow {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: .8125rem; font-weight: 600;
-      color: var(--brand); letter-spacing: .06em; text-transform: uppercase;
-      margin-bottom: var(--s2);
-    }
-    .eyebrow::before {
-      content: ''; width: 18px; height: 2px;
-      background: var(--accent); border-radius: 1px;
-    }
-    .section-title {
-      font-size: clamp(1.875rem, 4vw, 2.875rem);
-      font-weight: 800; line-height: 1.1;
-      color: var(--ink); margin-bottom: var(--s2);
-    }
-    .section-sub {
-      font-size: 1.0625rem; color: var(--ink-3);
-      line-height: 1.75; font-weight: 300; max-width: 540px;
-    }
-    .section-header { margin-bottom: var(--s7); }
-    .section-header.center { text-align: center; }
-    .section-header.center .section-sub { margin: 0 auto; }
-
-    /* ── CHANNELS STRIP ── */
-    .channels-strip {
-      background: var(--bg-softer); border-top: 1px solid var(--line-2);
-      border-bottom: 1px solid var(--line-2);
-      padding: var(--s3) var(--s3); overflow: hidden;
-    }
-    .channels-inner {
-      display: flex; align-items: center; justify-content: center;
-      gap: var(--s2); flex-wrap: wrap;
-    }
-    .ch-badge {
-      display: inline-flex; align-items: center; gap: 8px;
-      background: var(--bg-card); border: 1px solid var(--line);
-      color: var(--ink-2); padding: 8px 16px; border-radius: var(--r-md);
-      font-size: .875rem; font-weight: 500;
-      box-shadow: var(--shadow-sm);
-    }
-    .ch-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-    /* ── FEATURE CARDS ── */
-    .feat-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--s2);
-    }
-    @media (max-width: 900px) { .feat-grid { grid-template-columns: repeat(2,1fr); } }
-    @media (max-width: 560px) { .feat-grid { grid-template-columns: 1fr; } }
-
-    .feat-card {
-      background: var(--bg-card);
-      border: 1px solid var(--line);
-      border-radius: var(--r-lg);
-      padding: var(--s4);
-      transition: all .3s var(--ease);
-      opacity: 0; transform: translateY(16px);
-      position: relative; overflow: hidden;
-    }
-    .feat-card::before {
-      content: '';
-      position: absolute; inset: -1px;
-      border-radius: var(--r-lg);
-      background: var(--grad-brand);
-      opacity: 0;
-      transition: opacity .3s var(--ease);
-      z-index: -1;
-    }
-    .feat-card.visible { opacity: 1; transform: translateY(0); }
-    .feat-card:hover {
-      border-color: transparent;
-      box-shadow: 0 12px 48px rgba(87,89,168,.15);
-      transform: translateY(-4px);
-    }
-    .feat-card:hover::before { opacity: 1; }
-    .feat-icon {
-      width: 48px; height: 48px; border-radius: var(--r-md);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.25rem; margin-bottom: var(--s3);
-      flex-shrink: 0;
-    }
-    .feat-card h3 {
-      font-size: 1.0625rem; font-weight: 700;
-      color: var(--ink); margin-bottom: var(--s1);
-    }
-    .feat-card p {
-      font-size: .9rem; color: var(--ink-3);
-      line-height: 1.7; font-weight: 300;
-    }
-    .feat-link {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: .875rem; font-weight: 500; color: var(--brand);
-      margin-top: var(--s2);
-      transition: gap .2s var(--ease);
-    }
-    .feat-card:hover .feat-link { gap: 8px; }
-
-    /* ── TWO-COL SECTIONS ── */
-    .split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); align-items: center; }
-    @media (max-width: 768px) { .split { grid-template-columns: 1fr; gap: var(--s5); } }
-    .split.reverse .split-visual { order: -1; }
-    @media (max-width: 768px) { .split.reverse .split-visual { order: 0; } }
-
-    /* ── FEATURE CHECKLIST ── */
-    .check-list { list-style: none; display: flex; flex-direction: column; gap: var(--s2); }
-    .check-item {
-      display: flex; align-items: flex-start; gap: var(--s2);
-      font-size: .9375rem; color: var(--ink-2); font-weight: 400; line-height: 1.6;
-    }
-    .check-dot {
-      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
-      background: var(--accent-lt);
-      display: flex; align-items: center; justify-content: center;
-    }
-    .check-dot svg { width: 12px; height: 12px; color: var(--accent); }
-
-    /* ── VISUAL CARD (hero of a feature) ── */
-    .visual-card {
-      background: var(--bg-soft);
-      border: 1px solid var(--line);
-      border-radius: var(--r-xl);
-      padding: var(--s4);
-      box-shadow: var(--shadow-md);
-    }
-    .visual-card .vc-label {
-      font-size: .75rem; font-weight: 600; color: var(--ink-3);
-      text-transform: uppercase; letter-spacing: .06em; margin-bottom: var(--s3);
-    }
-    .vc-stat-row { display: flex; gap: var(--s3); flex-wrap: wrap; }
-    .vc-stat {
-      flex: 1; background: var(--bg); border: 1px solid var(--line);
-      border-radius: var(--r-md); padding: var(--s3);
-    }
-    .vc-stat-num { font-family: 'Urbanist', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--ink); }
-    .vc-stat-lbl { font-size: .8125rem; color: var(--ink-3); margin-top: 2px; }
-    .vc-progress { margin-top: var(--s3); }
-    .vc-progress-label { display: flex; justify-content: space-between; font-size: .8125rem; color: var(--ink-3); margin-bottom: 6px; }
-    .vc-bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
-    .vc-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--brand), var(--accent)); }
-    .vc-txn-list { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s3); }
-    .vc-txn {
-      display: flex; align-items: center; gap: var(--s2);
-      background: var(--bg); border: 1px solid var(--line);
-      border-radius: var(--r-md); padding: var(--s2) var(--s3);
-    }
-    .vc-txn-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .875rem; flex-shrink: 0; }
-    .vc-txn-info { flex: 1; }
-    .vc-txn-name { font-size: .875rem; font-weight: 500; color: var(--ink); }
-    .vc-txn-sub { font-size: .75rem; color: var(--ink-3); }
-    .vc-txn-amount { font-weight: 600; font-size: .9375rem; }
-    .vc-txn-amount.positive { color: var(--accent); }
-    .vc-txn-amount.negative { color: var(--ink-2); }
-
-    /* ── HOW IT WORKS ── */
-    .steps { display: flex; flex-direction: column; gap: 0; max-width: 680px; margin: 0 auto; }
-    .step {
-      display: flex; gap: var(--s4); padding: var(--s4) 0;
-      border-bottom: 1px solid var(--line);
-      opacity: 0; transform: translateX(-12px); transition: all .5s var(--ease);
-    }
-    .step:last-child { border-bottom: none; }
-    .step.visible { opacity: 1; transform: translateX(0); }
-    .step-num {
-      width: 40px; height: 40px; border-radius: var(--r-md); flex-shrink: 0;
-      background: var(--brand); color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-family: 'Urbanist', sans-serif; font-weight: 800; font-size: 1rem;
-    }
-    .step-body h3 { font-size: 1.0625rem; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
-    .step-body p { font-size: .9375rem; color: var(--ink-3); line-height: 1.7; font-weight: 300; }
-
-    /* ── CODE BLOCK ── */
-    .code-window {
-      border-radius: var(--r-lg);
-      overflow: hidden;
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow-lg);
-    }
-    .code-bar {
-      background: #1c1c2e; padding: .75rem 1rem;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .traffic { width: 11px; height: 11px; border-radius: 50%; }
-    .code-tabs { background: #161625; padding: 0 1rem; display: flex; border-bottom: 1px solid rgba(255,255,255,.06); }
-    .ctab { padding: .5rem 1rem; font-size: .8rem; font-weight: 500; color: rgba(255,255,255,.3); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }
-    .ctab.active { color: #fff; border-bottom-color: #5759a8; }
-    .code-body { background: #0d1117; padding: 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: .875rem; line-height: 1.8; overflow-x: auto; }
-    .kw{color:#ff7b72}.str{color:#a5d6ff}.fn{color:#d2a8ff}.cm{color:#484f58;font-style:italic}.num{color:#79c0ff}.var{color:#ffa657}
+    .feat.in{opacity:1;transform:translateY(0);}
+    .feat:hover{border-color:rgba(87,89,168,.3);box-shadow:0 8px 40px rgba(87,89,168,.1);transform:translateY(-3px);}
+    .feat-ico{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:18px;}
+    .feat h3{font-size:1.0625rem;font-weight:700;color:var(--ink);margin-bottom:7px;}
+    .feat p{font-size:.875rem;color:var(--ink3);line-height:1.7;font-weight:300;}
 
     /* ── PRICING ── */
-    .pricing-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--s2); max-width: 860px; margin: 0 auto; }
-    @media (max-width: 700px) { .pricing-grid { grid-template-columns: 1fr; } }
-    .price-card {
-      background: var(--bg-card); border: 1px solid var(--line);
-      border-radius: var(--r-lg); padding: var(--s4);
-      transition: all .25s var(--ease);
+    .price-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:860px;margin:0 auto;}
+    @media(max-width:700px){.price-row{grid-template-columns:1fr;}}
+    .price{
+      background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:32px 28px;
+      transition:all .25s var(--ease);
     }
-    .price-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-    .price-card.featured {
-      background: var(--ink); border-color: var(--ink); color: #fff;
+    .price:hover{box-shadow:0 8px 32px rgba(0,0,0,.07);transform:translateY(-2px);}
+    .price.hi{background:var(--ink);border-color:var(--ink);transform:scale(1.03);}
+    .price.hi:hover{transform:scale(1.03) translateY(-2px);}
+    .price-tag{
+      display:inline-block;font-size:.75rem;font-weight:600;
+      padding:3px 10px;border-radius:99px;margin-bottom:16px;
+      background:var(--green-lt);color:#065f46;
     }
-    .price-card.featured .price-label,
-    .price-card.featured .price-note,
-    .price-card.featured .price-num { color: rgba(255,255,255,.75); }
-    .price-card.featured .price-amount { color: #fff; }
-    .price-top { margin-bottom: var(--s4); }
-    .price-tag {
-      display: inline-block; font-size: .75rem; font-weight: 600;
-      padding: 3px 10px; border-radius: 99px;
-      background: var(--accent-lt); color: #065f46; margin-bottom: var(--s2);
+    .price.hi .price-tag{background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);}
+    .price-num{
+      font-family:'Urbanist',sans-serif;font-size:2.75rem;
+      font-weight:900;color:var(--ink);letter-spacing:-.03em;line-height:1;
     }
-    .price-card.featured .price-tag { background: rgba(255,255,255,.12); color: rgba(255,255,255,.8); }
-    .price-amount {
-      font-family: 'Urbanist', sans-serif;
-      font-size: 2.5rem; font-weight: 900; color: var(--ink); line-height: 1;
-    }
-    .price-num { font-size: 1rem; font-weight: 400; color: var(--ink-3); }
-    .price-label { font-size: .875rem; color: var(--ink-3); margin-top: 4px; font-weight: 400; }
-    .price-note { font-size: .8125rem; color: var(--ink-3); line-height: 1.65; margin-top: var(--s2); font-weight: 300; }
+    .price.hi .price-num{color:#fff;}
+    .price-unit{font-size:.9rem;font-weight:400;color:var(--ink3);}
+    .price.hi .price-unit{color:rgba(255,255,255,.5);}
+    .price-lbl{font-size:.875rem;color:var(--ink3);margin-top:4px;font-weight:300;}
+    .price.hi .price-lbl{color:rgba(255,255,255,.55);}
+    .price-note{font-size:.8125rem;color:var(--ink3);margin-top:16px;line-height:1.65;font-weight:300;}
+    .price.hi .price-note{color:rgba(255,255,255,.5);}
 
-    /* ── TRUST GRID ── */
-    .trust-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: var(--s2); }
-    @media (max-width: 860px) { .trust-grid { grid-template-columns: repeat(2,1fr); } }
-    @media (max-width: 480px) { .trust-grid { grid-template-columns: 1fr; } }
-    .trust-card {
-      background: var(--bg-card); border: 1px solid var(--line);
-      border-radius: var(--r-md); padding: var(--s3);
+    /* ── TESTIMONIALS ── */
+    .testi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+    @media(max-width:840px){.testi-row{grid-template-columns:1fr;}}
+    .testi{
+      background:var(--soft);border:1px solid var(--line);border-radius:var(--r);padding:24px;
+      opacity:0;transform:translateY(14px);transition:all .5s var(--ease);
     }
-    .trust-card-icon { font-size: 1.5rem; margin-bottom: var(--s2); }
-    .trust-card h4 { font-size: .9375rem; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
-    .trust-card p { font-size: .8125rem; color: var(--ink-3); line-height: 1.6; font-weight: 300; }
+    .testi.in{opacity:1;transform:translateY(0);}
+    .stars{display:flex;gap:2px;margin-bottom:12px;}
+    .star{color:#f59e0b;font-size:.875rem;}
+    .testi-q{font-size:.9rem;color:var(--ink2);line-height:1.7;font-weight:300;font-style:italic;margin-bottom:16px;}
+    .testi-who{display:flex;align-items:center;gap:10px;}
+    .testi-av{
+      width:36px;height:36px;border-radius:50%;flex-shrink:0;
+      background:linear-gradient(135deg,var(--brand),#764ba2);
+      display:flex;align-items:center;justify-content:center;
+      font-family:'Urbanist',sans-serif;font-weight:700;font-size:.875rem;color:white;
+    }
+    .testi-nm{font-size:.875rem;font-weight:600;color:var(--ink);}
+    .testi-rl{font-size:.8125rem;color:var(--ink3);}
 
-    /* ── FAQ ── */
-    .faq-list { max-width: 680px; margin: 0 auto; }
-    .faq-item { border-bottom: 1px solid var(--line); }
-    .faq-btn {
-      width: 100%; text-align: left; background: none; border: none; cursor: pointer;
-      padding: var(--s3) 0; display: flex; justify-content: space-between; align-items: center;
-      gap: var(--s3);
-      font-family: 'Urbanist', sans-serif; font-size: 1rem; font-weight: 700; color: var(--ink);
-      transition: color .2s var(--ease);
+    /* ── CTA BANNER ── */
+    .cta{
+      background:var(--ink);border-radius:24px;
+      padding:56px 40px;text-align:center;
+      position:relative;overflow:hidden;
     }
-    .faq-btn:hover { color: var(--brand); }
-    .faq-chevron {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--bg-soft); display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: all .25s var(--ease);
+    .cta::before{
+      content:'';position:absolute;inset:0;
+      background:radial-gradient(ellipse 80% 80% at 50% -20%,rgba(87,89,168,.5),transparent);
     }
-    .faq-chevron svg { width: 12px; height: 12px; color: var(--ink-3); transition: transform .25s var(--ease); }
-    .faq-item.open .faq-chevron { background: var(--brand); }
-    .faq-item.open .faq-chevron svg { color: #fff; transform: rotate(180deg); }
-    .faq-answer { display: none; padding-bottom: var(--s3); color: var(--ink-3); line-height: 1.75; font-size: .9375rem; font-weight: 300; }
-    .faq-item.open .faq-answer { display: block; }
-
-    /* ── CTA SECTION ── */
-    .cta-section {
-      background: var(--ink); padding: var(--s9) var(--s3);
-      text-align: center; position: relative; overflow: hidden;
+    .cta-inner{position:relative;z-index:1;}
+    .cta h2{font-size:clamp(1.75rem,4vw,3rem);font-weight:900;color:#fff;margin-bottom:12px;line-height:1.1;}
+    .cta p{font-size:1rem;color:rgba(255,255,255,.5);max-width:420px;margin:0 auto 32px;line-height:1.65;font-weight:300;}
+    .btn-green{
+      display:inline-flex;align-items:center;gap:8px;
+      background:var(--green);color:var(--ink);
+      padding:14px 28px;border-radius:10px;
+      font-family:'Lexend',sans-serif;font-weight:600;font-size:1rem;
+      box-shadow:0 8px 24px rgba(16,185,129,.3);
+      transition:all .2s var(--ease);
     }
-    .cta-section::before {
-      content: ''; position: absolute; inset: 0;
-      background: radial-gradient(ellipse 70% 60% at 50% -10%, rgba(87,89,168,.4), transparent);
-    }
-    .cta-inner { position: relative; z-index: 1; }
-    .cta-section h2 {
-      font-size: clamp(2rem,4vw,3.25rem); font-weight: 900; color: #fff;
-      margin-bottom: var(--s2); line-height: 1.1;
-    }
-    .cta-section p { font-size: 1.0625rem; color: rgba(255,255,255,.55); max-width: 480px; margin: 0 auto var(--s5); line-height: 1.7; font-weight: 300; }
-    .btn-accent {
-      display: inline-flex; align-items: center; gap: 10px;
-      background: var(--accent); color: var(--ink);
-      padding: 16px 32px; border-radius: var(--r-sm);
-      font-family: 'Lexend', sans-serif; font-weight: 600; font-size: 1.0625rem;
-      transition: all .2s var(--ease); box-shadow: 0 8px 32px rgba(16,185,129,.3);
-    }
-    .btn-accent:hover { transform: translateY(-2px); box-shadow: 0 16px 48px rgba(16,185,129,.45); }
-    .btn-accent svg { width: 18px; height: 18px; }
+    .btn-green:hover{transform:translateY(-2px);box-shadow:0 16px 40px rgba(16,185,129,.45);}
+    .btn-green svg{width:16px;height:16px;}
 
     /* ── FOOTER ── */
-    footer { background: var(--bg-soft); border-top: 1px solid var(--line); padding: var(--s8) var(--s3) var(--s5); }
-    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: var(--s6); max-width: 1160px; margin: 0 auto var(--s6); }
-    @media (max-width: 900px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 520px) { .footer-grid { grid-template-columns: 1fr; } }
-    .footer-logo { display: flex; align-items: center; gap: 10px; margin-bottom: var(--s3); }
-    .footer-logo img { width: 28px; height: 28px; border-radius: 7px; object-fit: cover; }
-    .footer-logo-name { font-family: 'Urbanist', sans-serif; font-weight: 700; font-size: 1rem; color: var(--ink); }
-    .footer-desc { font-size: .875rem; color: var(--ink-3); line-height: 1.75; max-width: 260px; font-weight: 300; }
-    footer h4 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); margin-bottom: var(--s2); }
-    footer ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-    footer a { font-size: .9rem; color: var(--ink-2); transition: color .15s var(--ease); font-weight: 400; }
-    footer a:hover { color: var(--brand); }
-    .footer-bottom {
-      max-width: 1160px; margin: 0 auto;
-      border-top: 1px solid var(--line); padding-top: var(--s3);
-      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--s2);
-      font-size: .8125rem; color: var(--ink-3);
+    footer{background:var(--soft);border-top:1px solid var(--line);padding:48px 24px 32px;}
+    .foot-inner{max-width:1100px;margin:0 auto;}
+    .foot-top{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px;margin-bottom:40px;}
+    @media(max-width:800px){.foot-top{grid-template-columns:1fr 1fr;}}
+    @media(max-width:480px){.foot-top{grid-template-columns:1fr;}}
+    .foot-brand{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+    .foot-brand img{width:26px;height:26px;border-radius:6px;object-fit:cover;}
+    .foot-brand span{font-family:'Urbanist',sans-serif;font-weight:700;font-size:.9375rem;color:var(--ink);}
+    .foot-desc{font-size:.8125rem;color:var(--ink3);line-height:1.7;font-weight:300;max-width:220px;}
+    footer h4{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3);margin-bottom:12px;}
+    footer ul{list-style:none;display:flex;flex-direction:column;gap:9px;}
+    footer a{font-size:.875rem;color:var(--ink2);transition:color .15s;}
+    footer a:hover{color:var(--brand);}
+    .foot-bottom{
+      border-top:1px solid var(--line);padding-top:20px;
+      display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;
+      font-size:.8125rem;color:var(--ink3);
     }
 
+    /* ── SECTION WRAPPER ── */
+    .section{padding:80px 24px;}
+    .section.soft{background:var(--soft);}
+    .sh{text-align:center;margin-bottom:48px;}
+    .eyebrow{
+      display:inline-flex;align-items:center;gap:6px;
+      font-size:.75rem;font-weight:700;color:var(--brand);
+      text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;
+    }
+    .eyebrow::before{content:'';width:16px;height:2px;background:var(--green);border-radius:1px;}
+    .sh h2{font-size:clamp(1.875rem,4vw,2.75rem);font-weight:800;color:var(--ink);margin-bottom:10px;line-height:1.1;}
+    .sh p{font-size:1rem;color:var(--ink3);line-height:1.7;font-weight:300;max-width:520px;margin:0 auto;}
+
     /* ── ANIMATIONS ── */
-    @keyframes fadeInUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-    .anim { opacity:0; transform:translateY(16px); transition: opacity .6s var(--ease), transform .6s var(--ease); }
-    .anim.visible { opacity:1; transform:translateY(0); }
+    .anim{opacity:0;transform:translateY(14px);transition:opacity .55s var(--ease),transform .55s var(--ease);}
+    .anim.in{opacity:1;transform:translateY(0);}
   </style>
 </head>
 <body>
 
-<!-- ── NAV ── -->
+<!-- NAV -->
 <nav class="nav">
-  <div class="nav-inner">
-    <a href="/" class="nav-logo">
-      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
-      <span class="nav-logo-name">Samsoftpay</span>
-    </a>
-    <div class="nav-links">
-      <a href="#features" class="nav-link">Features</a>
-      <a href="#pricing" class="nav-link">Pricing</a>
-      <a href="{{ url_for('docs.docs') }}" class="nav-link">Docs</a>
-      {% if current_user.is_authenticated %}
-      <a href="{{ url_for('auth.account') }}" class="nav-link">Dashboard</a>
-      {% else %}
-      <a href="{{ url_for('auth.login_page') }}" class="nav-link">Sign in</a>
-      {% endif %}
-    </div>
-    <a href="{{ url_for('auth.signup_page') }}" class="nav-cta">
-      Open account
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-    </a>
+  <a href="/" class="nav-brand">
+    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+    <span>Samsoftpay</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="{{ url_for('docs.docs') }}" class="nav-link">Docs</a>
+    {% if current_user.is_authenticated %}
+    <a href="{{ url_for('auth.account') }}" class="nav-link">Dashboard</a>
+    {% else %}
+    <a href="{{ url_for('auth.login_page') }}" class="nav-link">Sign in</a>
+    {% endif %}
   </div>
+  <a href="{{ url_for('auth.signup_page') }}" class="nav-btn">
+    Open account
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+  </a>
 </nav>
 
-<!-- ── HERO ── -->
+<!-- HERO -->
 <section class="hero">
-  <div class="hero-badge">
-    <span class="hero-badge-dot"></span>
-    Now live in Uganda
-  </div>
-  <h1>Payments built for<br><em>East Africa</em></h1>
-  <p class="hero-sub">
-    MTN MoMo, Airtel Money, Visa, Mastercard and crypto — one clean API,
-    one powerful dashboard, instant settlement. Start in 60 seconds.
-  </p>
-  <div class="hero-actions">
-    <a href="{{ url_for('auth.signup_page') }}" class="btn-filled">
+  <div class="hero-pill"><span class="hero-pill-dot"></span> Now live in Uganda</div>
+
+  <h1>Accept payments<br>across <b>East Africa</b></h1>
+
+  <p class="hero-sub">MTN MoMo, Airtel Money, Visa, Mastercard and crypto — one clean API, one dashboard, instant settlement.</p>
+
+  <div class="hero-ctas">
+    <a href="{{ url_for('auth.signup_page') }}" class="btn-dark">
       Open free account
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
     </a>
-    <a href="{{ url_for('docs.docs') }}" class="btn-text">
+    <a href="{{ url_for('docs.docs') }}" class="btn-ghost">
       View API docs
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
     </a>
   </div>
-  <div class="hero-stats">
-    <div class="hero-stat"><div class="hero-stat-num" data-count="1.5" data-suffix="%">1.5%</div><div class="hero-stat-label">Collection fee</div></div>
-    <div class="hero-stat"><div class="hero-stat-num">UGX 0</div><div class="hero-stat-label">Monthly fee</div></div>
-    <div class="hero-stat"><div class="hero-stat-num" data-count="5">5</div><div class="hero-stat-label">Payment channels</div></div>
-    <div class="hero-stat"><div class="hero-stat-num">60s</div><div class="hero-stat-label">To get API keys</div></div>
-  </div>
 
-  <!-- Floating UI mockup -->
-  <div class="hero-visual anim">
-    <div class="float-badge left">
-      <span style="color:var(--accent);font-size:1rem;">✓</span> Payment received
-    </div>
-    <div class="float-badge right">
-      <span style="font-size:1rem;">🔒</span> Secured &amp; signed
-    </div>
-    <div class="hero-card">
-      <div class="hc-panel">
-        <div class="hc-label">Today's collections</div>
-        <div class="hc-amount">UGX 4.2M</div>
-        <div class="hc-sub">+18% vs yesterday</div>
-        <div class="hc-bar"><div class="hc-bar-fill"></div></div>
-        <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--ink-3);">
-          <span>72% of daily target</span><span>UGX 5.8M goal</span>
-        </div>
-        <div style="margin-top:var(--s3);">
-          <div style="display:flex;gap:var(--s2);">
-            <div style="flex:1;background:white;border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s2);text-align:center;">
-              <div style="font-family:'Urbanist',sans-serif;font-size:1.125rem;font-weight:800;color:var(--ink);">47</div>
-              <div style="font-size:.75rem;color:var(--ink-3);">Transactions</div>
-            </div>
-            <div style="flex:1;background:white;border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s2);text-align:center;">
-              <div style="font-family:'Urbanist',sans-serif;font-size:1.125rem;font-weight:800;color:var(--accent);">94%</div>
-              <div style="font-size:.75rem;color:var(--ink-3);">Success rate</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div>
-        <div class="hc-label" style="margin-bottom:var(--s2);">Live transactions</div>
-        <div class="hc-txn">
-          <div class="hc-txn-ico" style="background:#fff7ed;">📱</div>
-          <div class="hc-txn-info">
-            <div class="hc-txn-name">Mary Namutebi</div>
-            <div class="hc-txn-ch">MTN MoMo · 2s ago</div>
-          </div>
-          <div>
-            <div class="hc-txn-amt pos">+ UGX 85,000</div>
-            <span class="hc-status ok">Succeeded</span>
-          </div>
-        </div>
-        <div class="hc-txn">
-          <div class="hc-txn-ico" style="background:#eff6ff;">💳</div>
-          <div class="hc-txn-info">
-            <div class="hc-txn-name">Tech Solutions Ltd</div>
-            <div class="hc-txn-ch">Visa · 14s ago</div>
-          </div>
-          <div>
-            <div class="hc-txn-amt pos">+ UGX 320,000</div>
-            <span class="hc-status ok">Succeeded</span>
-          </div>
-        </div>
-        <div class="hc-txn">
-          <div class="hc-txn-ico" style="background:#fffbeb;">₿</div>
-          <div class="hc-txn-info">
-            <div class="hc-txn-name">David Ochieng</div>
-            <div class="hc-txn-ch">USDT · 41s ago</div>
-          </div>
-          <div>
-            <div class="hc-txn-amt pos">+ UGX 210,000</div>
-            <span class="hc-status pend">Processing</span>
-          </div>
-        </div>
-        <div class="hc-txn">
-          <div class="hc-txn-ico" style="background:#fdf4ff;">📤</div>
-          <div class="hc-txn-info">
-            <div class="hc-txn-name">Payout — 12 agents</div>
-            <div class="hc-txn-ch">Bulk · Airtel · 2m ago</div>
-          </div>
-          <div>
-            <div class="hc-txn-amt" style="color:var(--ink-2);">− UGX 1.1M</div>
-            <span class="hc-status ok">Sent</span>
-          </div>
-        </div>
-      </div>
-    </div>
+  <div class="channels">
+    <span class="ch"><span class="ch-dot" style="background:#ffcb05;"></span>MTN MoMo</span>
+    <span class="ch"><span class="ch-dot" style="background:#e60000;"></span>Airtel Money</span>
+    <span class="ch"><span class="ch-dot" style="background:#1a1f71;"></span>Visa / MC</span>
+    <span class="ch"><span class="ch-dot" style="background:#f7931a;"></span>Crypto</span>
+    <span class="ch"><span class="ch-dot" style="background:#10b981;"></span>Bill Collection</span>
   </div>
 </section>
 
-<!-- ── CHANNELS STRIP ── -->
-<div class="channels-strip">
-  <div class="channels-inner">
-    <span style="font-size:.8125rem;font-weight:600;color:var(--ink-3);margin-right:8px;">Supports</span>
-    {% for swatch, label in [('#ffcb05','MTN MoMo'),('#e60000','Airtel Money'),('#1a1f71','Visa / MC'),('#f7931a','Crypto (BTC · ETH · USDT)'),('#10b981','Bill Collection')] %}
-    <span class="ch-badge">
-      <span class="ch-swatch" style="background:{{ swatch }};"></span>{{ label }}
-    </span>
-    {% endfor %}
-  </div>
+<!-- STATS -->
+<div class="stats">
+  <div class="stat"><div class="stat-n">1.5%</div><div class="stat-l">Collection fee</div></div>
+  <div class="stat"><div class="stat-n">UGX 0</div><div class="stat-l">Monthly fee</div></div>
+  <div class="stat"><div class="stat-n">5</div><div class="stat-l">Payment channels</div></div>
+  <div class="stat"><div class="stat-n">60s</div><div class="stat-l">To get API keys</div></div>
 </div>
 
-<!-- ── FEATURES ── -->
-<section id="features">
+<!-- FEATURES -->
+<section class="section" id="features">
   <div class="wrap">
-    <div class="section-header center anim">
-      <div class="eyebrow">Everything you need</div>
-      <h2 class="section-title">Built for serious businesses</h2>
-      <p class="section-sub">Collections, disbursements, subscriptions, bill collection, gift cards — built for Africa, production-ready today.</p>
+    <div class="sh anim">
+      <div class="eyebrow">Platform</div>
+      <h2>Everything you need</h2>
+      <p>Collections, payouts, subscriptions, bill collection, gift cards — production-ready for East Africa.</p>
     </div>
     <div class="feat-grid">
-      {% for emoji, bg, title, desc in [
-        ('📱','#fff7ed','Mobile Money','Accept MTN MoMo and Airtel Money. Customers receive a USSD prompt — no app download needed.'),
-        ('💳','#f0fdf4','Visa &amp; Mastercard','Full card acceptance with 3DS security. Licensed in Uganda, no countries blocked.'),
-        ('₿','#fffbeb','Crypto','Accept BTC, ETH, USDT via ChangeNow. Instant conversion — always settle in UGX.'),
-        ('📤','#eff6ff','Bulk Payouts','Pay hundreds of recipients at once via CSV. Salary runs, supplier payments, agent floats.'),
-        ('🔗','#fdf4ff','Payment Links','One link in your TikTok bio. Customer picks channel, pays. No code needed.'),
-        ('🔄','#f0fdf4','Subscriptions','Weekly, monthly or yearly billing plans. Subscribe once, charge automatically.'),
-        ('🎁','#fff1f2','Gift Cards','Issue redeemable gift cards with amounts, expiry and partial redemption.'),
-        ('📄','#f8fafc','Bill Collection','Schools, utilities, hospitals — issue bills with account references. Customers look up and pay.'),
-        ('%','#f0fdf4','Uganda VAT','18% VAT auto-calculated. Mobile Money Levy on receipts. TIN on every invoice.'),
+      {% for em, bg, title, desc in [
+        ('📱','#fff7ed','Mobile Money','Accept MTN MoMo and Airtel Money. Customers receive a USSD prompt — no app needed.'),
+        ('💳','#f0fdf4','Visa &amp; Mastercard','Full card acceptance with 3DS security. Licensed in Uganda. No countries blocked.'),
+        ('₿','#fffbeb','Crypto Payments','Accept BTC, ETH, USDT via ChangeNow. Instant UGX conversion. Never hold volatile assets.'),
+        ('📄','#f8fafc','Bill Collection','Issue bills with account references. Customers look up by ID and pay on mobile.'),
+        ('🔄','#fdf4ff','Subscriptions','Weekly, monthly or yearly billing plans. Subscribe once, charged automatically.'),
+        ('🔗','#eff6ff','Payment Links','Share one URL on TikTok or WhatsApp. Customer picks channel and pays — no code.'),
       ] %}
-      <div class="feat-card">
-        <div class="feat-icon" style="background:{{ bg }};font-size:1.5rem;">{{ emoji }}</div>
+      <div class="feat">
+        <div class="feat-ico" style="background:{{ bg }};">{{ em }}</div>
         <h3>{{ title }}</h3>
         <p>{{ desc }}</p>
-        <span class="feat-link">Learn more
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </span>
       </div>
       {% endfor %}
     </div>
   </div>
 </section>
 
-<!-- ── TESTIMONIALS ── -->
-<section class="section-soft">
+<!-- PRICING -->
+<section class="section soft" id="pricing">
   <div class="wrap">
-    <div class="section-header center anim">
-      <div class="eyebrow">Loved by builders</div>
-      <h2 class="section-title">What merchants are saying</h2>
+    <div class="sh anim">
+      <div class="eyebrow">Pricing</div>
+      <h2>Simple, honest fees</h2>
+      <p>No setup costs. No monthly charges. Pay only when you transact.</p>
     </div>
-    <div class="testi-grid">
-      {% for initials, name, role, text in [
-        ('MK','Michael Kato','E-commerce founder, Kampala','"Finally a payment gateway built for Uganda. The API docs are the clearest I have ever seen. We were live collecting MTN MoMo in under an hour."'),
-        ('SN','Sarah Namutebi','School Administrator, Masaka','"We use the bill collection feature for school fees. Parents look up their child by student ID and pay from their phone. No queues, no cash."'),
-        ('JO','James Ochieng','Freelance developer, Nairobi','"The sandbox mode is brilliant. I built the entire integration in test mode then flipped to live keys in production. Zero surprises."'),
+    <div class="price-row">
+      <div class="price anim">
+        <div class="price-tag">Collections</div>
+        <div class="price-num">1.5%</div>
+        <div class="price-lbl">per transaction</div>
+        <div class="price-note">Min UGX 200 · cap UGX 5,000. Applies to MoMo, Airtel, Visa, Mastercard and Crypto.</div>
+      </div>
+      <div class="price hi anim">
+        <div class="price-tag">Platform fee</div>
+        <div class="price-num">UGX 0</div>
+        <div class="price-lbl">every month, forever</div>
+        <div class="price-note">No setup fee. No minimum volume. Sandbox is always free — go live when ready.</div>
+      </div>
+      <div class="price anim">
+        <div class="price-tag">Payouts</div>
+        <div class="price-num">750 <span class="price-unit">UGX</span></div>
+        <div class="price-lbl">flat fee per payout</div>
+        <div class="price-note">Fully refunded if the payout fails. No percentage on the amount — ever.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="section">
+  <div class="wrap">
+    <div class="sh anim">
+      <div class="eyebrow">Stories</div>
+      <h2>Loved by builders &amp; merchants</h2>
+    </div>
+    <div class="testi-row">
+      {% for av, nm, rl, q in [
+        ('MK','Michael Kato','E-commerce, Kampala','"Finally a gateway built for Uganda. The API docs are the clearest I have seen. We were live with MTN MoMo in under an hour."'),
+        ('SN','Sarah Namutebi','School Admin, Masaka','"Parents look up their child by student ID and pay from their phone. No queues, no cash. The bill collection feature changed everything."'),
+        ('JO','James Ochieng','Developer, Nairobi','"The sandbox mode is brilliant. I built the full integration in test mode then switched to live keys in production. Zero surprises."'),
       ] %}
-      <div class="testi-card">
-        <div class="testi-stars">{% for _ in range(5) %}<span class="testi-star">★</span>{% endfor %}</div>
-        <div class="testi-text">{{ text }}</div>
-        <div class="testi-author">
-          <div class="testi-avatar">{{ initials }}</div>
-          <div>
-            <div class="testi-name">{{ name }}</div>
-            <div class="testi-role">{{ role }}</div>
-          </div>
+      <div class="testi">
+        <div class="stars">{% for _ in range(5) %}<span class="star">★</span>{% endfor %}</div>
+        <div class="testi-q">{{ q }}</div>
+        <div class="testi-who">
+          <div class="testi-av">{{ av }}</div>
+          <div><div class="testi-nm">{{ nm }}</div><div class="testi-rl">{{ rl }}</div></div>
         </div>
       </div>
       {% endfor %}
@@ -809,308 +411,76 @@
   </div>
 </section>
 
-<!-- ── SPLIT: Dashboard preview ── -->
-<section class="section-soft">
+<!-- CTA -->
+<section class="section soft">
   <div class="wrap">
-    <div class="split">
-      <div class="anim">
-        <div class="eyebrow">Real-time dashboard</div>
-        <h2 class="section-title">Every shilling tracked</h2>
-        <p class="section-sub" style="margin-bottom:var(--s4);">Double-entry ledger accounting. Every collection, payout and fee is recorded with a journal entry. Reconcile in one click.</p>
-        <ul class="check-list">
-          {% for item in ['Pending, available and in-flight balances','Automatic reconciliation report','Full audit log of every action','Settlement to bank on rolling basis'] %}
-          <li class="check-item">
-            <span class="check-dot">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </span>
-            {{ item }}
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      <div class="split-visual anim">
-        <div class="visual-card">
-          <div class="vc-label">Your balances</div>
-          <div class="vc-stat-row">
-            <div class="vc-stat">
-              <div class="vc-stat-num">UGX 2.4M</div>
-              <div class="vc-stat-lbl">Available</div>
-            </div>
-            <div class="vc-stat">
-              <div class="vc-stat-num">UGX 840K</div>
-              <div class="vc-stat-lbl">Pending</div>
-            </div>
-          </div>
-          <div class="vc-progress">
-            <div class="vc-progress-label"><span>Collection success rate</span><span>87%</span></div>
-            <div class="vc-bar"><div class="vc-bar-fill" style="width:87%;"></div></div>
-          </div>
-          <div class="vc-txn-list">
-            {% for emoji, name, channel, amount, sign in [('📱','John Mukasa','MTN MoMo','+ UGX 45,000','positive'),('💳','Sarah Nansubuga','Visa','+ UGX 120,000','positive'),('₿','James Opio','Crypto','+ UGX 89,000','positive')] %}
-            <div class="vc-txn">
-              <div class="vc-txn-icon" style="background:var(--bg-soft);">{{ emoji }}</div>
-              <div class="vc-txn-info">
-                <div class="vc-txn-name">{{ name }}</div>
-                <div class="vc-txn-sub">{{ channel }}</div>
-              </div>
-              <div class="vc-txn-amount {{ sign }}">{{ amount }}</div>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
+    <div class="cta anim">
+      <div class="cta-inner">
+        <h2>Start accepting payments today</h2>
+        <p>Free API keys in 60 seconds. Sandbox always free. No approval needed to start building.</p>
+        <a href="{{ url_for('auth.signup_page') }}" class="btn-green">
+          Open free account
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── HOW IT WORKS ── -->
-<section>
-  <div class="wrap">
-    <div class="split reverse">
-      <div class="split-visual anim">
-        <div class="code-window">
-          <div class="code-bar">
-            <span class="traffic" style="background:#ff5f57;"></span>
-            <span class="traffic" style="background:#febc2e;"></span>
-            <span class="traffic" style="background:#28c840;"></span>
-            <span style="color:rgba(255,255,255,.3);font-size:.8rem;margin-left:8px;font-family:'JetBrains Mono',monospace;">charge.py</span>
-          </div>
-          <div class="code-tabs">
-            <span class="ctab active">Python</span>
-            <span class="ctab">JS</span>
-            <span class="ctab">cURL</span>
-          </div>
-          <div class="code-body">
-<span class="kw">import</span> requests, time, uuid
-
-resp = requests.<span class="fn">post</span>(
-  <span class="str">"https://api.samsoftpay.com/v1/charges"</span>,
-  headers={
-    <span class="str">"Authorization"</span>: <span class="str">"Bearer sk_live_KEY"</span>,
-    <span class="str">"Idempotency-Key"</span>: str(uuid.<span class="fn">uuid4</span>()),
-    <span class="str">"X-Timestamp"</span>: str(int(time.<span class="fn">time</span>())),
-  },
-  json={
-    <span class="str">"amount"</span>:   <span class="num">10000</span>,
-    <span class="str">"channel"</span>:  <span class="str">"mtn_momo"</span>,
-    <span class="str">"customer"</span>: {<span class="str">"phone"</span>: <span class="str">"256700123456"</span>},
-  }
-)
-<span class="cm"># → {"id":"txn_abc","status":"authorized"}</span>
-          </div>
-        </div>
-      </div>
-      <div class="anim">
-        <div class="eyebrow">Simple integration</div>
-        <h2 class="section-title">Live in three steps</h2>
-        <p class="section-sub" style="margin-bottom:var(--s4);">Designed for vibe coders and senior engineers alike. Copy, paste, collect money.</p>
-        <div class="steps">
-          {% for n, title, desc in [
-            (1,'Sign up and get your keys','Create an account in 60 seconds. You get test and live API key pairs immediately.'),
-            (2,'Integrate one endpoint','POST to /v1/charges with your Bearer token. We handle USSD prompts, webhooks, ledger — everything.'),
-            (3,'Go live and get paid','Swap sk_test_ for sk_live_, complete KYC, and you are processing real payments.'),
-          ] %}
-          <div class="step">
-            <div class="step-num">{{ n }}</div>
-            <div class="step-body">
-              <h3>{{ title }}</h3>
-              <p>{{ desc }}</p>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── PRICING ── -->
-<section class="section-soft" id="pricing">
-  <div class="wrap">
-    <div class="section-header center anim">
-      <div class="eyebrow">Transparent pricing</div>
-      <h2 class="section-title">Simple, honest fees</h2>
-      <p class="section-sub">No monthly fees. No setup costs. No hidden charges. Pay only when you transact.</p>
-    </div>
-    <div class="pricing-grid">
-      <div class="price-card">
-        <div class="price-top">
-          <div class="price-tag">Collections</div>
-          <div class="price-amount">1.5%</div>
-          <div class="price-label">per transaction</div>
-        </div>
-        <div class="price-note" style="margin-bottom:var(--s3);">Min UGX 200 · cap UGX 5,000. Applies to MoMo, Airtel, Visa, MC and Crypto.</div>
-        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
-          {% for f in ['MTN MoMo & Airtel Money','Visa / Mastercard','Crypto via ChangeNow','Payment links','Bill collection'] %}
-          <li style="display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--ink-2);">
-            <span style="color:var(--accent);font-size:1rem;">✓</span> {{ f }}
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      <div class="price-card featured">
-        <div class="price-top">
-          <div class="price-tag">Platform</div>
-          <div class="price-amount">UGX 0</div>
-          <div class="price-label">monthly fee, always</div>
-        </div>
-        <div class="price-note" style="margin-bottom:var(--s3);">No setup fee. No minimum volume. Sandbox always free.</div>
-        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
-          {% for f in ['Unlimited API calls','Sandbox mode free','Test + live key pairs','2FA on all accounts','KYC portal included'] %}
-          <li style="display:flex;align-items:center;gap:8px;font-size:.875rem;color:rgba(255,255,255,.75);">
-            <span style="color:#6ee7b7;font-size:1rem;">✓</span> {{ f }}
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      <div class="price-card">
-        <div class="price-top">
-          <div class="price-tag">Payouts</div>
-          <div class="price-amount">750 <span class="price-num">UGX</span></div>
-          <div class="price-label">flat fee per payout</div>
-        </div>
-        <div class="price-note" style="margin-bottom:var(--s3);">Fully refunded if payout fails. No percentage on amount.</div>
-        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
-          {% for f in ['Single payouts','Bulk CSV payouts','Subscription billing','Auto-retry on fail','Full audit trail'] %}
-          <li style="display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--ink-2);">
-            <span style="color:var(--accent);font-size:1rem;">✓</span> {{ f }}
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-    </div>
-
-    <p style="text-align:center;margin-top:var(--s4);font-size:.9rem;color:var(--ink-3);">
-      All prices in UGX. Uganda VAT (18%) applied separately when you enable it in Tax Settings.
-      <a href="{{ url_for('auth.signup_page') }}" style="color:var(--brand);font-weight:600;"> Start free →</a>
-    </p>
-  </div>
-</section>
-
-<!-- ── TRUST ── -->
-<section>
-  <div class="wrap">
-    <div class="section-header center anim">
-      <div class="eyebrow">Security</div>
-      <h2 class="section-title">Bank-grade security</h2>
-      <p class="section-sub">From key management to webhook delivery — every touchpoint hardened.</p>
-    </div>
-    <div class="trust-grid">
-      {% for emoji, title, desc in [
-        ('🔐','HMAC Webhooks','Every event signed with SHA-256. Verify with X-Samsoftpay-Signature before processing.'),
-        ('🛡️','2FA by Default','All merchant accounts require two-factor authentication with email OTP.'),
-        ('⏱️','Replay Protection','X-Timestamp header required. Requests older than 5 minutes are rejected.'),
-        ('📋','Full Audit Log','Every auth attempt, charge, payout and KYC action recorded with IP and timestamp.'),
-        ('🔑','Key Separation','Test keys (sk_test_) never touch real rails. Sandbox is fully isolated.'),
-        ('⚖️','Double-Entry Ledger','Every shilling tracked. Reconciliation runs in one click at any time.'),
-        ('📊','Rate Limiting','Per-API-key limits — not per-IP. 30 charges/min, 10 payouts/min.'),
-        ('✅','KYC Compliant','Bank of Uganda ready. AML/CFT questionnaire, director IDs, TIN verification.'),
-      ] %}
-      <div class="trust-card anim">
-        <div class="trust-card-icon">{{ emoji }}</div>
-        <h4>{{ title }}</h4>
-        <p>{{ desc }}</p>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-
-<!-- ── FAQ ── -->
-<section class="section-soft" id="faq">
-  <div class="wrap">
-    <div class="section-header center anim">
-      <div class="eyebrow">FAQ</div>
-      <h2 class="section-title">Common questions</h2>
-    </div>
-    <div class="faq-list">
-      {% for q, a in [
-        ('How much does Samsoftpay charge?','1.5% per collection (minimum UGX 200, cap UGX 5,000). UGX 750 flat fee per payout. Zero monthly or setup fees.'),
-        ('Which payment channels are supported?','MTN Mobile Money, Airtel Money, Visa, Mastercard, and cryptocurrency (BTC, ETH, USDT, BNB, SOL) via ChangeNow instant exchange.'),
-        ('Do I need KYC to start?','No. Test immediately in sandbox with your test keys. KYC is required before going live with real money.'),
-        ('Can non-technical sellers use Samsoftpay?','Yes. Create a payment link from your account page and share the URL on TikTok or WhatsApp. Customers pay without you writing any code.'),
-        ('Does Samsoftpay support bill collection?','Yes. Create bills with account references like student IDs or meter numbers. Customers look up their bill and pay directly on mobile.'),
-        ('Is Samsoftpay Uganda VAT compliant?','Yes. Configure your TIN in Tax Settings and VAT (18%) is calculated on every bill. The Mobile Money Levy (0.5%) is shown separately on receipts.'),
-      ] %}
-      <div class="faq-item">
-        <button class="faq-btn" onclick="this.closest('.faq-item').classList.toggle('open')">
-          {{ q }}
-          <span class="faq-chevron">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </span>
-        </button>
-        <div class="faq-answer">{{ a }}</div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-
-<!-- ── CTA ── -->
-<section class="cta-section">
-  <div class="cta-inner">
-    <h2>Start accepting payments<br>across East Africa today</h2>
-    <p>Sign up in 60 seconds. Free API keys. Sandbox always free. No approval needed to start building.</p>
-    <a href="{{ url_for('auth.signup_page') }}" class="btn-accent">
-      Open free account
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-    </a>
-  </div>
-</section>
-
-<!-- ── FOOTER ── -->
+<!-- FOOTER -->
 <footer>
-  <div class="footer-grid">
-    <div>
-      <div class="footer-logo">
-        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
-        <span class="footer-logo-name">Samsoftpay</span>
+  <div class="foot-inner">
+    <div class="foot-top">
+      <div>
+        <div class="foot-brand">
+          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+          <span>Samsoftpay</span>
+        </div>
+        <p class="foot-desc">East Africa's developer-first payment gateway. Accept MoMo, Airtel, Visa, Mastercard and crypto via one clean API.</p>
       </div>
-      <p class="footer-desc">East Africa's developer-first payment gateway. Accept MoMo, Airtel, Visa, Mastercard and crypto from one clean API.</p>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="{{ url_for('docs.docs') }}">API Docs</a></li>
+          <li><a href="{{ url_for('auth.signup_page') }}">Sign Up</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Developers</h4>
+        <ul>
+          <li><a href="{{ url_for('docs.docs') }}#charges">Charges</a></li>
+          <li><a href="{{ url_for('docs.docs') }}#payouts">Payouts</a></li>
+          <li><a href="{{ url_for('docs.docs') }}#webhooks">Webhooks</a></li>
+          <li><a href="{{ url_for('docs.docs') }}#authentication">Auth</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Company</h4>
+        <ul>
+          <li><a href="{{ url_for('kyc.kyc_home') }}">KYC</a></li>
+          <li><a href="{{ url_for('seo.sitemap') }}">Sitemap</a></li>
+          <li><a href="{{ url_for('auth.login_page') }}">Sign In</a></li>
+        </ul>
+      </div>
     </div>
-    <div>
-      <h4>Product</h4>
-      <ul>
-        <li><a href="#features">Features</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="{{ url_for('docs.docs') }}">API Docs</a></li>
-        <li><a href="{{ url_for('auth.signup_page') }}">Sign Up</a></li>
-      </ul>
+    <div class="foot-bottom">
+      <span>© 2025 Samsoftpay</span>
+      <span>Uganda · Kenya · Tanzania · Rwanda</span>
     </div>
-    <div>
-      <h4>Developers</h4>
-      <ul>
-        <li><a href="{{ url_for('docs.docs') }}#charges">Charges API</a></li>
-        <li><a href="{{ url_for('docs.docs') }}#payouts">Payouts API</a></li>
-        <li><a href="{{ url_for('docs.docs') }}#webhooks">Webhooks</a></li>
-        <li><a href="{{ url_for('docs.docs') }}#authentication">Authentication</a></li>
-      </ul>
-    </div>
-    <div>
-      <h4>Company</h4>
-      <ul>
-        <li><a href="{{ url_for('auth.signup_page') }}">Get Started</a></li>
-        <li><a href="{{ url_for('kyc.kyc_home') }}">KYC Verification</a></li>
-        <li><a href="#faq">FAQ</a></li>
-        <li><a href="{{ url_for('seo.sitemap') }}">Sitemap</a></li>
-      </ul>
-    </div>
-  </div>
-  <div class="footer-bottom">
-    <span>© 2025 Samsoftpay. Built for East Africa.</span>
-    <span>Uganda · Kenya · Tanzania · Rwanda</span>
   </div>
 </footer>
 
 <script>
-  // Scroll animations
   const obs = new IntersectionObserver(entries => {
-    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('in'), i * 55);
+      }
+    });
   }, { threshold: 0.08 });
-  document.querySelectorAll('.feat-card, .step, .anim, .trust-card').forEach((el, i) => {
-    el.style.transitionDelay = `${i * 0.04}s`;
-    obs.observe(el);
-  });
+  document.querySelectorAll('.feat, .testi, .anim').forEach(el => obs.observe(el));
 </script>
 </body>
 </html>
