@@ -35,7 +35,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from flask import current_app
+from flask import current_app, g
 
 from ..extensions import db
 from ..models import (
@@ -94,6 +94,7 @@ def create_payout(
         currency=currency,
         channel=channel,
         status=PayoutStatus.PENDING,
+        is_test=g.get("api_mode") == "test",
         recipient_phone=recipient_phone,
         recipient_name=recipient_name,
     )
@@ -220,7 +221,8 @@ def complete_payout(
 def _get_disbursement_adapter(channel: Channel):
     if channel != Channel.MTN_MOMO:
         raise PayoutError(f"no disbursement adapter for channel {channel}")
-    if current_app.config.get("MOMO_USE_REAL"):
+    sandbox = g.get("api_mode") == "test"
+    if not sandbox and current_app.config.get("MOMO_USE_REAL"):
         from .rails_mtn_disbursement import RealMTNMoMoDisbursementAdapter
         return RealMTNMoMoDisbursementAdapter()
     return _MockDisbursementAdapter()

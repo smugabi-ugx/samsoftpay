@@ -13,7 +13,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from flask import current_app
+from flask import current_app, g
 
 from ..extensions import db
 from ..models import (
@@ -65,6 +65,7 @@ def create_charge(
         currency=currency,
         channel=channel,
         status=TxnStatus.PENDING,
+        is_test=g.get("api_mode") == "test",
         merchant_reference=merchant_reference,
         customer_phone=customer_phone,
         customer_email=customer_email,

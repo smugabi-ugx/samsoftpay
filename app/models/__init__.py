@@ -81,9 +81,11 @@ class Merchant(UserMixin, db.Model):
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     email = Column(String(200), nullable=False, unique=True)
-    password_hash = Column(String(256), nullable=True)  # null for CLI-seeded merchants
+    password_hash = Column(String(256), nullable=True)
     public_key = Column(String(80), nullable=False, unique=True, index=True)
     secret_key = Column(String(80), nullable=False, unique=True, index=True)
+    test_public_key = Column(String(80), nullable=True, unique=True, index=True)
+    test_secret_key = Column(String(80), nullable=True, unique=True, index=True)
     webhook_url = Column(String(500), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
     is_active = Column(Boolean, default=True, nullable=False)
@@ -154,6 +156,7 @@ class Transaction(db.Model):
     currency = Column(String(3), nullable=False, default="UGX")
     channel = Column(SAEnum(Channel), nullable=False)
     status = Column(SAEnum(TxnStatus), nullable=False, default=TxnStatus.PENDING, index=True)
+    is_test = Column(Boolean, default=False, nullable=False)
     merchant_reference = Column(String(120), nullable=True)
     customer_phone = Column(String(20), nullable=True)
     customer_email = Column(String(200), nullable=True)
@@ -229,6 +232,7 @@ class Payout(db.Model):
     currency = Column(String(3), nullable=False, default="UGX")
     channel = Column(SAEnum(Channel), nullable=False, default=Channel.MTN_MOMO)
     status = Column(SAEnum(PayoutStatus), nullable=False, default=PayoutStatus.PENDING, index=True)
+    is_test = Column(Boolean, default=False, nullable=False)
     recipient_phone = Column(String(20), nullable=False)
     recipient_name = Column(String(200), nullable=True)
     rail_reference = Column(String(120), nullable=True, index=True)

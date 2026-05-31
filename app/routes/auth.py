@@ -44,6 +44,8 @@ def signup():
         password_hash=generate_password_hash(password),
         public_key="pk_live_" + secrets.token_urlsafe(20),
         secret_key="sk_live_" + secrets.token_urlsafe(28),
+        test_public_key="pk_test_" + secrets.token_urlsafe(20),
+        test_secret_key="sk_test_" + secrets.token_urlsafe(28),
         kyc_status="verified",
         webhook_url=webhook_url,
     )

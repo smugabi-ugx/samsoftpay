@@ -103,9 +103,11 @@ class CardAdapter(_MockRail):
 
 
 def get_adapter(channel: Channel) -> RailAdapter:
+    from flask import g
+    sandbox = g.get("api_mode") == "test"  # sandbox key → always mock
+
     if channel == Channel.MTN_MOMO:
-        if current_app.config.get("MOMO_USE_REAL"):
-            # Late import to avoid a circular dependency at module load.
+        if not sandbox and current_app.config.get("MOMO_USE_REAL"):
             from .rails_mtn_real import RealMTNMoMoAdapter
             return RealMTNMoMoAdapter()
         return MTNMoMoAdapter()

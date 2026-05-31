@@ -1,6 +1,39 @@
 {% extends "base.html" %}
 {% block title %}My Account{% endblock %}
 
+{% block extra_head %}
+<style>
+  .mode-toggle {
+    display: inline-flex; border-radius: 8px; overflow: hidden;
+    border: 2px solid var(--gray-200); background: var(--gray-100);
+  }
+  .mode-btn {
+    padding: 0.5rem 1.25rem; font-size: 0.875rem; font-weight: 600;
+    border: none; background: transparent; cursor: pointer;
+    transition: all 0.2s; display: flex; align-items: center; gap: 0.4rem;
+  }
+  .mode-btn.active.test  { background: #f59e0b; color: white; border-radius: 6px; }
+  .mode-btn.active.live  { background: var(--success); color: white; border-radius: 6px; }
+  .mode-btn:not(.active) { color: var(--gray-500); }
+
+  .key-section { display: none; }
+  .key-section.visible { display: block; }
+
+  .sandbox-banner {
+    background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3);
+    border-radius: 8px; padding: 0.875rem 1.25rem;
+    color: #92400e; font-size: 0.9rem; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.625rem;
+  }
+  .live-banner {
+    background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 8px; padding: 0.875rem 1.25rem;
+    color: #065f46; font-size: 0.9rem; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.625rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
   <div>
@@ -12,15 +45,6 @@
   </a>
 </div>
 
-<!-- Status Banner -->
-<div class="alert alert-success" style="margin-bottom:2rem;">
-  <i data-feather="check-circle" class="alert-icon"></i>
-  <div>
-    <strong>Account Active</strong> — Your API keys are live and ready to use.
-    KYC status: <strong>{{ current_user.kyc_status }}</strong>
-  </div>
-</div>
-
 <!-- Stats -->
 <div class="stats-grid">
   <div class="stat-card">
@@ -29,7 +53,7 @@
       <div class="stat-icon primary"><i data-feather="trending-up"></i></div>
     </div>
     <div class="stat-value">{{ txn_count }}</div>
-    <div class="stat-change positive"><i data-feather="activity"></i> <span>{{ succeeded }} succeeded</span></div>
+    <div class="stat-change positive"><i data-feather="check-circle"></i> <span>{{ succeeded }} succeeded</span></div>
   </div>
   <div class="stat-card success">
     <div class="stat-header">
@@ -45,122 +69,131 @@
       <div class="stat-icon info"><i data-feather="percent"></i></div>
     </div>
     <div class="stat-value">1.5%</div>
-    <div class="stat-change"><i data-feather="info"></i> <span>Min UGX 200, cap UGX 5,000</span></div>
+    <div class="stat-change"><i data-feather="info"></i> <span>Min UGX 200 · cap UGX 5,000</span></div>
   </div>
 </div>
 
-<!-- API Keys -->
+<!-- API Keys Card -->
 <div class="card">
   <div class="card-header">
     <h3 class="card-title"><i data-feather="key"></i> API Keys</h3>
-    <span class="env-badge live">Live</span>
-  </div>
-
-  <div class="alert alert-warning" style="margin-bottom:1.5rem;">
-    <i data-feather="alert-triangle" class="alert-icon"></i>
-    <div>Keep your <strong>Secret Key</strong> private. Never expose it in client-side code or public repositories.</div>
-  </div>
-
-  <div class="form-group">
-    <label class="form-label">Public Key</label>
-    <div class="api-key-display">
-      <code id="pub-key">{{ current_user.public_key }}</code>
-      <button class="copy-btn" onclick="copyKey('pub-key', this)" title="Copy">
-        <i data-feather="copy" style="width:14px;height:14px;"></i>
+    <!-- Mode Toggle -->
+    <div class="mode-toggle">
+      <button class="mode-btn active test" id="btn-test" onclick="setMode('test')">
+        <i data-feather="flask" style="width:14px;height:14px;"></i> Test
+      </button>
+      <button class="mode-btn live" id="btn-live" onclick="setMode('live')">
+        <i data-feather="zap" style="width:14px;height:14px;"></i> Live
       </button>
     </div>
-    <div class="form-hint">Use this in client-side code to identify your account.</div>
   </div>
 
-  <div class="form-group" style="margin-bottom:0;">
-    <label class="form-label">Secret Key</label>
-    <div class="api-key-display">
-      <code id="sec-key">{{ current_user.secret_key }}</code>
-      <button class="copy-btn" onclick="copyKey('sec-key', this)" title="Copy">
-        <i data-feather="copy" style="width:14px;height:14px;"></i>
-      </button>
+  <!-- Sandbox Keys -->
+  <div class="key-section visible" id="keys-test">
+    <div class="sandbox-banner">
+      <i data-feather="alert-circle" style="width:16px;height:16px;flex-shrink:0;"></i>
+      <span><strong>Test mode</strong> — transactions use mock rails. No real money moves. Safe to use during development.</span>
     </div>
-    <div class="form-hint">Use this in your server-side code as your <code>Bearer</code> token in API calls.</div>
+    <div class="form-group">
+      <label class="form-label">Test Public Key</label>
+      <div class="api-key-display">
+        <code id="test-pub-key">{{ current_user.test_public_key or 'Not generated — re-create your account' }}</code>
+        <button class="copy-btn" onclick="copyKey('test-pub-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Test Secret Key</label>
+      <div class="api-key-display">
+        <code id="test-sec-key">{{ current_user.test_secret_key or 'Not generated' }}</code>
+        <button class="copy-btn" onclick="copyKey('test-sec-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+      </div>
+      <div class="form-hint">Use <code>Authorization: Bearer {{ current_user.test_secret_key or 'sk_test_...' }}</code></div>
+    </div>
+  </div>
+
+  <!-- Live Keys -->
+  <div class="key-section" id="keys-live">
+    <div class="live-banner">
+      <i data-feather="zap" style="width:16px;height:16px;flex-shrink:0;"></i>
+      <span><strong>Live mode</strong> — transactions hit real rails and move real money. Keep your secret key private.</span>
+    </div>
+    <div class="alert alert-warning" style="margin-bottom:1.25rem;">
+      <i data-feather="alert-triangle" class="alert-icon"></i>
+      <div>Never expose your Live Secret Key in client-side code, mobile apps, or public repos.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Live Public Key</label>
+      <div class="api-key-display">
+        <code id="live-pub-key">{{ current_user.public_key }}</code>
+        <button class="copy-btn" onclick="copyKey('live-pub-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:0;">
+      <label class="form-label">Live Secret Key</label>
+      <div class="api-key-display">
+        <code id="live-sec-key">{{ current_user.secret_key }}</code>
+        <button class="copy-btn" onclick="copyKey('live-sec-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+      </div>
+    </div>
   </div>
 </div>
 
 <!-- Quick Integration -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title"><i data-feather="code"></i> Quick Integration</h3>
+    <h3 class="card-title"><i data-feather="code"></i> Quick Start</h3>
     <a href="{{ url_for('docs.docs') }}" class="btn btn-primary" style="padding:0.5rem 1rem;font-size:0.875rem;">
-      <i data-feather="book-open"></i> Full Docs
+      <i data-feather="book-open"></i> Full API Docs
     </a>
   </div>
-  <p class="text-muted mb-2">Make your first charge with your secret key:</p>
+  <p class="text-muted mb-2">Test charge — safe to run, uses sandbox rails:</p>
   <pre><code>import requests, time, uuid
 
-response = requests.post(
+resp = requests.post(
     "{{ request.host_url }}v1/charges",
     headers={
-        "Authorization": "Bearer {{ current_user.secret_key }}",
+        "Authorization": "Bearer {{ current_user.test_secret_key or 'sk_test_YOUR_KEY' }}",
         "Idempotency-Key": str(uuid.uuid4()),
         "X-Timestamp": str(int(time.time())),
         "Content-Type": "application/json",
     },
-    json={
-        "amount": 5000,
-        "currency": "UGX",
-        "channel": "mtn_momo",
-        "customer": {"phone": "+256700123456"},
-        "reference": "order-001",
-    }
+    json={"amount": 5000, "currency": "UGX", "channel": "mtn_momo",
+          "customer": {"phone": "256700123456"}, "reference": "test-001"},
 )
-print(response.json())</code></pre>
+print(resp.json())
+# {"id": "txn_...", "mode": "test", "status": "authorized", "fee": 200, ...}</code></pre>
 </div>
 
-<!-- Webhook Config -->
-{% if current_user.webhook_url %}
+<!-- Dashboard Link -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title"><i data-feather="radio"></i> Webhook Endpoint</h3>
-    <span class="badge succeeded">Configured</span>
-  </div>
-  <div class="api-key-display">
-    <code>{{ current_user.webhook_url }}</code>
-  </div>
-  <div class="form-hint" style="margin-top:0.5rem;">
-    We send <code>X-Samsoftpay-Signature</code> with every event. Verify it with your <code>WEBHOOK_SIGNING_SECRET</code>.
-  </div>
-</div>
-{% else %}
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title"><i data-feather="radio"></i> Webhook Endpoint</h3>
-    <span class="badge pending">Not Set</span>
-  </div>
-  <p class="text-muted">No webhook URL configured. Add one to receive real-time payment events.</p>
-</div>
-{% endif %}
-
-<!-- Links -->
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title"><i data-feather="external-link"></i> Your Dashboard</h3>
+    <h3 class="card-title"><i data-feather="bar-chart-2"></i> Your Dashboard</h3>
   </div>
   <div class="btn-group">
     <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="btn btn-primary">
-      <i data-feather="bar-chart-2"></i> View Transactions &amp; Balances
+      <i data-feather="activity"></i> Transactions &amp; Balances
     </a>
     <a href="{{ url_for('docs.docs') }}" class="btn btn-outline">
       <i data-feather="book-open"></i> API Documentation
     </a>
   </div>
 </div>
-
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
   feather.replace();
+
+  function setMode(mode) {
+    document.getElementById('keys-test').classList.toggle('visible', mode === 'test');
+    document.getElementById('keys-live').classList.toggle('visible', mode === 'live');
+    document.getElementById('btn-test').classList.toggle('active', mode === 'test');
+    document.getElementById('btn-live').classList.toggle('active', mode === 'live');
+    feather.replace();
+  }
+
   function copyKey(id, btn) {
-    const text = document.getElementById(id).textContent;
-    navigator.clipboard.writeText(text).then(() => {
+    navigator.clipboard.writeText(document.getElementById(id).textContent).then(() => {
       btn.classList.add('copied');
       btn.innerHTML = '<i data-feather="check" style="width:14px;height:14px;"></i>';
       feather.replace();

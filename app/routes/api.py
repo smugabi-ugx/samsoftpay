@@ -10,7 +10,7 @@ Rate limits:  POST /v1/charges  — 30/min, 200/hr per API key
 import json
 import time
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, g, jsonify, request
 
 from ..extensions import db, limiter
 from ..models import Channel, Merchant, Transaction
@@ -31,7 +31,15 @@ def _auth() -> Merchant:
         log_event("auth.failed", detail={"reason": "missing_bearer"})
         abort(401, description="missing bearer token")
     token = header[len("Bearer "):].strip()
-    merchant = Merchant.query.filter_by(secret_key=token).one_or_none()
+
+    # Sandbox keys take priority; fall back to live key lookup.
+    merchant = Merchant.query.filter_by(test_secret_key=token).one_or_none()
+    if merchant:
+        g.api_mode = "test"
+    else:
+        merchant = Merchant.query.filter_by(secret_key=token).one_or_none()
+        g.api_mode = "live"
+
     if merchant is None or not merchant.is_active:
         log_event("auth.failed", detail={"reason": "invalid_key"})
         abort(401, description="invalid api key")
@@ -115,6 +123,7 @@ def create_charge_route():
 
     out = {
         "id": txn.public_id,
+        "mode": "test" if txn.is_test else "live",
         "status": txn.status.value,
         "amount": txn.amount,
         "fee": txn.fee_amount,
@@ -125,7 +134,7 @@ def create_charge_route():
     }
     idempotency.store(merchant.id, idem_key, request_hash, 201, out)
     log_event("charge.created", merchant_id=merchant.id, resource_id=txn.public_id,
-              detail={"amount": txn.amount, "channel": txn.channel.value})
+              detail={"amount": txn.amount, "channel": txn.channel.value, "mode": g.api_mode})
     return jsonify(out), 201
 
 
