@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import base64
 import json
-import threading
-import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -166,76 +164,10 @@ class RealMTNMoMoAdapter(RailAdapter):
                 reason=f"momo_rejected_{resp.status_code}: {resp.text[:200]}",
             )
 
-        # 202 Accepted — MTN took the request. Schedule a status poller.
-        self._schedule_status_poll(txn.id, reference_id)
+        # 202 Accepted — MTN took the request. Queue a persistent Celery poller.
+        from ..tasks.polling import poll_mtn_collection
+        poll_mtn_collection.apply_async(
+            args=[txn.id, reference_id],
+            countdown=5,
+        )
         return InitiateResult(rail_reference=reference_id, accepted=True)
-
-    def _schedule_status_poll(self, txn_id: int, reference_id: str) -> None:
-        """Poll the status endpoint until terminal or timeout."""
-        app = current_app._get_current_object()
-        subscription_key = self.subscription_key
-        api_user = self.api_user
-        api_key = self.api_key
-        base_url = self.base_url
-        target_env = self.target_env
-
-        def _poll():
-            from .orchestrator import complete_transaction
-
-            deadline = time.time() + 90  # max 90s in sandbox
-            attempt = 0
-            with app.app_context():
-                while time.time() < deadline:
-                    attempt += 1
-                    time.sleep(3 if attempt == 1 else 5)
-                    try:
-                        token = _get_token(
-                            subscription_key=subscription_key,
-                            api_user=api_user,
-                            api_key=api_key,
-                            base_url=base_url,
-                        )
-                        r = requests.get(
-                            f"{base_url}/collection/v1_0/requesttopay/{reference_id}",
-                            headers={
-                                "Authorization": f"Bearer {token}",
-                                "Ocp-Apim-Subscription-Key": subscription_key,
-                                "X-Target-Environment": target_env,
-                            },
-                            timeout=15,
-                        )
-                        if r.status_code != 200:
-                            continue
-                        data = r.json()
-                        status = (data.get("status") or "").upper()
-                        if status == "SUCCESSFUL":
-                            complete_transaction(
-                                txn_id,
-                                success=True,
-                                rail_reference=reference_id,
-                                reason=None,
-                            )
-                            return
-                        if status == "FAILED":
-                            reason = (data.get("reason") or "failed").lower()
-                            complete_transaction(
-                                txn_id,
-                                success=False,
-                                rail_reference=reference_id,
-                                reason=reason,
-                            )
-                            return
-                        # else PENDING — keep polling
-                    except requests.RequestException as exc:
-                        # transient — try again until deadline
-                        continue
-
-                # Timed out. Mark failed with a clear reason.
-                complete_transaction(
-                    txn_id,
-                    success=False,
-                    rail_reference=reference_id,
-                    reason="timeout_waiting_for_momo",
-                )
-
-        threading.Thread(target=_poll, daemon=True).start()
