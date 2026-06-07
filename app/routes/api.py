@@ -158,6 +158,44 @@ def get_charge(public_id: str):
     )
 
 
+# ---------- refunds ----------
+
+@bp.post("/charges/<public_id>/refund")
+@limiter.limit("10 per minute")
+def refund_charge_route(public_id: str):
+    from ..services.refunds import RefundError, refund_charge
+
+    merchant = _auth()
+    txn = Transaction.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id
+    ).one_or_none()
+    if txn is None:
+        abort(404)
+
+    result = refund_charge(txn=txn, merchant=merchant)
+
+    if not result["ok"]:
+        log_event("refund.rejected", merchant_id=merchant.id,
+                  resource_id=txn.public_id, detail={"reason": result["error"]})
+        return jsonify(error=result["error"]), 400
+
+    payout = result["payout"]
+    log_event("refund.initiated", merchant_id=merchant.id,
+              resource_id=txn.public_id,
+              detail={"payout_id": payout.public_id, "amount": payout.amount})
+    return jsonify(
+        charge_id=txn.public_id,
+        status=txn.status.value,
+        refund=dict(
+            id=payout.public_id,
+            amount=payout.amount,
+            currency=payout.currency,
+            recipient_phone=payout.recipient_phone,
+            status=payout.status.value,
+        ),
+    ), 202
+
+
 # ---------- payouts ----------
 
 @bp.post("/payouts")

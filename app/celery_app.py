@@ -39,6 +39,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.billing.process_due_subscriptions",
                 "schedule": 60.0,          # every 60 seconds
             },
+            "auto-settlement-sweep": {
+                "task": "app.tasks.sweep.auto_settlement_sweep",
+                "schedule": 3600.0,        # every hour
+            },
         },
         # Worker settings
         worker_prefetch_multiplier=1,       # one task at a time per worker slot

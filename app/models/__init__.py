@@ -178,6 +178,8 @@ class Transaction(db.Model):
     failure_reason = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
     completed_at = Column(DateTime, nullable=True)
+    refunded_at = Column(DateTime, nullable=True)
+    refund_payout_id = Column(Integer, ForeignKey("payouts.id"), nullable=True)
 
     merchant = relationship("Merchant", back_populates="transactions")
 
