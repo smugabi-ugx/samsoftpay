@@ -1,11 +1,12 @@
 services:
+  # ── Web (Flask + Gunicorn) ─────────────────────────────────────────────────
   - type: web
     name: samsoftpay
     env: python
     region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile -
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -
     preDeployCommand: python -m flask --app run.py db upgrade
     healthCheckPath: /
     envVars:
@@ -21,17 +22,82 @@ services:
         fromDatabase:
           name: samsoftpay-db
           property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: samsoftpay-redis
+          type: redis
+          property: connectionString
       - key: BASE_URL
         value: https://samsoftpay.onrender.com
-      # Add these manually in the Render dashboard after first deploy:
+      # Set these manually in Render dashboard after first deploy:
       # MOMO_USE_REAL, MOMO_SUBSCRIPTION_KEY, MOMO_API_USER, MOMO_API_KEY
       # MOMO_DISBURSEMENT_SUBSCRIPTION_KEY, MOMO_DISBURSEMENT_API_USER, MOMO_DISBURSEMENT_API_KEY
       # FLUTTERWAVE_SECRET_KEY
       # CHANGENOW_API_KEY, CHANGENOW_RECEIVING_ADDRESS
       # MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD
 
+  # ── Celery Worker (processes tasks from Redis queue) ──────────────────────
+  - type: worker
+    name: samsoftpay-worker
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.celery_app:celery worker --loglevel=info --concurrency=2
+    envVars:
+      - key: RENDER
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: samsoftpay-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: samsoftpay-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: samsoftpay
+          type: web
+          envVarKey: SECRET_KEY
+      - key: WEBHOOK_SIGNING_SECRET
+        fromService:
+          name: samsoftpay
+          type: web
+          envVarKey: WEBHOOK_SIGNING_SECRET
+      # Same MOMO_* vars as web service — set manually in dashboard
+
+  # ── Celery Beat (periodic task scheduler) ─────────────────────────────────
+  - type: worker
+    name: samsoftpay-beat
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.celery_app:celery beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    envVars:
+      - key: RENDER
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: samsoftpay-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: samsoftpay-redis
+          type: redis
+          property: connectionString
+
 databases:
   - name: samsoftpay-db
     databaseName: samsoftpay
     user: samsoftpay
     plan: free
+
+  # ── Redis (Celery broker + result backend) ─────────────────────────────────
+  - name: samsoftpay-redis
+    type: redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: allkeys-lru

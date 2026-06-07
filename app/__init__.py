@@ -92,11 +92,16 @@ def create_app(config: dict | None = None) -> Flask:
         CHANGENOW_API_KEY=os.environ.get("CHANGENOW_API_KEY", ""),
         CHANGENOW_RECEIVING_ADDRESS=os.environ.get("CHANGENOW_RECEIVING_ADDRESS", ""),
         CHANGENOW_RECEIVING_NETWORK=os.environ.get("CHANGENOW_RECEIVING_NETWORK", "bsc"),
+        # ---- Celery / Redis ----
+        REDIS_URL=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
     )
     if config:
         app.config.update(config)
 
     db.init_app(app)
+
+    from .celery_app import init_celery
+    init_celery(app)
 
     from .extensions import limiter, login_manager, migrate
     limiter.init_app(app)
