@@ -389,28 +389,35 @@ def toggle_2fa():
 
 @bp.get("/first-setup")
 def first_setup():
-    """Fix admin account: update email to smugabi@gmail.com and reset password."""
+    """One-time admin bootstrap. Hardened:
+
+    - Requires a SETUP_TOKEN env var, supplied as ?token=... and compared
+      in constant time. If SETUP_TOKEN is unset, the endpoint is disabled.
+    - NEVER resets an existing admin (that was an account-takeover backdoor).
+      It only creates the first admin when none exists, with a random password
+      that is shown once in the response.
+    """
+    import os
+    import hmac as _hmac
     from werkzeug.security import generate_password_hash
     from flask import jsonify
     import secrets as _sec
 
-    admin = Merchant.query.filter_by(role="admin").first()
-    if admin:
-        # Update existing admin to the correct email and reset password
-        old_email = admin.email
-        admin.email         = "smugabi@gmail.com"
-        admin.password_hash = generate_password_hash("SamsoftAdmin2025!")
-        admin.email_verified = True
-        admin.two_fa_enabled = False
-        db.session.commit()
-        return jsonify(ok=True,
-            message=f"Admin updated from {old_email} to smugabi@gmail.com. Log in with SamsoftAdmin2025!")
+    setup_token = os.environ.get("SETUP_TOKEN", "")
+    provided = request.args.get("token", "")
+    if not setup_token or not _hmac.compare_digest(setup_token, provided):
+        abort(404)   # disabled / wrong token — do not reveal existence
 
-    # No admin yet — create one
+    if Merchant.query.filter_by(role="admin").first():
+        # Admin already exists — refuse to touch it. Reset is done via CLI only.
+        return jsonify(ok=False,
+            message="An admin already exists. Use the create-admin / make-admin CLI to manage it."), 409
+
+    one_time_password = _sec.token_urlsafe(16)
     m = Merchant(
         name="Samsoftpay Admin",
-        email="smugabi@gmail.com",
-        password_hash=generate_password_hash("SamsoftAdmin2025!"),
+        email=os.environ.get("ADMIN_EMAIL", "smugabi@gmail.com"),
+        password_hash=generate_password_hash(one_time_password),
         public_key="pk_live_admin_" + _sec.token_urlsafe(16),
         secret_key="sk_live_admin_" + _sec.token_urlsafe(20),
         test_public_key="pk_test_admin_" + _sec.token_urlsafe(16),
@@ -421,7 +428,9 @@ def first_setup():
     )
     db.session.add(m)
     db.session.commit()
-    return jsonify(ok=True, message="Admin created. Log in with smugabi@gmail.com / SamsoftAdmin2025!")
+    return jsonify(ok=True,
+        message="Admin created. Save this password now - it is shown only once.",
+        email=m.email, password=one_time_password)
 
 
 @bp.get("/admin/verify-user/<int:merchant_id>")

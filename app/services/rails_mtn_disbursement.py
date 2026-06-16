@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -159,9 +160,14 @@ class RealMTNMoMoDisbursementAdapter:
                 reason=f"momo_rejected_{resp.status_code}: {resp.text[:200]}",
             )
 
-        from ..tasks.polling import poll_mtn_disbursement
-        poll_mtn_disbursement.apply_async(
-            args=[payout.id, reference_id],
-            countdown=5,
-        )
+        # Already accepted by MTN (202). Don't fail the payout if the broker is
+        # momentarily unreachable — the inbound webhook + beat sweep complete it.
+        try:
+            from ..tasks.polling import poll_mtn_disbursement
+            poll_mtn_disbursement.apply_async(args=[payout.id, reference_id], countdown=5)
+        except Exception as exc:
+            current_app.logger.warning(
+                "could not queue payout poller for payout %s (%s); "
+                "relying on inbound webhook + sweep", payout.id, exc
+            )
         return InitiatePayoutResult(rail_reference=reference_id, accepted=True)

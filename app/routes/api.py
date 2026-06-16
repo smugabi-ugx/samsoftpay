@@ -32,13 +32,28 @@ def _auth() -> Merchant:
         abort(401, description="missing bearer token")
     token = header[len("Bearer "):].strip()
 
-    # Sandbox keys take priority; fall back to live key lookup.
-    merchant = Merchant.query.filter_by(test_secret_key=token).one_or_none()
+    # Look up by SHA-256 hash first (keys are stored hashed so a DB leak can't be
+    # replayed). Fall back to the legacy plaintext columns so keys created before
+    # the hash backfill keep working. Sandbox keys take priority over live.
+    from ..models import hash_api_key
+    token_hash = hash_api_key(token)
+
+    merchant = Merchant.query.filter_by(test_secret_key_hash=token_hash).one_or_none()
     if merchant:
         g.api_mode = "test"
     else:
-        merchant = Merchant.query.filter_by(secret_key=token).one_or_none()
-        g.api_mode = "live"
+        merchant = Merchant.query.filter_by(secret_key_hash=token_hash).one_or_none()
+        if merchant:
+            g.api_mode = "live"
+        else:
+            # Legacy plaintext fallback (pre-backfill).
+            merchant = Merchant.query.filter_by(test_secret_key=token).one_or_none()
+            if merchant:
+                g.api_mode = "test"
+            else:
+                merchant = Merchant.query.filter_by(secret_key=token).one_or_none()
+                if merchant:
+                    g.api_mode = "live"
 
     if merchant is None or not merchant.is_active:
         log_event("auth.failed", detail={"reason": "invalid_key"})
@@ -131,6 +146,7 @@ def create_charge_route():
         "channel": txn.channel.value,
         "reference": txn.merchant_reference,
         "rail_reference": txn.rail_reference,
+        "created_at": txn.created_at.isoformat() if txn.created_at else None,
     }
     idempotency.store(merchant.id, idem_key, request_hash, 201, out)
     log_event("charge.created", merchant_id=merchant.id, resource_id=txn.public_id,
@@ -146,6 +162,7 @@ def get_charge(public_id: str):
         abort(404)
     return jsonify(
         id=txn.public_id,
+        mode="test" if txn.is_test else "live",
         status=txn.status.value,
         amount=txn.amount,
         fee=txn.fee_amount,
@@ -154,6 +171,7 @@ def get_charge(public_id: str):
         reference=txn.merchant_reference,
         rail_reference=txn.rail_reference,
         failure_reason=txn.failure_reason,
+        created_at=txn.created_at.isoformat() if txn.created_at else None,
         completed_at=txn.completed_at.isoformat() if txn.completed_at else None,
     )
 
@@ -246,6 +264,7 @@ def create_payout_route():
 
     out = {
         "id": payout.public_id,
+        "mode": "test" if payout.is_test else "live",
         "status": payout.status.value,
         "amount": payout.amount,
         "fee": payout.fee_amount,
@@ -253,6 +272,7 @@ def create_payout_route():
         "channel": payout.channel.value,
         "recipient_phone": payout.recipient_phone,
         "rail_reference": payout.rail_reference,
+        "created_at": payout.created_at.isoformat() if payout.created_at else None,
     }
     idempotency.store(merchant.id, idem_key, request_hash, 201, out)
     log_event("payout.created", merchant_id=merchant.id, resource_id=payout.public_id,
@@ -269,6 +289,7 @@ def get_payout(public_id: str):
         abort(404)
     return jsonify(
         id=p.public_id,
+        mode="test" if p.is_test else "live",
         status=p.status.value,
         amount=p.amount,
         fee=p.fee_amount,
@@ -277,6 +298,7 @@ def get_payout(public_id: str):
         recipient_phone=p.recipient_phone,
         rail_reference=p.rail_reference,
         failure_reason=p.failure_reason,
+        created_at=p.created_at.isoformat() if p.created_at else None,
         completed_at=p.completed_at.isoformat() if p.completed_at else None,
     )
 

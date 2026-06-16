@@ -55,16 +55,18 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
                 timeout=5,
             )
             wh.last_response_code = resp.status_code
-            wh.last_response_body = resp.text[:1000]
             if 200 <= resp.status_code < 300:
                 wh.status = "sent"
+                wh.last_response_body = None   # success — don't retain merchant's body
                 sent += 1
             else:
                 wh.status = "failed"
+                # Keep only a short snippet for debugging a failing endpoint.
+                wh.last_response_body = (resp.text or "")[:200]
                 wh.next_attempt_at = now + _backoff(wh.attempts)
         except requests.RequestException as exc:
             wh.status = "failed"
-            wh.last_response_body = str(exc)[:1000]
+            wh.last_response_body = str(exc)[:200]
             wh.next_attempt_at = now + _backoff(wh.attempts)
     db.session.commit()
     return sent

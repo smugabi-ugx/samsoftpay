@@ -10,6 +10,7 @@ In mock mode, the timer in rails.py calls complete_transaction directly.
 This route handles real-rail callbacks and also acts as the loopback URL
 for the demo merchant's webhook_url.
 """
+import os
 import hmac
 import hashlib
 
@@ -22,11 +23,26 @@ from ..services.orchestrator import complete_transaction
 bp = Blueprint("inbound", __name__, url_prefix="/inbound")
 
 
+def _is_placeholder_secret(secret: str) -> bool:
+    return (not secret
+            or secret.startswith("whsec_demo")
+            or secret == "whsec_change_me_in_production")
+
+
 def _verify_signature(payload: bytes) -> bool:
-    """Verify X-Samsoftpay-Signature. Skip if no secret configured."""
+    """Verify X-Samsoftpay-Signature (HMAC-SHA256). Fail CLOSED.
+
+    A rail callback marks a transaction succeeded, which moves real money in the
+    ledger. We therefore reject unless a valid signature is present. In production
+    (RENDER set) an unconfigured/placeholder secret is a hard failure — never a skip.
+    """
     secret = current_app.config.get("WEBHOOK_SIGNING_SECRET", "")
-    if not secret or secret == "whsec_change_me_in_production":
-        return True   # dev mode — no secret configured, skip check
+    if _is_placeholder_secret(secret):
+        if os.environ.get("RENDER"):
+            # Should never happen — _assert_production_env blocks boot — but fail closed.
+            return False
+        # Local dev only: allow unsigned callbacks so the mock rail loopback works.
+        return True
     sig = request.headers.get("X-Samsoftpay-Signature", "")
     if not sig:
         return False

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -165,9 +166,15 @@ class RealMTNMoMoAdapter(RailAdapter):
             )
 
         # 202 Accepted — MTN took the request. Queue a persistent Celery poller.
-        from ..tasks.polling import poll_mtn_collection
-        poll_mtn_collection.apply_async(
-            args=[txn.id, reference_id],
-            countdown=5,
-        )
+        # The deposit is already accepted by MTN; the inbound webhook is the primary
+        # completion path and the beat sweep re-polls stragglers. So if the broker is
+        # momentarily unreachable, DO NOT fail the charge — just log and rely on those.
+        try:
+            from ..tasks.polling import poll_mtn_collection
+            poll_mtn_collection.apply_async(args=[txn.id, reference_id], countdown=5)
+        except Exception as exc:  # broker down / Redis blip
+            current_app.logger.warning(
+                "could not queue MoMo poller for txn %s (%s); "
+                "relying on inbound webhook + sweep", txn.id, exc
+            )
         return InitiateResult(rail_reference=reference_id, accepted=True)

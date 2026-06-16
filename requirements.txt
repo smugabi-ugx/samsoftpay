@@ -12,3 +12,4 @@ python-dotenv>=1.0.1
 Werkzeug>=3.0.3
 celery[redis]==5.3.6
 redis>=5.0.1
+sentry-sdk[flask]>=2.0.0

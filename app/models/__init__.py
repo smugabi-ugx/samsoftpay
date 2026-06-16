@@ -22,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from flask_login import UserMixin
+from sqlalchemy import event as _sa_event
 from sqlalchemy.orm import relationship
 
 from ..extensions import db
@@ -98,6 +99,11 @@ class Merchant(UserMixin, db.Model):
     secret_key = Column(String(80), nullable=False, unique=True, index=True)
     test_public_key = Column(String(80), nullable=True, unique=True, index=True)
     test_secret_key = Column(String(80), nullable=True, unique=True, index=True)
+    # SHA-256 of the secret keys, for lookup-by-hash so a DB leak doesn't expose
+    # usable keys. Auto-populated from the plaintext keys by the event listener
+    # below. Plaintext columns are retained for one-time display + transition.
+    secret_key_hash = Column(String(64), nullable=True, unique=True, index=True)
+    test_secret_key_hash = Column(String(64), nullable=True, unique=True, index=True)
     handle = Column(String(40), nullable=True, unique=True, index=True)
     logo_filename = Column(String(255), nullable=True)   # uploaded business logo
     webhook_url = Column(String(500), nullable=True)
@@ -107,6 +113,28 @@ class Merchant(UserMixin, db.Model):
 
     accounts = relationship("Account", back_populates="merchant")
     transactions = relationship("Transaction", back_populates="merchant")
+
+
+def hash_api_key(raw_key: str | None) -> str | None:
+    """SHA-256 of an API key for lookup-by-hash.
+
+    API keys are high-entropy random tokens (token_urlsafe(28) ~= 168 bits), so a
+    single SHA-256 is sufficient — there is nothing to brute-force. This is NOT for
+    passwords (those use werkzeug's salted hash).
+    """
+    if not raw_key:
+        return None
+    import hashlib
+    return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+@_sa_event.listens_for(Merchant, "before_insert")
+@_sa_event.listens_for(Merchant, "before_update")
+def _sync_key_hashes(mapper, connection, target: "Merchant") -> None:
+    """Keep the *_hash columns in lock-step with the plaintext keys, everywhere a
+    Merchant is created or its keys change — no need to edit each creation site."""
+    target.secret_key_hash = hash_api_key(target.secret_key)
+    target.test_secret_key_hash = hash_api_key(target.test_secret_key)
 
 
 # ---------- Ledger ----------
@@ -180,6 +208,10 @@ class Transaction(db.Model):
     completed_at = Column(DateTime, nullable=True)
     refunded_at = Column(DateTime, nullable=True)
     refund_payout_id = Column(Integer, ForeignKey("payouts.id"), nullable=True)
+    # Set when this transaction's funds are swept from merchant_pending to
+    # merchant_available. NULL = not yet settled. Lets the sweep settle each
+    # transaction exactly once, only after its own hold period.
+    settled_at = Column(DateTime, nullable=True, index=True)
 
     merchant = relationship("Merchant", back_populates="transactions")
 

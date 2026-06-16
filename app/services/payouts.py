@@ -78,6 +78,10 @@ def create_payout(
         merchant_id=merchant.id,
         currency=currency,
     )
+    # Lock the balance row FOR UPDATE before reading it. Without this, two
+    # concurrent payouts can both pass the check and overdraft the merchant
+    # (classic double-spend). The lock serialises them until this txn commits.
+    ledger.lock_account_for_update(avail_acct)
     # available is stored as a credit (negative). Convert to positive.
     available_positive = -avail_acct.cached_balance
     if available_positive < amount + fee:

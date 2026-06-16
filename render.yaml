@@ -8,7 +8,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -
     preDeployCommand: python -m flask --app run.py db upgrade
-    healthCheckPath: /
+    healthCheckPath: /healthz
     envVars:
       - key: FLASK_ENV
         value: production
@@ -17,6 +17,10 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: WEBHOOK_SIGNING_SECRET
+        generateValue: true
+      # Gates the one-time /first-setup admin bootstrap. Read its value from the
+      # Render dashboard when you need it: /first-setup?token=<SETUP_TOKEN>
+      - key: SETUP_TOKEN
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
@@ -43,7 +47,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: celery -A app.celery_app:celery worker --loglevel=info --concurrency=2
+    startCommand: celery -A app.celery_worker:celery worker --loglevel=info --concurrency=2
     envVars:
       - key: RENDER
         value: "true"
@@ -75,7 +79,7 @@ services:
     region: oregon
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: celery -A app.celery_app:celery beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    startCommand: celery -A app.celery_worker:celery beat --loglevel=info --scheduler celery.beat:PersistentScheduler
     envVars:
       - key: RENDER
         value: "true"
@@ -88,6 +92,17 @@ services:
           name: samsoftpay-redis
           type: redis
           property: connectionString
+      # Share the web service's secrets so the production boot-guard passes here too.
+      - key: SECRET_KEY
+        fromService:
+          name: samsoftpay
+          type: web
+          envVarKey: SECRET_KEY
+      - key: WEBHOOK_SIGNING_SECRET
+        fromService:
+          name: samsoftpay
+          type: web
+          envVarKey: WEBHOOK_SIGNING_SECRET
 
 databases:
   - name: samsoftpay-db
