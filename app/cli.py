@@ -119,6 +119,29 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"backfilled key hashes for {changed} of {len(merchants)} merchant(s)")
 
+    @app.cli.command("disable-2fa")
+    @click.argument("email", required=False)
+    def disable_2fa(email):
+        """Turn OFF email-OTP 2FA for a merchant (by EMAIL), or for ALL if no email.
+
+        Use this to unlock accounts stuck at the 2FA email screen.
+        """
+        with app.app_context():
+            q = Merchant.query.filter_by(email=email) if email else Merchant.query
+            merchants = q.all()
+            if email and not merchants:
+                print(f"No merchant found with email: {email}")
+                return
+            n = 0
+            for m in merchants:
+                if m.two_fa_enabled:
+                    m.two_fa_enabled = False
+                    m.otp_code = None
+                    m.otp_expires_at = None
+                    n += 1
+            db.session.commit()
+            print(f"disabled 2FA for {n} of {len(merchants)} merchant(s)")
+
     @app.cli.command("reconcile")
     def reconcile():
         """Run ledger reconciliation now and print the result."""

@@ -5,7 +5,7 @@ import secrets
 from urllib.parse import urlparse
 
 from flask import (
-    Blueprint, flash, redirect, render_template,
+    Blueprint, abort, flash, jsonify, redirect, render_template,
     request, session, url_for,
 )
 from flask_login import (
@@ -98,6 +98,7 @@ def signup():
         webhook_url=webhook_url,
         handle=raw_handle if raw_handle else _make_handle(name),
         email_verified=True,   # re-enable when email is working
+        two_fa_enabled=False,  # opt-in later in settings; avoids email-OTP lockout at signup
         otp_code=None,
         otp_expires_at=None,
     )
