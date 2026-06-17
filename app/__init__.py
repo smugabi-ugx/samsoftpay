@@ -239,6 +239,37 @@ def create_app(config: dict | None = None) -> Flask:
             response.headers["X-Request-ID"] = rid
         return response
 
+    # ---- Security headers (defense-in-depth; Cloudflare also fronts the app) ----
+    # CSP is permissive on purpose: the existing templates use inline scripts/styles,
+    # Google Fonts, and CDN libs. It still blocks framing by others, locks form-action
+    # and base-uri to self, and restricts sources. Override via the CONTENT_SECURITY_POLICY
+    # env var (or set CSP_ENABLED=0) if a page ever breaks — no redeploy of code needed.
+    _default_csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+        "style-src 'self' 'unsafe-inline' https:; "
+        "font-src 'self' https: data:; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self' https:; "
+        "frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+    )
+    _csp = os.environ.get("CONTENT_SECURITY_POLICY", _default_csp)
+    _csp_enabled = os.environ.get("CSP_ENABLED", "1") != "0"
+
+    @app.after_request
+    def _security_headers(response):
+        h = response.headers
+        h.setdefault("X-Content-Type-Options", "nosniff")
+        h.setdefault("X-Frame-Options", "SAMEORIGIN")
+        h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        h.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        # HSTS only in production (always HTTPS via Render/Cloudflare); browsers ignore it on HTTP.
+        if os.environ.get("RENDER"):
+            h.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        if _csp_enabled:
+            h.setdefault("Content-Security-Policy", _csp)
+        return response
+
     class _RequestIdFilter(logging.Filter):
         def filter(self, record):
             try:
