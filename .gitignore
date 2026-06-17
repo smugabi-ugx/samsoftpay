@@ -8,3 +8,6 @@ instance/
 .claude/
 TRANSFORMATION_SUMMARY.md
 New folder/
+
+# local production secrets - never commit
+render_secrets.txt

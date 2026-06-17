@@ -1,5 +1,7 @@
 """Flask CLI commands."""
 import secrets
+
+import click
 from flask import Flask
 
 from .extensions import db
@@ -96,6 +98,43 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"Admin created: {email} (id={m.id})")
 
+    @app.cli.command("backfill-key-hashes")
+    def backfill_key_hashes():
+        """Populate secret_key_hash / test_secret_key_hash for existing merchants.
+
+        Safe to run repeatedly. Run once after deploying the hash columns; auth then
+        uses hash lookup and the plaintext fallback can eventually be removed.
+        """
+        from .models import hash_api_key
+        with app.app_context():
+            merchants = Merchant.query.all()
+            changed = 0
+            for m in merchants:
+                new_secret = hash_api_key(m.secret_key)
+                new_test = hash_api_key(m.test_secret_key)
+                if m.secret_key_hash != new_secret or m.test_secret_key_hash != new_test:
+                    m.secret_key_hash = new_secret
+                    m.test_secret_key_hash = new_test
+                    changed += 1
+            db.session.commit()
+            print(f"backfilled key hashes for {changed} of {len(merchants)} merchant(s)")
+
+    @app.cli.command("reconcile")
+    def reconcile():
+        """Run ledger reconciliation now and print the result."""
+        from .tasks.reconciliation import _problems
+        from .services.reconciliation import run_reconciliation
+        with app.app_context():
+            report = run_reconciliation()
+            problems = _problems(report)
+            if problems:
+                print("RECONCILIATION FAILED:")
+                for p in problems:
+                    print(f"  - {p}")
+            else:
+                print("Reconciliation OK — ledger is consistent.")
+            print(f"journal sums: {report['internal']['journal_sum_by_currency']}")
+
     @app.cli.command("bill-subscriptions")
     def bill_subscriptions():
         """Manually trigger billing for all due subscriptions."""
@@ -130,3 +169,50 @@ def register(app: Flask) -> None:
             db.session.add(m)
             db.session.commit()
             print(f"id={m.id} public={m.public_key} secret={m.secret_key}")
+
+    @app.cli.command("create-merchant")
+    @click.argument("name")
+    @click.argument("email")
+    @click.option("--webhook", default=None, help="Webhook URL for transaction events")
+    @click.option("--handle", default=None, help="Unique URL handle (defaults from email)")
+    def create_merchant(name, email, webhook, handle):
+        """Create a production merchant with real random keys.
+
+        Usage:
+            flask create-merchant "TK Vending" billing@tkvending.com \\
+                --webhook https://tkvending.example.com/hooks/samsoftpay
+        """
+        import click as _click
+        with app.app_context():
+            if Merchant.query.filter_by(email=email).first():
+                print(f"A merchant with email {email} already exists. Aborting.")
+                return
+            derived_handle = (handle or email.split("@")[0]).lower()
+            derived_handle = "".join(c for c in derived_handle if c.isalnum() or c == "-")[:40]
+            m = Merchant(
+                name=name,
+                email=email,
+                public_key="pk_live_" + secrets.token_urlsafe(20),
+                secret_key="sk_live_" + secrets.token_urlsafe(28),
+                test_public_key="pk_test_" + secrets.token_urlsafe(20),
+                test_secret_key="sk_test_" + secrets.token_urlsafe(28),
+                handle=derived_handle,
+                webhook_url=webhook,
+                kyc_status="verified",
+                email_verified=True,
+                two_fa_enabled=False,
+            )
+            db.session.add(m)
+            db.session.commit()
+            print("=" * 60)
+            print(f"  Merchant created: {m.name} (id={m.id})")
+            print("=" * 60)
+            print(f"  LIVE public key : {m.public_key}")
+            print(f"  LIVE secret key : {m.secret_key}")
+            print(f"  TEST public key : {m.test_public_key}")
+            print(f"  TEST secret key : {m.test_secret_key}")
+            print(f"  Handle          : {m.handle}")
+            print(f"  Webhook         : {m.webhook_url or '(none)'}")
+            print("=" * 60)
+            print("  Store the secret keys securely. They are shown only once here.")
+            print("=" * 60)

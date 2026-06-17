@@ -34,6 +34,7 @@ import uuid
 from typing import Iterable
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
 from ..models import Account, AccountType, JournalEntry
@@ -46,15 +47,42 @@ class LedgerError(Exception):
 def get_or_create_account(
     *, type: AccountType, merchant_id: int | None = None, currency: str = "UGX"
 ) -> Account:
+    """Race-safe get-or-create.
+
+    Under concurrency two requests can both miss the SELECT and try to INSERT the
+    same (type, merchant_id, currency), which violates the uq_account UNIQUE
+    constraint. We insert inside a SAVEPOINT so a clash rolls back ONLY the insert
+    (not the caller's whole transaction) and then re-read the winning row.
+    """
     acct = (
         Account.query.filter_by(type=type, merchant_id=merchant_id, currency=currency)
         .one_or_none()
     )
-    if acct is None:
-        acct = Account(type=type, merchant_id=merchant_id, currency=currency)
-        db.session.add(acct)
-        db.session.flush()
-    return acct
+    if acct is not None:
+        return acct
+    try:
+        with db.session.begin_nested():
+            acct = Account(type=type, merchant_id=merchant_id, currency=currency)
+            db.session.add(acct)
+            db.session.flush()
+        return acct
+    except IntegrityError:
+        # Another request created it first — use theirs.
+        return Account.query.filter_by(
+            type=type, merchant_id=merchant_id, currency=currency
+        ).one()
+
+
+def lock_account_for_update(account: Account) -> Account:
+    """Take a row-level lock on the account and refresh its cached_balance.
+
+    Issues SELECT ... FOR UPDATE (on PostgreSQL) so concurrent debits of the same
+    balance serialise — this is what prevents double-spend / overdraft. The lock is
+    held until the surrounding transaction commits or rolls back. On SQLite (local
+    dev) FOR UPDATE is a no-op, which is fine since local dev is single-threaded.
+    """
+    db.session.refresh(account, with_for_update=True)
+    return account
 
 
 def post(

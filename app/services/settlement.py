@@ -8,14 +8,9 @@ For the demo we just expose a function that sweeps everything older than N hours
 """
 from datetime import timedelta
 
-from sqlalchemy import and_, func
-
 from ..extensions import db
 from ..models import (
-    Account,
     AccountType,
-    JournalEntry,
-    Merchant,
     Transaction,
     TxnStatus,
     utcnow,
@@ -23,58 +18,93 @@ from ..models import (
 from . import ledger
 
 
-def sweep_to_available(*, hold_hours: int = 24) -> dict:
-    """Move merchant_pending -> merchant_available for transactions that have
-    aged past hold_hours.
+def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
+    """Move merchant_pending -> merchant_available for transactions whose own hold
+    period has elapsed.
+
+    Each transaction is settled exactly once (tracked by Transaction.settled_at), so
+    money is only released after ITS hold — not swept wholesale because some other
+    transaction on the same merchant aged out. Work is committed per merchant so one
+    merchant's failure or a long run never holds a table-wide lock.
 
     Returns {merchant_id: amount_moved}.
     """
     cutoff = utcnow() - timedelta(hours=hold_hours)
-    rows = (
-        db.session.query(
-            Transaction.merchant_id,
-            Transaction.currency,
-            func.sum(Transaction.amount - Transaction.fee_amount),
-        )
+
+    # Collect the distinct merchant/currency pairs that have anything due.
+    pairs = (
+        db.session.query(Transaction.merchant_id, Transaction.currency)
         .filter(
             Transaction.status == TxnStatus.SUCCEEDED,
+            Transaction.settled_at.is_(None),
             Transaction.completed_at <= cutoff,
-            # Only sweep those we haven't swept yet — track via a flag on Transaction
-            # in a real system. For the demo we'll trust that this is run idempotently
-            # by tagging with a memo + checking journal.
         )
-        .group_by(Transaction.merchant_id, Transaction.currency)
+        .distinct()
         .all()
     )
+
     moved = {}
-    for merchant_id, currency, total in rows:
-        if not total:
-            continue
-        total = int(total)
-        # Idempotency guard: if we've already posted a "sweep" memo equal to this total
-        # for this merchant today, skip. (Real systems mark transactions as settled.)
-        pending = ledger.get_or_create_account(
-            type=AccountType.MERCHANT_PENDING, merchant_id=merchant_id, currency=currency
+    for merchant_id, currency in pairs:
+        try:
+            merchant_moved = _settle_one_merchant(
+                merchant_id=merchant_id,
+                currency=currency,
+                cutoff=cutoff,
+                batch_size=batch_size,
+            )
+            if merchant_moved:
+                moved[merchant_id] = merchant_moved
+            db.session.commit()   # commit per merchant — bounded lock scope
+        except Exception:
+            db.session.rollback()
+            # Keep going; one bad merchant must not stall settlement for the rest.
+            from flask import current_app
+            current_app.logger.exception(
+                "settlement sweep failed for merchant %s", merchant_id
+            )
+    return moved
+
+
+def _settle_one_merchant(*, merchant_id, currency, cutoff, batch_size) -> int:
+    """Settle all due transactions for one merchant. Caller commits."""
+    due = (
+        Transaction.query.filter(
+            Transaction.merchant_id == merchant_id,
+            Transaction.currency == currency,
+            Transaction.status == TxnStatus.SUCCEEDED,
+            Transaction.settled_at.is_(None),
+            Transaction.completed_at <= cutoff,
         )
-        available = ledger.get_or_create_account(
-            type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency
-        )
-        # We only sweep what's actually in pending (it could be less if previous sweeps ran).
-        # Cap the sweep at the current pending balance (which is negative because we
-        # credited it earlier). Pending balance is stored as a negative number per our
-        # convention.
-        pending_balance = -pending.cached_balance  # convert to positive "owed to merchant"
-        sweep_amount = min(total, pending_balance)
-        if sweep_amount <= 0:
-            continue
+        .order_by(Transaction.completed_at)
+        .limit(batch_size)
+        .all()
+    )
+    if not due:
+        return 0
+
+    pending = ledger.get_or_create_account(
+        type=AccountType.MERCHANT_PENDING, merchant_id=merchant_id, currency=currency
+    )
+    available = ledger.get_or_create_account(
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency
+    )
+
+    now = utcnow()
+    total = sum(max(0, int(t.amount - (t.fee_amount or 0))) for t in due)
+
+    # Post the money move FIRST. Only if it succeeds do we mark the transactions
+    # settled — so settled_at can never be set without the matching ledger entry.
+    # (pending/available are stored as negative credits, hence +total / -total.)
+    if total > 0:
         ledger.post(
             [
-                (pending, +sweep_amount),
-                (available, -sweep_amount),
+                (pending, +total),
+                (available, -total),
             ],
             currency=currency,
-            memo=f"settlement sweep merchant={merchant_id}",
+            memo=f"settlement sweep merchant={merchant_id} ({len(due)} txns)",
         )
-        moved[merchant_id] = sweep_amount
-    db.session.commit()
-    return moved
+    for txn in due:
+        # net<=0 txns move no money but are still marked so the sweep skips them next time.
+        txn.settled_at = now
+    return total

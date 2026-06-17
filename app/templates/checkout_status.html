@@ -16,6 +16,7 @@
       --ok: #1a7f37;
       --warn: #b88600;
       --fail: #c44536;
+      --accent: #1a1814;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
@@ -34,91 +35,168 @@
       width: 100%;
       background: white;
       border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 3rem 2.25rem;
+      border-radius: 14px;
+      padding: 2.75rem 2.25rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(26,24,20,0.06);
       text-align: center;
     }
+
+    /* ---------- icon stage ---------- */
     .icon {
-      width: 64px;
-      height: 64px;
+      width: 84px;
+      height: 84px;
       margin: 0 auto 1.5rem;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
+      transition: background 0.4s ease;
     }
     .icon.pending { background: #fdf6e3; }
     .icon.ok { background: #e8f3ec; }
     .icon.fail { background: #fdebe8; }
-    .spinner {
-      width: 28px;
-      height: 28px;
-      border: 3px solid var(--warn);
-      border-top-color: transparent;
+
+    /* pulsing ring while we wait for the customer to approve */
+    .icon.pending::before {
+      content: '';
+      position: absolute;
+      inset: 0;
       border-radius: 50%;
-      animation: spin 0.9s linear infinite;
+      border: 2px solid var(--warn);
+      opacity: 0;
+      animation: pulse 1.8s ease-out infinite;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .check {
-      width: 28px;
-      height: 28px;
-      stroke: var(--ok);
-      stroke-width: 3;
-      fill: none;
+    @keyframes pulse {
+      0%   { transform: scale(1);   opacity: 0.55; }
+      100% { transform: scale(1.45); opacity: 0; }
     }
-    .cross {
-      width: 28px;
-      height: 28px;
-      stroke: var(--fail);
-      stroke-width: 3;
-      fill: none;
+
+    /* phone glyph that gently nudges, telling the user to look at their phone */
+    .phone {
+      width: 34px; height: 34px;
+      animation: nudge 1.6s ease-in-out infinite;
     }
+    .phone svg { width: 100%; height: 100%; stroke: var(--warn); fill: none; stroke-width: 1.8; }
+    @keyframes nudge {
+      0%, 100% { transform: translateY(0) rotate(-3deg); }
+      50%      { transform: translateY(-3px) rotate(3deg); }
+    }
+
+    /* animated success check (circle draws, then tick draws, then pops) */
+    .result-svg { width: 52px; height: 52px; }
+    .result-svg circle, .result-svg path, .result-svg line {
+      fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .draw-circle { stroke-dasharray: 166; stroke-dashoffset: 166; animation: draw 0.5s ease forwards; }
+    .draw-check  { stroke-dasharray: 48;  stroke-dashoffset: 48;  animation: draw 0.35s 0.45s ease forwards; }
+    .draw-line1  { stroke-dasharray: 26;  stroke-dashoffset: 26;  animation: draw 0.3s 0.4s ease forwards; }
+    .draw-line2  { stroke-dasharray: 26;  stroke-dashoffset: 26;  animation: draw 0.3s 0.55s ease forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    .pop { animation: pop 0.4s 0.5s cubic-bezier(.34,1.56,.64,1) backwards; }
+    @keyframes pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.08); } 100% { transform: scale(1); } }
+    .shake { animation: shake 0.5s ease; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-7px); }
+      40%,80% { transform: translateX(7px); }
+    }
+
     h1 {
       font-family: 'Fraunces', serif;
       font-weight: 500;
-      font-size: 1.75rem;
+      font-size: 1.6rem;
       letter-spacing: -0.01em;
-      margin: 0 0 0.75rem 0;
+      margin: 0 0 0.6rem 0;
     }
     p { color: var(--muted); margin: 0 0 0.6rem 0; line-height: 1.55; }
+    .hint {
+      display: inline-block;
+      margin-top: 0.25rem;
+      font-size: 0.82rem;
+      color: var(--warn);
+      font-weight: 600;
+    }
+
+    /* ---------- progress stepper ---------- */
+    .steps {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0;
+      margin: 1.75rem 0 0.5rem;
+    }
+    .step { flex: 1; max-width: 110px; text-align: center; position: relative; }
+    .step .dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid var(--line); background: white;
+      margin: 0 auto 0.5rem; display: flex; align-items: center; justify-content: center;
+      transition: all 0.35s ease; position: relative; z-index: 2;
+      font-size: 0.7rem; color: var(--muted);
+    }
+    .step .label { font-size: 0.72rem; color: var(--muted); line-height: 1.3; transition: color 0.35s ease; }
+    .step::before {
+      content: ''; position: absolute; top: 11px; left: -50%; width: 100%;
+      height: 2px; background: var(--line); z-index: 1; transition: background 0.35s ease;
+    }
+    .step:first-child::before { display: none; }
+    .step.done .dot { border-color: var(--ok); background: var(--ok); color: white; }
+    .step.done::before { background: var(--ok); }
+    .step.active .dot { border-color: var(--warn); box-shadow: 0 0 0 4px #fdf6e3; color: var(--warn); }
+    .step.active .label { color: var(--ink); font-weight: 600; }
+    .step.fail .dot { border-color: var(--fail); background: var(--fail); color: white; }
+
     .amount {
       font-family: 'Fraunces', serif;
-      font-size: 2rem;
+      font-size: 1.9rem;
       color: var(--ink);
       font-weight: 500;
-      margin: 1.5rem 0 0.4rem;
+      margin: 1.75rem 0 0.3rem;
     }
     .merchant-name { color: var(--muted); font-size: 0.9rem; }
     .detail {
-      margin-top: 2rem;
-      padding-top: 1.5rem;
+      margin-top: 1.75rem;
+      padding-top: 1.25rem;
       border-top: 1px solid var(--line);
       text-align: left;
       font-size: 0.85rem;
     }
-    .detail-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.35rem 0;
-      color: var(--muted);
-    }
+    .detail-row { display: flex; justify-content: space-between; padding: 0.35rem 0; color: var(--muted); }
     .detail-row span:last-child { color: var(--ink); font-family: monospace; }
+    .btn {
+      display: none; margin-top: 1.5rem; padding: 0.85rem 1.6rem;
+      background: var(--accent); color: white; text-decoration: none;
+      border: none; border-radius: 10px; font-weight: 600; font-size: 0.95rem;
+      cursor: pointer; font-family: inherit; transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); opacity: 0.92; }
     .footer {
-      color: var(--muted);
-      font-size: 0.78rem;
-      margin-top: 1.5rem;
-      letter-spacing: 0.04em;
+      color: var(--muted); font-size: 0.78rem; margin-top: 1.5rem; letter-spacing: 0.04em;
+    }
+    @media (max-width: 420px) {
+      .card { padding: 2.25rem 1.5rem; }
+      .step .label { font-size: 0.66rem; }
     }
   </style>
 </head>
 <body>
   <div class="card" id="card">
     <div class="icon pending" id="icon">
-      <div class="spinner" id="state-icon"></div>
+      <div class="phone" id="state-icon">
+        <svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
+      </div>
     </div>
-    <h1 id="heading">Processing your payment…</h1>
-    <p id="message">Approve the request on your phone if prompted. This usually takes 10–30 seconds.</p>
+
+    <h1 id="heading">Check your phone</h1>
+    <p id="message">We’ve sent a payment request to your phone.</p>
+    <span class="hint" id="hint">Enter your Mobile Money PIN to approve</span>
+
+    <!-- progress stepper -->
+    <div class="steps" id="steps">
+      <div class="step done" id="step1"><div class="dot">✓</div><div class="label">Request sent</div></div>
+      <div class="step active" id="step2"><div class="dot">2</div><div class="label">Approve on phone</div></div>
+      <div class="step" id="step3"><div class="dot">3</div><div class="label">Confirmed</div></div>
+    </div>
 
     <div class="amount">{{ link.currency }} {{ "{:,}".format(link.amount) }}</div>
     <div class="merchant-name">to {{ merchant.name }}</div>
@@ -131,7 +209,8 @@
       {% endif %}
     </div>
 
-    <a id="return-btn" href="#" style="display:none; margin-top:1.5rem; padding:0.8rem 1.5rem; background:#1a1814; color:white; text-decoration:none; border-radius:3px; font-weight:600;">Return</a>
+    <a id="return-btn" class="btn" href="#">Return</a>
+    <button id="retry-btn" class="btn" onclick="window.location.reload()">Try again</button>
     <div id="countdown" style="display:none; margin-top:0.75rem; color:#6b665d; font-size:0.85rem;"></div>
 
     <div class="footer">Secured by <strong>Samsoftpay</strong></div>
@@ -141,49 +220,79 @@
     const statusUrl = "{{ url_for('checkout.status_json', public_id=link.public_id) }}";
     const heading = document.getElementById('heading');
     const message = document.getElementById('message');
+    const hint = document.getElementById('hint');
     const icon = document.getElementById('icon');
     const stateIcon = document.getElementById('state-icon');
+    const step2 = document.getElementById('step2');
+    const step3 = document.getElementById('step3');
+    const retryBtn = document.getElementById('retry-btn');
+
+    const SUCCESS_SVG = `<svg class="result-svg pop" viewBox="0 0 52 52">
+      <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#1a7f37"/>
+      <path class="draw-check" d="M16 27 l7 7 l14 -15" stroke="#1a7f37"/></svg>`;
+    const FAIL_SVG = `<svg class="result-svg pop" viewBox="0 0 52 52">
+      <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#c44536"/>
+      <line class="draw-line1" x1="18" y1="18" x2="34" y2="34" stroke="#c44536"/>
+      <line class="draw-line2" x1="34" y1="18" x2="18" y2="34" stroke="#c44536"/></svg>`;
 
     function setSuccess() {
-      icon.className = 'icon ok';
-      stateIcon.outerHTML = '<svg class="check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
-      heading.textContent = 'Payment successful';
-      message.textContent = 'Your payment has been received.';
-      showReturnButton();
+      // brief "confirming" beat, then the animated checkmark
+      step2.className = 'step done';
+      step3.className = 'step active';
+      heading.textContent = 'Confirming…';
+      message.textContent = 'Payment approved — finalising.';
+      hint.style.display = 'none';
+      setTimeout(() => {
+        icon.className = 'icon ok';
+        stateIcon.outerHTML = SUCCESS_SVG;
+        step3.className = 'step done';
+        step3.querySelector('.dot').textContent = '✓';
+        heading.textContent = 'Payment successful';
+        message.textContent = 'Your payment has been received. Thank you!';
+        showReturnButton();
+      }, 700);
     }
+
     function setFailure(reason) {
       icon.className = 'icon fail';
-      stateIcon.outerHTML = '<svg class="cross" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-      heading.textContent = 'Payment failed';
-      message.textContent = reason ? ('Reason: ' + reason) : 'Please try again.';
+      stateIcon.outerHTML = FAIL_SVG;
+      document.getElementById('card').classList.add('shake');
+      step2.className = 'step fail';
+      step2.querySelector('.dot').textContent = '✕';
+      heading.textContent = 'Payment not completed';
+      message.textContent = reason ? ('Reason: ' + reason) : 'The request was declined or timed out.';
+      hint.style.display = 'none';
+      retryBtn.style.display = 'inline-block';
       {% if link.cancel_url %}
       addReturnLink("{{ link.cancel_url }}", "Return to {{ merchant.name }}");
       {% endif %}
     }
 
+    function setTimeoutState() {
+      // Not terminal yet, but the customer has been waiting a long time.
+      heading.textContent = 'Still waiting…';
+      message.textContent = 'We haven’t received confirmation yet. If you didn’t get a prompt, you can try again.';
+      hint.style.display = 'none';
+      retryBtn.style.display = 'inline-block';
+    }
+
     function showReturnButton() {
       {% if link.success_url %}
       addReturnLink("{{ link.success_url }}", "Continue to {{ merchant.name }}");
-      // Auto-redirect after 5 seconds
       let countdown = 5;
       const cd = document.getElementById('countdown');
       cd.style.display = 'block';
       const tick = setInterval(() => {
         countdown--;
         cd.textContent = `Redirecting in ${countdown}…`;
-        if (countdown <= 0) {
-          clearInterval(tick);
-          window.location.href = "{{ link.success_url }}";
-        }
+        if (countdown <= 0) { clearInterval(tick); window.location.href = "{{ link.success_url }}"; }
       }, 1000);
       {% endif %}
     }
 
     function addReturnLink(url, label) {
       const btn = document.getElementById('return-btn');
-      btn.href = url;
-      btn.textContent = label;
-      btn.style.display = 'inline-block';
+      btn.href = url; btn.textContent = label; btn.style.display = 'inline-block';
     }
 
     // Initial state from server-rendered status
@@ -191,21 +300,20 @@
     if (initial === 'succeeded') setSuccess();
     else if (initial === 'failed') setFailure("{{ txn.failure_reason or '' }}");
 
-    // Poll until terminal
-    let pollTimer = null;
+    // Poll until terminal, with a friendly timeout after ~100s.
+    let pollTimer = null, polls = 0;
+    const MAX_POLLS = 40;   // 40 * 2.5s = 100s
     async function poll() {
+      polls++;
       try {
         const r = await fetch(statusUrl);
-        if (!r.ok) return;
-        const data = await r.json();
-        if (data.status === 'succeeded') {
-          setSuccess();
-          clearInterval(pollTimer);
-        } else if (data.status === 'failed') {
-          setFailure(data.failure_reason);
-          clearInterval(pollTimer);
+        if (r.ok) {
+          const data = await r.json();
+          if (data.status === 'succeeded') { clearInterval(pollTimer); setSuccess(); return; }
+          if (data.status === 'failed')    { clearInterval(pollTimer); setFailure(data.failure_reason); return; }
         }
-      } catch (e) { /* ignore transient errors */ }
+      } catch (e) { /* transient — keep polling */ }
+      if (polls >= MAX_POLLS) { clearInterval(pollTimer); setTimeoutState(); }
     }
     if (initial !== 'succeeded' && initial !== 'failed') {
       pollTimer = setInterval(poll, 2500);

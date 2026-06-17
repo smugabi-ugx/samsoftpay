@@ -2,6 +2,7 @@
 
 Keeping this thin on purpose. All real logic lives in services/.
 """
+import logging
 import os
 import sys
 
@@ -23,8 +24,32 @@ def _fix_db_url(url: str) -> str:
     return url
 
 
+def _init_sentry() -> None:
+    """Initialise Sentry error tracking IF a SENTRY_DSN is configured.
+
+    No-op when SENTRY_DSN is unset (local/dev) or the SDK isn't installed, so this
+    is safe to always call. Captures unhandled exceptions from Flask and Celery.
+    """
+    dsn = os.environ.get("SENTRY_DSN")
+    if not dsn:
+        return
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        from sentry_sdk.integrations.celery import CeleryIntegration
+    except ImportError:
+        return
+    sentry_sdk.init(
+        dsn=dsn,
+        integrations=[FlaskIntegration(), CeleryIntegration()],
+        environment=os.environ.get("SENTRY_ENV", "production" if os.environ.get("RENDER") else "dev"),
+        traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+        send_default_pii=False,   # never ship customer PII to Sentry
+    )
+
+
 def _assert_production_env() -> None:
-    """Fail fast on Render if DATABASE_URL is missing, empty, or still SQLite."""
+    """Fail fast on Render if critical secrets/config are missing or insecure."""
     if not os.environ.get("RENDER"):
         return   # local dev — skip
     db_url = os.environ.get("DATABASE_URL", "")
@@ -35,12 +60,42 @@ def _assert_production_env() -> None:
             "with the Internal Connection String from your PostgreSQL database.\n"
             "If you have not created a database yet: Render dashboard → New + → PostgreSQL."
         )
+    # Real-money safety: refuse to boot in production with default/placeholder secrets.
+    insecure = []
+    secret_key = os.environ.get("SECRET_KEY", "")
+    if not secret_key or secret_key == "dev-only-do-not-use-in-prod":
+        insecure.append("SECRET_KEY")
+    wh_secret = os.environ.get("WEBHOOK_SIGNING_SECRET", "")
+    if not wh_secret or wh_secret.startswith("whsec_demo") or wh_secret == "whsec_change_me_in_production":
+        insecure.append("WEBHOOK_SIGNING_SECRET")
+    if insecure:
+        sys.exit(
+            "FATAL: the following secrets are missing or still set to insecure defaults "
+            f"on Render: {', '.join(insecure)}.\n"
+            "Set strong random values in Render → Environment before going live. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
 
 
 def create_app(config: dict | None = None) -> Flask:
     _assert_production_env()
     app = Flask(__name__, template_folder="templates")
     from datetime import timedelta
+
+    _db_uri = _fix_db_url(os.environ.get("DATABASE_URL", "sqlite:///samsoftpay.db"))
+    # Pool tuning only applies to server databases. SQLite uses a different pool
+    # implementation that does not accept pool_size/max_overflow.
+    if _db_uri.startswith("postgresql"):
+        _engine_options = {
+            "pool_size": int(os.environ.get("DB_POOL_SIZE", "20")),
+            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+            "pool_recycle": 1800,    # recycle connections every 30 min (avoid stale)
+            "pool_pre_ping": True,   # check a connection is alive before using it
+            "pool_timeout": 30,
+        }
+    else:
+        _engine_options = {"pool_pre_ping": True}
+
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-do-not-use-in-prod"),
         # ── Secure session cookies ──────────────────────────────────────────
@@ -50,10 +105,12 @@ def create_app(config: dict | None = None) -> Flask:
         SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # True on Render, False locally
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),  # idle timeout
         SESSION_REFRESH_EACH_REQUEST=True,       # reset 30-min window on activity
-        SQLALCHEMY_DATABASE_URI=_fix_db_url(
-            os.environ.get("DATABASE_URL", "sqlite:///samsoftpay.db")
-        ),
+        SQLALCHEMY_DATABASE_URI=_db_uri,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # Connection pool — the default (5 + 10 overflow) saturates under load and
+        # causes request timeouts. Only valid for server DBs (Postgres); SQLite
+        # rejects these kwargs, so we apply them conditionally below.
+        SQLALCHEMY_ENGINE_OPTIONS=_engine_options,
         WEBHOOK_SIGNING_SECRET=os.environ.get(
             "WEBHOOK_SIGNING_SECRET", "whsec_demo_replace_me"
         ),
@@ -94,9 +151,20 @@ def create_app(config: dict | None = None) -> Flask:
         CHANGENOW_RECEIVING_NETWORK=os.environ.get("CHANGENOW_RECEIVING_NETWORK", "bsc"),
         # ---- Celery / Redis ----
         REDIS_URL=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        # Rate-limit storage: shared Redis in production so limits hold ACROSS
+        # gunicorn workers (in-memory would let each worker keep its own counter,
+        # multiplying the effective limit). Local dev stays in-memory.
+        RATELIMIT_STORAGE_URI=(
+            os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+            if os.environ.get("RENDER")
+            else "memory://"
+        ),
+        RATELIMIT_HEADERS_ENABLED=True,
     )
     if config:
         app.config.update(config)
+
+    _init_sentry()
 
     db.init_app(app)
 
@@ -155,5 +223,59 @@ def create_app(config: dict | None = None) -> Flask:
     def forbidden(e):
         from flask import render_template as _rt
         return _rt("403.html"), 403
+
+    # ---- Request IDs: tag every request so logs can be traced end to end ----
+    import uuid as _uuid
+    from flask import g, request
+
+    @app.before_request
+    def _assign_request_id():
+        g.request_id = request.headers.get("X-Request-ID") or _uuid.uuid4().hex[:16]
+
+    @app.after_request
+    def _echo_request_id(response):
+        rid = g.get("request_id")
+        if rid:
+            response.headers["X-Request-ID"] = rid
+        return response
+
+    class _RequestIdFilter(logging.Filter):
+        def filter(self, record):
+            try:
+                from flask import g as _g, has_request_context
+                record.request_id = _g.get("request_id", "-") if has_request_context() else "-"
+            except Exception:
+                record.request_id = "-"
+            return True
+
+    # Attach the filter + a format that includes the request id, without clobbering
+    # any handler gunicorn/Render already installed.
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter(
+        "%(asctime)s %(levelname)s [req:%(request_id)s] %(name)s: %(message)s"
+    ))
+    _handler.addFilter(_RequestIdFilter())
+    app.logger.addHandler(_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.propagate = False
+
+    # ---- Health checks (for Render + external uptime monitors) ----
+    @app.get("/healthz")
+    def healthz():
+        """Liveness + DB connectivity. Returns 200 only if the database answers."""
+        from flask import jsonify
+        from sqlalchemy import text
+        try:
+            db.session.execute(text("SELECT 1"))
+            return jsonify(status="ok", database="up"), 200
+        except Exception as exc:  # pragma: no cover
+            app.logger.error("healthz DB check failed: %s", exc)
+            return jsonify(status="degraded", database="down"), 503
+
+    @app.get("/livez")
+    def livez():
+        """Pure liveness — process is up. No external dependencies checked."""
+        from flask import jsonify
+        return jsonify(status="ok"), 200
 
     return app
