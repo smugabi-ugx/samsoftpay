@@ -119,6 +119,25 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"backfilled key hashes for {changed} of {len(merchants)} merchant(s)")
 
+    @app.cli.command("delete-merchant")
+    @click.argument("email")
+    def delete_merchant(email):
+        """Delete a merchant that has NO transactions/payouts (e.g. a stray test account)."""
+        from .models import Transaction, Payout, Account
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            if (Transaction.query.filter_by(merchant_id=m.id).first()
+                    or Payout.query.filter_by(merchant_id=m.id).first()):
+                print(f"Refusing: {email} has transactions/payouts. Deactivate it instead.")
+                return
+            Account.query.filter_by(merchant_id=m.id).delete()
+            db.session.delete(m)
+            db.session.commit()
+            print(f"deleted merchant: {email}")
+
     @app.cli.command("verify-merchant")
     @click.argument("email")
     def verify_merchant(email):
