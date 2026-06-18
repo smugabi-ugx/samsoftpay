@@ -119,6 +119,33 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"backfilled key hashes for {changed} of {len(merchants)} merchant(s)")
 
+    @app.cli.command("verify-merchant")
+    @click.argument("email")
+    def verify_merchant(email):
+        """Mark a merchant KYC-verified (enables live keys). e.g. for KarlPOS / TK Vending."""
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            m.kyc_status = "verified"
+            db.session.commit()
+            print(f"verified: {m.name} ({m.email}) — live keys enabled")
+
+    @app.cli.command("set-instant-settlement")
+    @click.argument("email")
+    @click.argument("state", required=False, default="on")
+    def set_instant_settlement(email, state):
+        """Toggle instant settlement (skip the 24h hold) for a merchant. STATE: on|off."""
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            m.instant_settlement = state.lower() in ("on", "true", "1", "yes")
+            db.session.commit()
+            print(f"{m.name} ({m.email}) instant_settlement = {m.instant_settlement}")
+
     @app.cli.command("disable-2fa")
     @click.argument("email", required=False)
     def disable_2fa(email):
