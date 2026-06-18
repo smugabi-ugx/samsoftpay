@@ -112,15 +112,20 @@ def complete_transaction(
     )
 
     if success:
-        # Post the settlement: rail_clearing receives funds, merchant_pending
-        # gets amount-fee, psp_revenue gets fee.
+        # Post the settlement: rail_clearing receives funds, merchant gets
+        # amount-fee, psp_revenue gets fee.
+        merchant = db.session.get(Merchant, txn.merchant_id)
+        instant = bool(getattr(merchant, "instant_settlement", False))
         rail_acct = ledger.get_or_create_account(
             type=AccountType.RAIL_CLEARING,
             merchant_id=None,
             currency=txn.currency,
         )
-        merch_pending = ledger.get_or_create_account(
-            type=AccountType.MERCHANT_PENDING,
+        # Instant-settlement merchants (e.g. our own products like KarlPOS) skip the
+        # 24h hold — funds land directly in MERCHANT_AVAILABLE and are withdrawable now.
+        dest_type = AccountType.MERCHANT_AVAILABLE if instant else AccountType.MERCHANT_PENDING
+        merch_dest = ledger.get_or_create_account(
+            type=dest_type,
             merchant_id=txn.merchant_id,
             currency=txn.currency,
         )
@@ -132,14 +137,18 @@ def complete_transaction(
         ledger.post(
             [
                 (rail_acct, +txn.amount),
-                (merch_pending, -(txn.amount - txn.fee_amount)),
+                (merch_dest, -(txn.amount - txn.fee_amount)),
                 (revenue, -txn.fee_amount),
             ],
             currency=txn.currency,
             transaction_id=txn.id,
-            memo=f"charge {txn.public_id} succeeded",
+            memo=f"charge {txn.public_id} succeeded"
+                 + (" (instant settle)" if instant else ""),
         )
         txn.status = TxnStatus.SUCCEEDED
+        if instant:
+            # Already in available; mark settled so the sweep never re-moves it.
+            txn.settled_at = datetime.now(timezone.utc)
     else:
         txn.status = TxnStatus.FAILED
         txn.failure_reason = reason or "unknown"

@@ -109,6 +109,9 @@ class Merchant(UserMixin, db.Model):
     webhook_url = Column(String(500), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
     is_active = Column(Boolean, default=True, nullable=False)
+    # When True, succeeded charges skip the 24h settlement hold and land directly
+    # in available balance (used for our own products, e.g. KarlPOS).
+    instant_settlement = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     accounts = relationship("Account", back_populates="merchant")
