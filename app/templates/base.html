@@ -145,8 +145,9 @@
       display:none;position:fixed;inset:0;z-index:299;
       background:rgba(15,23,42,.4);backdrop-filter:blur(4px);
       opacity:0;transition:opacity .3s var(--ease);
+      pointer-events:none;   /* when invisible it must NOT eat taps on the page */
     }
-    #sidebar-overlay.visible{opacity:1;}
+    #sidebar-overlay.visible{opacity:1;pointer-events:auto;}
 
     /* Nav sections */
     .sidebar-nav{padding:.75rem 0;flex:1;}
@@ -676,14 +677,11 @@
 
         <div class="nav-section">
           <div class="nav-section-title">Navigate</div>
-          <!-- Logo always goes to landing; Home goes to merchant dashboard if logged in -->
-          <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" onclick="closeSidebar()">
-            <i data-feather="home"></i><span>Home</span>
-          </a>
           {% if current_user.is_authenticated %}
+          <!-- For a logged-in merchant, Home IS the dashboard (like Chipper/Eversend) -->
           <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}"
              class="nav-link {% if request.endpoint == 'dashboard.merchant_detail' %}active{% endif %}" onclick="closeSidebar()">
-            <i data-feather="bar-chart-2"></i><span>My Dashboard</span>
+            <i data-feather="home"></i><span>Home</span>
           </a>
           <a href="{{ url_for('auth.account') }}"
              class="nav-link {% if request.endpoint == 'auth.account' %}active{% endif %}" onclick="closeSidebar()">
@@ -695,6 +693,10 @@
             <i data-feather="link"></i><span>My Payment Page ↗</span>
           </a>
           {% endif %}
+          {% else %}
+          <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="home"></i><span>Home</span>
+          </a>
           {% endif %}
         </div>
 
@@ -790,8 +792,12 @@
       <!-- Page top brand + breadcrumb (fintech-style, no back button) -->
       {% if current_user.is_authenticated %}
       <div class="page-top-brand">
-        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
-        <span>Samsoftpay</span>
+        <!-- Brand = Home: tapping the logo always returns to the dashboard -->
+        <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}"
+           style="display:inline-flex;align-items:center;gap:.45rem;text-decoration:none;color:inherit;" title="Go to dashboard">
+          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+          <span>Samsoftpay</span>
+        </a>
         {% if request.endpoint != 'auth.account' and request.endpoint != 'dashboard.merchant_detail' %}
         <span class="bc-sep">/</span>
         <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="ptb-section"

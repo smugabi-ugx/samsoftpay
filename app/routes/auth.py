@@ -279,7 +279,11 @@ def login():
         return redirect(url_for("auth.verify_2fa_page"))
 
     login_user(merchant, remember=False)   # no persistent cookies by default
-    return redirect(_safe_redirect(request.args.get("next"), url_for("auth.account")))
+    # Land on the dashboard (home), not settings — natural fintech-app flow.
+    return redirect(_safe_redirect(
+        request.args.get("next"),
+        url_for("dashboard.merchant_detail", merchant_id=merchant.id),
+    ))
 
 
 # ---------- 2FA verification ----------
