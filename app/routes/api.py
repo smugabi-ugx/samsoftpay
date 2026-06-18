@@ -303,6 +303,106 @@ def get_payout(public_id: str):
     )
 
 
+# ---------- bulk payouts (CSV or JSON) ----------
+
+def _parse_bulk_items() -> list:
+    """Read payout items from a JSON body {payouts:[...]}, an uploaded CSV file,
+    or a raw text/csv body. CSV columns (header row): phone, amount, name, reference."""
+    ctype = (request.content_type or "")
+    if "application/json" in ctype:
+        body = request.get_json(silent=True) or {}
+        return body.get("payouts") or []
+
+    csv_text = None
+    if request.files:
+        f = next(iter(request.files.values()))
+        csv_text = f.read().decode("utf-8", "ignore")
+    elif "csv" in ctype or "text/plain" in ctype:
+        csv_text = request.get_data(as_text=True)
+
+    if not csv_text:
+        return []
+    import csv as _csv
+    import io as _io
+    items = []
+    for row in _csv.DictReader(_io.StringIO(csv_text)):
+        r = {(k or "").strip().lower(): (v or "").strip() for k, v in row.items()}
+        items.append({
+            "phone": r.get("phone") or r.get("msisdn") or r.get("number"),
+            "amount": r.get("amount"),
+            "name": r.get("name") or None,
+            "reference": r.get("reference") or r.get("ref") or None,
+        })
+    return items
+
+
+@bp.post("/payouts/bulk")
+@limiter.limit("10 per minute;100 per hour")
+def create_bulk_payout():
+    """Create many payouts in one call from a CSV (or JSON array).
+
+    Each item is deduped by its `reference` (idempotency), so re-submitting the
+    same batch never double-pays. Items are independent — one failure (bad row or
+    insufficient balance) does not stop the rest. Returns a per-item result list.
+    """
+    import uuid as _uuid
+    from ..models import Channel
+    from ..services.payouts import PayoutError, create_payout
+
+    _check_timestamp()
+    merchant = _auth()
+
+    items = _parse_bulk_items()
+    if not items:
+        abort(400, description="no payout items provided (JSON {payouts:[...]} or CSV)")
+    if len(items) > 1000:
+        abort(400, description="batch too large (max 1000 items per call)")
+
+    batch_id = "batch_" + _uuid.uuid4().hex[:16]
+    results = []
+    for i, item in enumerate(items):
+        try:
+            amount = int(item["amount"])
+            phone = str(item["phone"]).strip()
+            name = item.get("name")
+            ref = str(item.get("reference") or f"{batch_id}-{i}")
+            channel = Channel(item.get("channel", "mtn_momo"))
+        except (KeyError, ValueError, TypeError) as exc:
+            results.append({"index": i, "ok": False, "error": f"invalid item: {exc}"})
+            continue
+
+        # Per-item idempotency keyed by the caller's reference.
+        idem_key = f"bulkpayout:{ref}"
+        existing = idempotency.find(merchant.id, idem_key)
+        if existing is not None:
+            results.append({"index": i, "ok": True, "reference": ref, **json.loads(existing.response_body)})
+            continue
+
+        try:
+            payout = create_payout(
+                merchant=merchant, amount=amount, currency="UGX",
+                recipient_phone=phone, recipient_name=name, channel=channel,
+            )
+            out = {
+                "id": payout.public_id,
+                "status": payout.status.value,
+                "amount": payout.amount,
+                "recipient_phone": payout.recipient_phone,
+            }
+            idempotency.store(merchant.id, idem_key, idempotency.hash_body(item), 201, out)
+            results.append({"index": i, "ok": True, "reference": ref, **out})
+        except PayoutError as exc:
+            results.append({"index": i, "ok": False, "reference": ref, "error": str(exc)})
+
+    accepted = sum(1 for r in results if r.get("ok"))
+    log_event("payout.bulk", merchant_id=merchant.id, resource_id=batch_id,
+              detail={"total": len(items), "accepted": accepted})
+    return jsonify(
+        batch_id=batch_id, total=len(items), accepted=accepted,
+        failed=len(items) - accepted, results=results,
+    ), 200
+
+
 # ---------- payment links ----------
 
 @bp.post("/payment-links")
