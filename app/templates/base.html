@@ -145,8 +145,9 @@
       display:none;position:fixed;inset:0;z-index:299;
       background:rgba(15,23,42,.4);backdrop-filter:blur(4px);
       opacity:0;transition:opacity .3s var(--ease);
+      pointer-events:none;   /* when invisible it must NOT eat taps on the page */
     }
-    #sidebar-overlay.visible{opacity:1;}
+    #sidebar-overlay.visible{opacity:1;pointer-events:auto;}
 
     /* Nav sections */
     .sidebar-nav{padding:.75rem 0;flex:1;}
