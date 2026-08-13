@@ -85,6 +85,7 @@
       <a href="#charges" class="docs-nav-link">Charges</a>
       <a href="#payouts" class="docs-nav-link">Payouts</a>
       <a href="#payment-links" class="docs-nav-link">Payment Links</a>
+      <a href="#vending" class="docs-nav-link">Vending Machines</a>
     </div>
     <div class="docs-nav-section">
       <div class="docs-nav-title">Webhooks</div>
@@ -334,6 +335,53 @@ print(resp.json())
 )
 data = resp.json()
 print(data["url"])  # Share this link with your customer</code></pre>
+    </div>
+
+    <!-- Vending machines -->
+    <div class="docs-section" id="vending">
+      <h2><i data-feather="grid" style="width:22px;height:22px;color:var(--primary);"></i> Vending Machines</h2>
+      <p>Take Mobile Money on an unattended machine. You create an order, the machine shows the QR we return, the customer scans and pays on their phone — and we tell the machine to release the product the moment the payment succeeds. Your machine software never handles money.</p>
+      <p><strong>Enable it first:</strong> Dashboard → Vending. While it is off, no order can be created and no machine will be told to dispense.</p>
+
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/vending/orders</div>
+      <table class="param-table">
+        <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>machine</code> <span class="required">required</span></td><td>string</td><td>Machine number from your machine operator.</td></tr>
+          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>What the customer pays, in whole UGX.</td></tr>
+          <tr><td><code>goods</code> <span class="required">required</span></td><td>array</td><td>Items to release: <code>spbh</code> (slot/product number), <code>spmc</code> (name), <code>spdj</code> (unit price). Passed to the machine unchanged.</td></tr>
+          <tr><td><code>reference</code> <span class="optional">optional</span></td><td>string</td><td>Your own order id.</td></tr>
+        </tbody>
+      </table>
+
+<pre><code>resp = requests.post(
+    "{{ request.host_url }}v1/vending/orders",
+    headers={
+        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Idempotency-Key": str(uuid.uuid4()),
+        "X-Timestamp": str(int(time.time())),
+        "Content-Type": "application/json",
+    },
+    json={
+        "machine": "XY000123",
+        "amount": 2500,
+        "goods": [{"spbh": "0001", "spmc": "Coca-Cola 500ml", "spdj": 2500}],
+    }
+)
+order = resp.json()
+order["display_url"]  # open this on the machine screen — it shows the QR and
+                      # switches itself to "collect your item" when done
+order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code></pre>
+
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/vending/orders/{order_id}</div>
+      <p>Poll an order if you would rather drive the screen yourself. Returns <code>payment_status</code> (<code>unpaid</code>, <code>pending</code>, <code>succeeded</code>, <code>failed</code>) and <code>vending_status</code> (<code>pending</code>, <code>dispensing</code>, <code>dispensed</code>, <code>failed</code>).</p>
+
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/vending/orders/{order_id}/dispense</div>
+      <p>Retry a dispense that failed — for example the machine was offline when the payment landed. The customer's money is never at risk: a retry only works on an order whose charge actually succeeded, and an order can never dispense twice.</p>
+
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/vending/machines</div>
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/vending/machines/{machine}/goods</div>
+      <p>Your machines, and the live tray contents and prices of one machine — build your on-screen menu from this rather than hard-coding slots.</p>
     </div>
 
     <!-- Webhooks -->

@@ -1,7 +1,7 @@
 """Audit logging — append-only trail of every sensitive action."""
 import json
 
-from flask import request
+from flask import has_request_context, request
 
 from ..extensions import db
 from ..models import AuditLog
@@ -34,6 +34,10 @@ def log_event(
 
 
 def _client_ip() -> str:
+    # Also called from Celery tasks (settlement, polling, auto-dispense) where
+    # there is no request context at all — those entries are still worth writing.
+    if not has_request_context():
+        return "worker"
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()

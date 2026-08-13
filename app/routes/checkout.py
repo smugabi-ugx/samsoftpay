@@ -171,6 +171,13 @@ def checkout_submit(public_id: str):
         _db.session.commit()
         return redirect(url_for("checkout.status_page", public_id=public_id))
 
+    # Vending orders always carry the link id as the reference: it is how a
+    # succeeded charge finds its way back to the machine that must dispense.
+    from ..services.vending import is_vending_order
+    charge_reference = (
+        link.public_id if is_vending_order(link) else (link.reference or link.public_id)
+    )
+
     try:
         txn = create_charge(
             merchant=merchant,
@@ -179,7 +186,7 @@ def checkout_submit(public_id: str):
             channel=channel,
             customer_phone=customer_phone or None,
             customer_email=customer_email,
-            merchant_reference=link.reference or link.public_id,
+            merchant_reference=charge_reference,
         )
     except OrchestratorError as exc:
         return render_template(
@@ -223,6 +230,90 @@ def status_json(public_id: str):
         currency=txn.currency,
         channel=txn.channel.value,
         failure_reason=txn.failure_reason,
+    )
+
+
+# ── QR codes + vending machine display ─────────────────────────────────
+
+def _qr_response(public_id: str, kind: str):
+    """Render the checkout URL for a link as a QR image.
+
+    Public on purpose: it encodes nothing secret, just the same /pay/<id> URL
+    the customer would type. Cached hard — a link's URL never changes.
+    """
+    from flask import Response
+    from ..services.vending import qr_image
+
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None:
+        abort(404)
+    target = url_for("checkout.checkout_page", public_id=public_id, _external=True)
+    data = qr_image(target, kind=kind, scale=10 if kind == "png" else 8)
+    mime = "image/png" if kind == "png" else "image/svg+xml"
+    return Response(data, mimetype=mime,
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@bp.get("/pay/<public_id>/qr.svg")
+def order_qr_svg(public_id: str):
+    return _qr_response(public_id, "svg")
+
+
+@bp.get("/pay/<public_id>/qr.png")
+def order_qr_png(public_id: str):
+    return _qr_response(public_id, "png")
+
+
+@bp.get("/vending/display/<public_id>")
+def vending_display(public_id: str):
+    """Full-screen 'scan to pay' page for the vending machine's own screen.
+
+    The machine opens this URL for the order. It shows the QR, then flips to a
+    paid/dispensing/collect state on its own by polling — so the machine's UI
+    needs no logic beyond opening a browser at this address.
+    """
+    from ..services.vending import is_vending_order, read_meta
+
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or not is_vending_order(link):
+        abort(404)
+    merchant = db.session.get(Merchant, link.merchant_id)
+    return render_template(
+        "vending_display.html",
+        link=link,
+        merchant=merchant,
+        meta=read_meta(link) or {},
+        pay_url=url_for("checkout.checkout_page", public_id=public_id, _external=True),
+    )
+
+
+@bp.get("/vending/display/<public_id>/state.json")
+def vending_display_state(public_id: str):
+    """State feed for the machine screen — payment + dispense in one call.
+
+    Public (no API key): it exposes only this one order's status, which the
+    person standing at the machine can already see. It also nudges a missed
+    dispense, so the screen recovers on its own if the hook was skipped.
+    """
+    from flask import jsonify
+    from ..models import TxnStatus
+    from ..services import vending
+
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or not vending.is_vending_order(link):
+        abort(404)
+
+    if link.vending_status == vending.PENDING and link.transaction_id:
+        txn = db.session.get(Transaction, link.transaction_id)
+        if txn is not None and txn.status == TxnStatus.SUCCEEDED:
+            vending.dispense_for_link(link, txn)
+            db.session.refresh(link)
+
+    state = vending.order_state(link)
+    return jsonify(
+        payment_status=state["payment_status"],
+        vending_status=state["vending_status"],
+        vending_error=state["vending_error"],
     )
 
 

@@ -156,6 +156,13 @@ def complete_transaction(
     txn.completed_at = datetime.now(timezone.utc)
     db.session.commit()
 
+    # Payment -> dispense bridge. Only fires for vending orders, and only after
+    # the money is committed above. It never raises: a supplier outage must not
+    # undo a payment we have already taken and recorded.
+    if success:
+        from .vending import maybe_dispense_on_success
+        maybe_dispense_on_success(txn)
+
     _queue_webhook(txn)
 
 

@@ -93,6 +93,10 @@ def admin_update_merchant(merchant_id: int):
     m.kyc_status = request.form.get("kyc_status", m.kyc_status)
     m.role       = request.form.get("role", m.role)
     m.is_active  = request.form.get("is_active") == "1"
+    # Only touched when the admin form actually submits the field, so existing
+    # forms that don't render it can't silently switch vending off.
+    if "vending_enabled" in request.form:
+        m.vending_enabled = request.form.get("vending_enabled") == "1"
     db.session.commit()
     flash(f"Updated: {m.name}", "success")
     return redirect(url_for("dashboard.list_merchants"))
@@ -284,6 +288,131 @@ def new_link_submit(merchant_id: int):
     db.session.add(link)
     db.session.commit()
     return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant.id))
+
+
+# ---------- Vending machines (XY connector) ----------
+
+@bp.get("/dashboard/<int:merchant_id>/vending")
+@login_required
+@verified_required
+def vending_settings(merchant_id: int):
+    """Merchant-facing switch and order log for the vending connector."""
+    import os
+
+    from ..services.vending import read_meta
+
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+
+    orders = (
+        PaymentLink.query
+        .filter(PaymentLink.merchant_id == merchant_id,
+                PaymentLink.vending_meta.isnot(None))
+        .order_by(PaymentLink.created_at.desc())
+        .limit(25)
+        .all()
+    )
+    # Pair each order with its machine + payment status for the table.
+    rows = []
+    for o in orders:
+        meta = read_meta(o) or {}
+        txn = db.session.get(Transaction, o.transaction_id) if o.transaction_id else None
+        rows.append({
+            "link": o,
+            "machine": meta.get("machine", "—"),
+            "payment_status": txn.status.value if txn else "unpaid",
+        })
+
+    return render_template(
+        "vending_settings.html",
+        merchant=merchant,
+        rows=rows,
+        # Whether the supplier credentials exist at all — never show their values.
+        connector_configured=bool(os.environ.get("XY_KEY") and os.environ.get("XY_SECRET")),
+    )
+
+
+@bp.post("/dashboard/<int:merchant_id>/vending/toggle")
+@login_required
+@verified_required
+def vending_toggle(merchant_id: int):
+    """Turn the vending connector on or off for this merchant."""
+    from flask import flash
+
+    from ..services.audit import log_event
+
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    merchant.vending_enabled = request.form.get("enabled") == "1"
+    db.session.commit()
+    log_event("vending.toggled", merchant_id=merchant.id,
+              detail={"enabled": merchant.vending_enabled})
+    flash(
+        "Vending machine payments enabled." if merchant.vending_enabled
+        else "Vending machine payments turned off.",
+        "success",
+    )
+    return redirect(url_for("dashboard.vending_settings", merchant_id=merchant.id))
+
+
+@bp.post("/dashboard/<int:merchant_id>/vending/test-order")
+@login_required
+@verified_required
+def vending_test_order(merchant_id: int):
+    """Create an order by hand — the demo/QA path for a real machine."""
+    from flask import flash
+
+    from ..services import vending
+
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    try:
+        amount = int(request.form.get("amount", "0"))
+    except ValueError:
+        amount = 0
+    try:
+        link = vending.create_order(
+            merchant=merchant,
+            machine=(request.form.get("machine") or "").strip(),
+            goods=[{
+                "spbh": (request.form.get("spbh") or "").strip(),
+                "spmc": (request.form.get("spmc") or "").strip(),
+                "spdj": amount,
+            }],
+            amount=amount,
+            reference=(request.form.get("reference") or "").strip() or None,
+        )
+    except vending.VendingError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("dashboard.vending_settings", merchant_id=merchant.id))
+
+    return redirect(url_for("checkout.vending_display", public_id=link.public_id))
+
+
+@bp.post("/dashboard/<int:merchant_id>/vending/<public_id>/retry")
+@login_required
+@verified_required
+def vending_retry(merchant_id: int, public_id: str):
+    """Retry a dispense the supplier rejected. Payment guard still applies."""
+    from flask import flash
+
+    from ..services import vending
+
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    link = PaymentLink.query.filter_by(
+        public_id=public_id, merchant_id=merchant_id
+    ).one_or_none() or abort(404)
+    try:
+        ok = vending.retry_dispense(link)
+        flash("Dispensed." if ok else f"Still failing: {link.vending_error}",
+              "success" if ok else "error")
+    except vending.VendingError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("dashboard.vending_settings", merchant_id=merchant_id))
 
 
 # ---------- Payout dashboard routes (single + bulk CSV) ----------

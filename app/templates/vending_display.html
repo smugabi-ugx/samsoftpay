@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scan to pay — {{ merchant.name }}</title>
+<style>
+  /* Standalone page: this renders on the vending machine's own screen, so it
+     deliberately has no site nav, no scrolling and no small tap targets. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #1a0533 60%, #2d1060 100%);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 4vh 4vw;
+  }
+  .card {
+    background: #fff; color: #1a1a2e;
+    border-radius: 28px; padding: 4vh 4vw;
+    width: min(560px, 92vw);
+    box-shadow: 0 24px 70px rgba(0,0,0,.45);
+  }
+  .brand { font-size: 1rem; font-weight: 700; letter-spacing: .04em;
+           text-transform: uppercase; color: #6b21a8; margin-bottom: .5rem; }
+  .amount { font-size: clamp(2.5rem, 9vw, 4rem); font-weight: 900;
+            letter-spacing: -.03em; line-height: 1; margin-bottom: .35rem; }
+  .item { font-size: 1.05rem; color: #555; margin-bottom: 1.5rem; }
+  .qr { background: #fff; border-radius: 16px; padding: 12px;
+        display: inline-block; line-height: 0; }
+  .qr img { width: min(300px, 60vw); height: auto; display: block; }
+  .hint { margin-top: 1.4rem; font-size: 1.15rem; font-weight: 700; }
+  .sub  { margin-top: .35rem; font-size: .95rem; color: #666; }
+  .state { display: none; }
+  .state.on { display: block; }
+  .big { font-size: clamp(1.6rem, 6vw, 2.4rem); font-weight: 900; line-height: 1.15; }
+  .tick {
+    width: 96px; height: 96px; border-radius: 50%; margin: 0 auto 1.25rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem; color: #fff; background: #16a34a;
+  }
+  .tick.wait { background: #6b21a8; }
+  .tick.bad  { background: #dc2626; }
+  .spinner {
+    width: 62px; height: 62px; margin: 0 auto 1.25rem;
+    border: 7px solid #e9d5ff; border-top-color: #6b21a8;
+    border-radius: 50%; animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .err { margin-top: .75rem; font-size: .9rem; color: #dc2626; }
+</style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- 1. Waiting for payment -->
+    <div class="state on" id="s-scan">
+      <div class="brand">{{ merchant.name }}</div>
+      <div class="amount">UGX {{ "{:,}".format(link.amount) }}</div>
+      <div class="item">{{ link.description or 'Vending purchase' }}</div>
+      <div class="qr">
+        <img src="{{ url_for('checkout.order_qr_png', public_id=link.public_id) }}"
+             alt="Scan to pay with Mobile Money">
+      </div>
+      <div class="hint">Scan with your phone to pay</div>
+      <div class="sub">MTN Mobile Money &middot; Airtel Money</div>
+    </div>
+
+    <!-- 2. Paid, machine releasing the product -->
+    <div class="state" id="s-dispensing">
+      <div class="spinner"></div>
+      <div class="big">Payment received</div>
+      <div class="sub">Releasing your item…</div>
+    </div>
+
+    <!-- 3. Done -->
+    <div class="state" id="s-done">
+      <div class="tick">&#10003;</div>
+      <div class="big">Collect your item</div>
+      <div class="sub">Thank you.</div>
+    </div>
+
+    <!-- 4. Paid but the machine did not release -->
+    <div class="state" id="s-failed">
+      <div class="tick bad">!</div>
+      <div class="big">Payment received</div>
+      <div class="sub">The machine could not release your item. You have not lost
+        your money — please contact the operator, quoting order
+        <strong>{{ link.public_id }}</strong>.</div>
+      <div class="err" id="err"></div>
+    </div>
+
+  </div>
+
+<script>
+(function () {
+  var url = "{{ url_for('checkout.vending_display_state', public_id=link.public_id) }}";
+  var states = ['s-scan', 's-dispensing', 's-done', 's-failed'];
+
+  function show(id, err) {
+    states.forEach(function (s) {
+      document.getElementById(s).classList.toggle('on', s === id);
+    });
+    if (err) { document.getElementById('err').textContent = err; }
+  }
+
+  function tick() {
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.vending_status === 'dispensed') { show('s-done'); return; }
+        if (d.vending_status === 'failed') { show('s-failed', d.vending_error || ''); return; }
+        if (d.payment_status === 'succeeded') { show('s-dispensing'); return; }
+        show('s-scan');
+      })
+      .catch(function () { /* keep the current screen on a network blip */ });
+  }
+
+  setInterval(tick, 2500);
+  tick();
+})();
+</script>
+</body>
+</html>
