@@ -303,6 +303,231 @@ def get_payout(public_id: str):
     )
 
 
+# ---------- vending: orders, QR, dispense (XY Vending) ----------
+
+@bp.post("/vending/orders")
+@limiter.limit("60 per minute")
+def create_vending_order():
+    """Create a vending order and get back the QR the machine should display.
+
+    Body:
+      { "machine": "<jqbh>",
+        "amount": 2500,                     (whole UGX — what the customer pays)
+        "goods": [ {"spbh": "0001", "spmc": "Coke", "spdj": 2500} ],
+        "reference": "...",     (optional, your own order id)
+        "pay_account": "...",   (optional fallback payer id for the supplier)
+        "success_url": "https://…" (optional) }
+
+    Returns the checkout URL plus a ready-made QR. The customer scans it, pays
+    with Mobile Money, and the machine dispenses automatically on success — the
+    machine itself never needs to handle the payment.
+    """
+    from flask import url_for
+    from ..services import vending
+
+    _check_timestamp()
+    merchant = _auth()
+    body = request.get_json(silent=True) or {}
+
+    try:
+        amount = int(body["amount"])
+    except (KeyError, ValueError, TypeError):
+        abort(400, description="amount (positive integer) is required")
+
+    try:
+        link = vending.create_order(
+            merchant=merchant,
+            machine=str(body.get("machine") or ""),
+            goods=body.get("goods") or [],
+            amount=amount,
+            currency=str(body.get("currency") or "UGX"),
+            reference=str(body.get("reference") or "")[:120] or None,
+            pay_account=body.get("pay_account"),
+            description=str(body.get("description") or "")[:255] or None,
+            success_url=body.get("success_url"),
+        )
+    except vending.VendingError as exc:
+        abort(400, description=str(exc))
+
+    pay_url = url_for("checkout.checkout_page", public_id=link.public_id, _external=True)
+    log_event("vending.order_created", merchant_id=merchant.id, resource_id=link.public_id,
+              detail={"machine": body.get("machine"), "amount": amount})
+    return jsonify(
+        order_id=link.public_id,
+        amount=link.amount,
+        currency=link.currency,
+        machine=str(body.get("machine")),
+        pay_url=pay_url,
+        qr_content=pay_url,      # encode this string if you draw the QR yourself
+        qr_svg_url=url_for("checkout.order_qr_svg", public_id=link.public_id, _external=True),
+        qr_png_url=url_for("checkout.order_qr_png", public_id=link.public_id, _external=True),
+        display_url=url_for("checkout.vending_display", public_id=link.public_id, _external=True),
+        status_url=url_for("api.get_vending_order", order_id=link.public_id, _external=True),
+        payment_status="unpaid",
+        vending_status=link.vending_status,
+    ), 201
+
+
+@bp.get("/vending/orders/<order_id>")
+def get_vending_order(order_id: str):
+    """Poll an order: is it paid, and has the machine dispensed?
+
+    Also acts as a safety net — if the charge succeeded but the dispense never
+    fired (worker restart, supplier blip), polling retries it once here.
+    """
+    from ..models import PaymentLink, TxnStatus
+    from ..services import vending
+
+    merchant = _auth()
+    link = PaymentLink.query.filter_by(
+        public_id=order_id, merchant_id=merchant.id
+    ).one_or_none()
+    if link is None or not vending.is_vending_order(link):
+        abort(404, description="vending order not found")
+
+    if link.vending_status == vending.PENDING and link.transaction_id:
+        txn = db.session.get(Transaction, link.transaction_id)
+        if txn is not None and txn.status == TxnStatus.SUCCEEDED:
+            vending.dispense_for_link(link, txn)
+            db.session.refresh(link)
+
+    return jsonify(**vending.order_state(link)), 200
+
+
+@bp.post("/vending/orders/<order_id>/dispense")
+@limiter.limit("30 per minute")
+def retry_vending_order(order_id: str):
+    """Retry a dispense that failed. Only works on a SUCCEEDED charge."""
+    from ..models import PaymentLink
+    from ..services import vending
+
+    _check_timestamp()
+    merchant = _auth()
+    link = PaymentLink.query.filter_by(
+        public_id=order_id, merchant_id=merchant.id
+    ).one_or_none()
+    if link is None or not vending.is_vending_order(link):
+        abort(404, description="vending order not found")
+
+    try:
+        ok = vending.retry_dispense(link)
+    except vending.VendingError as exc:
+        abort(400, description=str(exc))
+    db.session.refresh(link)
+    return jsonify(ok=ok, **vending.order_state(link)), 200
+
+
+@bp.get("/vending/machines")
+def list_vending_machines():
+    """Your machines, from our registry. Run a sync first to populate it."""
+    from ..services import vending
+    merchant = _auth()
+    if not getattr(merchant, "vending_enabled", False):
+        abort(403, description="vending is not enabled for this merchant")
+    machines = vending.machines_for(merchant)
+    return jsonify(machines=[vending.machine_dict(m) for m in machines],
+                   count=len(machines)), 200
+
+
+@bp.post("/vending/machines/sync")
+@limiter.limit("10 per minute")
+def sync_vending_machines():
+    """Refresh the registry from the supplier using YOUR XY credentials."""
+    from ..services import vending
+    _check_timestamp()
+    merchant = _auth()
+    if not getattr(merchant, "vending_enabled", False):
+        abort(403, description="vending is not enabled for this merchant")
+    try:
+        added, updated = vending.sync_machines(merchant)
+    except vending.VendingError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+    except Exception as exc:      # supplier unreachable / rejected
+        return jsonify(ok=False, error=str(exc)), 502
+    machines = vending.machines_for(merchant)
+    log_event("vending.machines_synced", merchant_id=merchant.id,
+              detail={"added": added, "updated": updated})
+    return jsonify(ok=True, added=added, updated=updated,
+                   machines=[vending.machine_dict(m) for m in machines]), 200
+
+
+@bp.get("/vending/machines/<machine>/goods")
+def vending_machine_goods(machine: str):
+    """Live tray inventory for one machine — build your menu from this."""
+    from ..services import vending, xy_vending
+    merchant = _auth()
+    if not getattr(merchant, "vending_enabled", False):
+        abort(403, description="vending is not enabled for this merchant")
+    if not vending.owns_machine(merchant, str(machine)):
+        abort(404, description="machine not registered to this merchant")
+    try:
+        return jsonify(xy_vending.query_machine_goods(
+            str(machine), creds=xy_vending.for_merchant(merchant))), 200
+    except xy_vending.XYVendingError as exc:
+        return jsonify(ok=False, error=str(exc)), 502
+
+
+@bp.post("/vending/dispense")
+@limiter.limit("60 per minute")
+def vending_dispense():
+    """Tell an XY Vending machine to dispense after a payment is confirmed.
+
+    Body:
+      { "machine": "<jqbh>",
+        "order_id": "<your order no>",
+        "pay_account": "<payer account>",
+        "goods": [ {"spbh": "0001", "spmc": "Coke", "spdj": 250}, ... ],
+        "charge_id": "txn_..."   (optional — used as the third-party txn id) }
+
+    Requires a confirmed, SUCCEEDED charge id belonging to this merchant: we will
+    NOT dispense unless the charge actually succeeded. This is the payment->dispense
+    guard ("no payment, no dispense").
+    """
+    _check_timestamp()
+    merchant = _auth()
+    from ..services import xy_vending
+
+    body = request.get_json(silent=True) or {}
+    machine = body.get("machine")
+    order_id = body.get("order_id")
+    goods = body.get("goods") or []
+    charge_id = body.get("charge_id")
+    if not machine or not order_id or not goods:
+        abort(400, description="machine, order_id and goods are required")
+
+    # Enforce: only dispense against a real SUCCEEDED charge for THIS merchant.
+    third_party_txn = charge_id or order_id
+    if charge_id:
+        txn = Transaction.query.filter_by(public_id=charge_id, merchant_id=merchant.id).one_or_none()
+        if txn is None:
+            abort(404, description="charge not found")
+        from ..models import TxnStatus
+        if txn.status != TxnStatus.SUCCEEDED:
+            abort(400, description=f"cannot dispense: charge status is {txn.status.value}, not succeeded")
+
+    from ..services import vending as _vending
+    if not _vending.owns_machine(merchant, str(machine)):
+        abort(404, description="machine not registered to this merchant")
+
+    try:
+        resp = xy_vending.apply_export_goods(
+            jqbh=str(machine),
+            order_id=str(order_id),
+            third_party_txn_id=str(third_party_txn),
+            pay_account=str(body.get("pay_account") or merchant.handle or merchant.id),
+            goods=goods,
+            creds=xy_vending.for_merchant(merchant),
+        )
+    except xy_vending.XYVendingError as exc:
+        log_event("vending.dispense_failed", merchant_id=merchant.id,
+                  resource_id=str(order_id), detail={"error": str(exc)})
+        return jsonify(ok=False, error=str(exc)), 502
+
+    log_event("vending.dispensed", merchant_id=merchant.id, resource_id=str(order_id),
+              detail={"machine": machine, "charge_id": charge_id})
+    return jsonify(ok=True, machine=machine, order_id=order_id, supplier_response=resp), 200
+
+
 # ---------- bulk payouts (CSV or JSON) ----------
 
 def _parse_bulk_items() -> list:

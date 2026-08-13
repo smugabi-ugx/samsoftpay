@@ -112,6 +112,18 @@ class Merchant(UserMixin, db.Model):
     # When True, succeeded charges skip the 24h settlement hold and land directly
     # in available balance (used for our own products, e.g. KarlPOS).
     instant_settlement = Column(Boolean, default=False, nullable=False)
+    # When True, this merchant can use the vending (XY) dispense connector:
+    # a succeeded charge for a vending order auto-triggers the machine to dispense.
+    vending_enabled = Column(Boolean, default=False, nullable=False)
+    # The merchant's OWN credentials with the machine supplier (XY Vending issues
+    # a key/secret/merchant-number per operator). Held per merchant, not globally,
+    # so any number of vending operators can run on the platform at once.
+    # The secret is encrypted at rest (see services/secrets_box.py) because the
+    # signing algorithm needs it back in plaintext — it cannot be hashed.
+    xy_key = Column(String(120), nullable=True)
+    xy_secret_encrypted = Column(Text, nullable=True)
+    xy_merchant_no = Column(String(60), nullable=True)   # shbh
+    xy_base_url = Column(String(200), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     accounts = relationship("Account", back_populates="merchant")
@@ -327,10 +339,51 @@ class PaymentLink(db.Model):
     is_active = Column(Boolean, default=True, nullable=False)
     # FK to a transaction once it's been paid — null until then.
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    # For vending orders: JSON {machine, goods:[{spbh,spmc,spdj}], pay_account}.
+    # Set when the order is created; read on payment success to auto-dispense.
+    vending_meta = Column(Text, nullable=True)
+    # Dispense lifecycle for a vending order, kept separate from payment status:
+    # None (not a vending order) | pending | dispensing | dispensed | failed.
+    # "dispensing" is claimed by an atomic compare-and-set so two concurrent rail
+    # callbacks can never dispense the same order twice.
+    vending_status = Column(String(20), nullable=True)
+    vending_error = Column(String(255), nullable=True)
+    vending_dispensed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_link_amount_positive"),
+    )
+
+
+class VendingMachine(db.Model):
+    """One physical vending machine belonging to a merchant.
+
+    An XY operator account (shbh) owns many machines, each identified by a
+    machine number (jqbh). We mirror them here — synced from the supplier's
+    queryMachine — so the operator picks "Kampala Road lobby" instead of
+    memorising 1707600112, and so orders can be validated against machines the
+    merchant actually owns before we ever call the supplier.
+    """
+    __tablename__ = "vending_machines"
+    id = Column(Integer, primary_key=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    jqbh = Column(String(60), nullable=False)             # machine number
+    name = Column(String(160), nullable=True)             # jqmc
+    category = Column(String(40), nullable=True)          # jqlb
+    machine_type = Column(String(40), nullable=True)      # jqlx
+    address = Column(String(255), nullable=True)          # dwmc
+    latitude = Column(String(40), nullable=True)          # dwwd
+    longitude = Column(String(40), nullable=True)         # dwjd
+    image_url = Column(String(500), nullable=True)        # jqtp
+    is_active = Column(Boolean, default=True, nullable=False)
+    last_synced_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        # A machine number is unique per merchant, not globally: two operators
+        # could in principle be given overlapping numbering by the supplier.
+        UniqueConstraint("merchant_id", "jqbh", name="uq_machine_per_merchant"),
     )
 
 

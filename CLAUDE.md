@@ -48,6 +48,14 @@
 10. **NEVER commit secrets.** `.env`, `render_secrets.txt`, `New folder/gh.txt`, `.venv`, `*.db`
     are gitignored. Confirm `git status` before any `git add -A`.
 
+11. **A vending machine dispenses ONLY against a SUCCEEDED charge, ONCE.**
+    `app/services/vending.py` is the single gate. Two guards must stay:
+    (a) every path re-checks `txn.status == SUCCEEDED` — including retries;
+    (b) `_claim()` is an atomic `UPDATE … WHERE vending_status='pending'`, so concurrent rail
+    callbacks/polls can never both dispense. Do NOT replace it with a read-then-write.
+    The supplier call is also wrapped so a machine/supplier outage can never roll back or hide
+    a payment we already took — the order goes `failed` and is retried, the money stays recorded.
+
 ---
 
 ## Who is Sam
@@ -76,8 +84,14 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
   - `$env:MOMO_USE_REAL="0"; .\.venv\Scripts\python.exe tests\test_end_to_end.py`
   - `$env:MOMO_USE_REAL="0"; .\.venv\Scripts\python.exe tests\test_settlement_sweep.py`
   - Both MUST pass (ledger sums to zero; settlement respects per-txn hold).
+  - `tests\test_vending_flow.py` and `tests\test_checkout.py` pin their own env — just run them.
 - `.env` sets `MOMO_USE_REAL=1` (real MTN sandbox). Override to `0` locally for mock/offline tests.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **b2f1a9c4d5e6**.
+  In a test file, SET it to `"0"` — do not `pop()` it. dotenv refills a popped var from `.env`
+  and the test then fires at MTN's sandbox and hangs in `authorized`.
+- Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
+  completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
+  writes into a different, empty database and the completion silently never lands.
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **d7e8f9a0b1c2**.
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -91,6 +105,9 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 SECRET_KEY, WEBHOOK_SIGNING_SECRET (generateValue), SETUP_TOKEN, ADMIN_EMAIL, DATABASE_URL,
 REDIS_URL, BASE_URL=https://api.samsoftpay.com, RENDER=true. Production MTN: MOMO_USE_REAL=1,
 MOMO_BASE_URL (prod), MOMO_CURRENCY=UGX, MOMO_* keys (from MTN onboarding). Optional: SENTRY_DSN.
+Vending (XY connector, only needed for vending merchants): XY_BASE_URL, XY_KEY, XY_SECRET,
+XY_MERCHANT_NO — issued by the machine supplier. Without them payments still work; the machine
+just cannot be told to dispense (orders land in `failed` and are retryable).
 
 ---
 
@@ -106,6 +123,22 @@ b2f1a9c4d5e6 (refund cols + settled_at + key-hash cols + indexes) — applies cl
 
 MTN SIT: re-run against live sandbox = 8/9 (only fail = disbursement balance, a sandbox limitation;
 returns 200 in production). Sheet: C:\Users\DELL\Desktop\tk\MTN_MoMo_SIT_Report.xlsx (annotated).
+
+### Vending (TK Vending / XY machines) — built Aug 13, 2026, NOT yet committed or deployed
+The whole scan-to-pay-to-dispense loop, driven by Samsoftpay:
+- `app/services/xy_vending.py` — supplier cloud client (MD5 sign, queries, `ApplyExportGoods`).
+- `app/services/vending.py` — orders, the dispense gate (see guardrail 11), QR rendering (segno).
+- API: `POST /v1/vending/orders`, `GET /v1/vending/orders/<id>`, `POST …/<id>/dispense` (retry),
+  `GET /v1/vending/machines`, `GET /v1/vending/machines/<m>/goods`, plus the older
+  `POST /v1/vending/dispense` for merchants running their own payment flow.
+- Public: `/pay/<id>/qr.png|.svg`, `/vending/display/<id>` (the machine's own screen — polls
+  `state.json` and flips itself to "collect your item"), all QR-enabled for ANY payment link.
+- Merchant UI: Dashboard → Vending (on/off kill switch, create order, order log, retry).
+- Migration `d7e8f9a0b1c2`; new dep **segno** (pure-Python QR, no Pillow).
+- Tests: `tests/test_vending_flow.py` — 14 checks incl. no-dispense-on-failed-payment,
+  double-dispense guard, supplier-outage recovery, kill switch. All passing.
+NOTE: the customer QR points at our hosted checkout, so the machine never touches money. The
+supplier's `forwardPayCode` model expects the payment provider to own the QR — that provider is us.
 
 ## POST-DEPLOY checklist (after a main deploy)
 1. `flask db current` → expect `b2f1a9c4d5e6`

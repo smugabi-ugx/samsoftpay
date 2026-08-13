@@ -5,10 +5,28 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-os.environ.pop("MOMO_USE_REAL", None)
+# Pin the mock rail. Popping is not enough: .env sets MOMO_USE_REAL=1 and dotenv
+# fills the variable back in, which would send this test at MTN's sandbox.
+os.environ["MOMO_USE_REAL"] = "0"
 os.environ["RAIL_CALLBACK_DELAY_SECONDS"] = "1"
 os.environ["RAIL_SUCCESS_PROBABILITY"] = "1.0"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+# A FILE database, not :memory:. The mock rail completes the charge on a timer
+# thread, and SQLite's in-memory database is per-connection — that thread would
+# write into a different, empty database and the charge would never complete.
+import atexit
+import tempfile
+
+_DB_FD, _DB_PATH = tempfile.mkstemp(suffix=".db", prefix="checkout_test_")
+os.close(_DB_FD)
+os.environ["DATABASE_URL"] = "sqlite:///" + _DB_PATH.replace("\\", "/")
+
+
+@atexit.register
+def _cleanup_db():
+    try:
+        os.unlink(_DB_PATH)
+    except OSError:
+        pass
 
 from app import create_app
 from app.extensions import db
@@ -30,7 +48,9 @@ def main():
     # 1. Merchant creates a payment link
     r = client.post(
         "/v1/payment-links",
-        headers={"Authorization": "Bearer sk", "Content-Type": "application/json"},
+        headers={"Authorization": "Bearer sk", "Content-Type": "application/json",
+                 # POSTs carry the replay guard header
+                 "X-Timestamp": str(int(time.time()))},
         json={"amount": 25000, "description": "Team building T-shirt"},
     )
     assert r.status_code == 201, r.data

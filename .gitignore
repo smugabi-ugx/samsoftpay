@@ -8,6 +8,9 @@ instance/
 .claude/
 TRANSFORMATION_SUMMARY.md
 New folder/
+# Local credential scratch folders — GitHub tokens live here. Never commit.
+karl2/
+**/gh.txt
 
 # local production secrets - never commit
 render_secrets.txt

@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Vending machines — {{ merchant.name }}{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('dashboard.index') }}">Home</a>
+  <span class="bc-sep">/</span>
+  <a href="{{ url_for('dashboard.merchant_detail', merchant_id=merchant.id) }}">{{ merchant.name }}</a>
+  <span class="bc-sep">/</span>
+  <span class="bc-cur">Vending machines</span>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .vend-card {
+    background: #fff; border: 1px solid #e8e8ef; border-radius: 14px;
+    padding: 1.5rem; margin-bottom: 1.25rem;
+  }
+  .vend-head { display:flex; align-items:flex-start; justify-content:space-between;
+               gap:1rem; flex-wrap:wrap; }
+  .vend-title { font-family:'Urbanist',sans-serif; font-size:1.125rem; font-weight:800; }
+  .vend-sub { font-size:.875rem; color:#666; margin-top:.3rem; max-width:56ch; line-height:1.5; }
+  .pill { display:inline-flex; align-items:center; gap:.4rem; padding:.3rem .75rem;
+          border-radius:99px; font-size:.75rem; font-weight:700; }
+  .pill.on   { background:#dcfce7; color:#166534; }
+  .pill.off  { background:#f1f5f9; color:#475569; }
+  .pill.warn { background:#fef3c7; color:#92400e; }
+  .pill.bad  { background:#fee2e2; color:#991b1b; }
+  .vend-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; }
+  .fld label { display:block; font-weight:600; font-size:.8125rem; margin-bottom:.3rem; }
+  .fld input { width:100%; padding:.55rem; border:1px solid #ddd; border-radius:6px; font-size:.95rem; }
+  table.vend { width:100%; border-collapse:collapse; font-size:.875rem; }
+  table.vend th { text-align:left; font-size:.75rem; text-transform:uppercase;
+                  letter-spacing:.05em; color:#888; padding:.5rem .6rem; border-bottom:1px solid #eee; }
+  table.vend td { padding:.6rem; border-bottom:1px solid #f4f4f8; vertical-align:middle; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.8125rem; }
+  .empty { color:#888; font-size:.9rem; padding:1rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom:.35rem;">Vending machines</h1>
+<p style="color:#666; margin-bottom:1.5rem; max-width:64ch;">
+  Let a vending machine take Mobile Money. The machine shows a QR, the customer
+  scans and pays on their phone, and the product is released automatically the
+  moment the payment succeeds — never before.
+</p>
+
+<!-- On/off -->
+<div class="vend-card">
+  <div class="vend-head">
+    <div>
+      <div class="vend-title">Mobile Money on vending machines</div>
+      <div class="vend-sub">
+        When this is off, no machine attached to your account can be told to
+        dispense — even if a payment succeeds. Turn it off to stop a
+        misbehaving machine immediately.
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:.75rem;">
+      {% if merchant.vending_enabled %}
+        <span class="pill on">● Enabled</span>
+      {% else %}
+        <span class="pill off">○ Off</span>
+      {% endif %}
+      <form method="post" action="{{ url_for('dashboard.vending_toggle', merchant_id=merchant.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="enabled" value="{{ '0' if merchant.vending_enabled else '1' }}">
+        <button type="submit" class="btn {{ 'btn-secondary' if merchant.vending_enabled else 'btn-primary' }}"
+                style="padding:.45rem .95rem; font-size:.875rem;">
+          {{ 'Turn off' if merchant.vending_enabled else 'Turn on' }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem; padding-top:1rem; border-top:1px solid #f0f0f5;">
+    {% if using_own_credentials %}
+      <span class="pill on">● Connected with your own operator credentials</span>
+    {% elif connector_configured %}
+      <span class="pill warn">▲ Using the platform's shared operator credentials</span>
+      <span style="font-size:.8125rem; color:#666; margin-left:.5rem;">
+        Add your own below so your machines are yours alone.
+      </span>
+    {% else %}
+      <span class="pill warn">▲ Machine operator not connected</span>
+      <span style="font-size:.8125rem; color:#666; margin-left:.5rem;">
+        Payments will still work; the machine cannot be told to dispense until
+        you add the credentials below.
+      </span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Operator credentials -->
+<div class="vend-card">
+  <div class="vend-title" style="margin-bottom:.35rem;">Machine operator credentials</div>
+  <div class="vend-sub" style="margin-bottom:1rem;">
+    Issued by your vending machine supplier — not by us. One operator account
+    covers all of your machines. Your secret is encrypted and never shown again
+    after saving; leave it blank to keep the current one.
+  </div>
+  <form method="post" action="{{ url_for('dashboard.vending_credentials', merchant_id=merchant.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="vend-grid">
+      <div class="fld">
+        <label>Key</label>
+        <input type="text" name="xy_key" value="{{ merchant.xy_key or '' }}" placeholder="issued by the supplier">
+      </div>
+      <div class="fld">
+        <label>Secret</label>
+        <input type="password" name="xy_secret" autocomplete="new-password"
+               placeholder="{% if merchant.xy_secret_encrypted %}•••••••• (unchanged){% else %}issued by the supplier{% endif %}">
+      </div>
+      <div class="fld">
+        <label>Merchant number (shbh)</label>
+        <input type="text" name="xy_merchant_no" value="{{ merchant.xy_merchant_no or '' }}" placeholder="0023">
+      </div>
+      <div class="fld">
+        <label>Operator API URL</label>
+        <input type="text" name="xy_base_url" value="{{ merchant.xy_base_url or '' }}" placeholder="{{ xy_base_url }}">
+      </div>
+    </div>
+    <div style="margin-top:1rem; display:flex; gap:.75rem; align-items:center; flex-wrap:wrap;">
+      <button type="submit" class="btn btn-primary">Save credentials</button>
+      {% if merchant.xy_secret_encrypted %}
+      <label style="font-size:.8125rem; color:#666;">
+        <input type="checkbox" name="clear_secret" value="1"> remove the stored secret
+      </label>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Machines -->
+<div class="vend-card">
+  <div class="vend-head" style="margin-bottom:.75rem;">
+    <div>
+      <div class="vend-title">Your machines</div>
+      <div class="vend-sub">
+        Pulled from your operator account. One account can hold many machines;
+        each order names the machine that should release the product.
+      </div>
+    </div>
+    <form method="post" action="{{ url_for('dashboard.vending_sync', merchant_id=merchant.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-secondary" style="padding:.45rem .95rem; font-size:.875rem;"
+              {% if not connector_configured %}disabled title="Add credentials first"{% endif %}>
+        Sync machines
+      </button>
+    </form>
+  </div>
+  {% if machines %}
+  <div style="overflow-x:auto;">
+    <table class="vend">
+      <thead><tr><th>Machine</th><th>Name</th><th>Location</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for m in machines %}
+        <tr>
+          <td class="mono">{{ m.jqbh }}</td>
+          <td>{{ m.name or '—' }}</td>
+          <td>{{ m.address or '—' }}</td>
+          <td>
+            {% if m.is_active %}<span class="pill on">active</span>
+            {% else %}<span class="pill off">not listed</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">
+      No machines yet. Add your operator credentials above, then Sync machines.
+      Until you sync, orders can name any machine number.
+    </div>
+  {% endif %}
+</div>
+
+<!-- Create an order -->
+<div class="vend-card">
+  <div class="vend-title" style="margin-bottom:.35rem;">Create an order</div>
+  <div class="vend-sub" style="margin-bottom:1rem;">
+    Produces the scan-to-pay screen for one purchase. Use it to test a machine,
+    or run it from your machine software through the API.
+  </div>
+  <form method="post" action="{{ url_for('dashboard.vending_test_order', merchant_id=merchant.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="vend-grid">
+      <div class="fld">
+        <label>Machine</label>
+        {% if machines %}
+        <select name="machine" required
+                style="width:100%; padding:.55rem; border:1px solid #ddd; border-radius:6px; font-size:.95rem;">
+          {% for m in machines if m.is_active %}
+          <option value="{{ m.jqbh }}">{{ m.name or m.jqbh }}{% if m.address %} — {{ m.address }}{% endif %}</option>
+          {% endfor %}
+        </select>
+        {% else %}
+        <input type="text" name="machine" required placeholder="e.g. 1707600112">
+        {% endif %}
+      </div>
+      <div class="fld">
+        <label>Slot / product no.</label>
+        <input type="text" name="spbh" required placeholder="0001">
+      </div>
+      <div class="fld">
+        <label>Product name</label>
+        <input type="text" name="spmc" placeholder="Coca-Cola 500ml">
+      </div>
+      <div class="fld">
+        <label>Price (UGX)</label>
+        <input type="number" name="amount" required min="1" placeholder="2500">
+      </div>
+    </div>
+    <button type="submit" class="btn btn-primary" style="margin-top:1rem;"
+            {% if not merchant.vending_enabled %}disabled title="Turn vending on first"{% endif %}>
+      Create order &amp; show QR
+    </button>
+  </form>
+</div>
+
+<!-- Order log -->
+<div class="vend-card">
+  <div class="vend-title" style="margin-bottom:.75rem;">Recent vending orders</div>
+  {% if rows %}
+  <div style="overflow-x:auto;">
+    <table class="vend">
+      <thead>
+        <tr>
+          <th>Order</th><th>Machine</th><th>Amount</th>
+          <th>Payment</th><th>Dispense</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="mono">{{ r.link.public_id }}</td>
+          <td>{{ r.machine }}</td>
+          <td>{{ "{:,}".format(r.link.amount) }} {{ r.link.currency }}</td>
+          <td>
+            {% if r.payment_status == 'succeeded' %}<span class="pill on">paid</span>
+            {% elif r.payment_status == 'failed' %}<span class="pill bad">failed</span>
+            {% else %}<span class="pill off">{{ r.payment_status }}</span>{% endif %}
+          </td>
+          <td>
+            {% if r.link.vending_status == 'dispensed' %}<span class="pill on">dispensed</span>
+            {% elif r.link.vending_status == 'failed' %}
+              <span class="pill bad" title="{{ r.link.vending_error }}">failed</span>
+            {% elif r.link.vending_status == 'dispensing' %}<span class="pill warn">dispensing</span>
+            {% else %}<span class="pill off">waiting</span>{% endif %}
+          </td>
+          <td style="text-align:right; white-space:nowrap;">
+            <a href="{{ url_for('checkout.vending_display', public_id=r.link.public_id) }}"
+               target="_blank" class="btn btn-secondary"
+               style="padding:.3rem .7rem; font-size:.8125rem;">QR</a>
+            {% if r.link.vending_status == 'failed' and r.payment_status == 'succeeded' %}
+            <form method="post" style="display:inline;"
+                  action="{{ url_for('dashboard.vending_retry', merchant_id=merchant.id, public_id=r.link.public_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary"
+                      style="padding:.3rem .7rem; font-size:.8125rem;">Retry</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="empty">No vending orders yet.</div>
+  {% endif %}
+</div>
+{% endblock %}
