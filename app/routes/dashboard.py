@@ -324,13 +324,78 @@ def vending_settings(merchant_id: int):
             "payment_status": txn.status.value if txn else "unpaid",
         })
 
+    from ..services import vending as _vending
+    from ..services import xy_vending
+
+    creds = xy_vending.for_merchant(merchant)
+    machines = _vending.machines_for(merchant)
+
     return render_template(
         "vending_settings.html",
         merchant=merchant,
         rows=rows,
-        # Whether the supplier credentials exist at all — never show their values.
-        connector_configured=bool(os.environ.get("XY_KEY") and os.environ.get("XY_SECRET")),
+        machines=machines,
+        # Never render the secret itself — only whether one exists, and where
+        # it came from, so the merchant can tell their own key from ours.
+        connector_configured=creds.configured,
+        using_own_credentials=bool(merchant.xy_key and merchant.xy_secret_encrypted),
+        platform_fallback=bool(os.environ.get("XY_KEY") and os.environ.get("XY_SECRET")),
+        xy_base_url=creds.base(),
     )
+
+
+@bp.post("/dashboard/<int:merchant_id>/vending/credentials")
+@login_required
+@verified_required
+def vending_credentials(merchant_id: int):
+    """Save the merchant's OWN supplier credentials (key/secret/shbh)."""
+    from flask import flash
+
+    from ..services.audit import log_event
+    from ..services.secrets_box import encrypt
+
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+
+    merchant.xy_key = (request.form.get("xy_key") or "").strip()[:120] or None
+    merchant.xy_merchant_no = (request.form.get("xy_merchant_no") or "").strip()[:60] or None
+    merchant.xy_base_url = (request.form.get("xy_base_url") or "").strip()[:200] or None
+    # Blank secret = leave the stored one alone (the form never echoes it back).
+    secret = (request.form.get("xy_secret") or "").strip()
+    if secret:
+        merchant.xy_secret_encrypted = encrypt(secret)
+    if request.form.get("clear_secret") == "1":
+        merchant.xy_secret_encrypted = None
+
+    db.session.commit()
+    log_event("vending.credentials_updated", merchant_id=merchant.id,
+              detail={"has_key": bool(merchant.xy_key),
+                      "has_secret": bool(merchant.xy_secret_encrypted)})
+    flash("Machine operator credentials saved.", "success")
+    return redirect(url_for("dashboard.vending_settings", merchant_id=merchant.id))
+
+
+@bp.post("/dashboard/<int:merchant_id>/vending/sync")
+@login_required
+@verified_required
+def vending_sync(merchant_id: int):
+    """Pull the merchant's machine list from the supplier."""
+    from flask import flash
+
+    from ..services import vending
+
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    try:
+        added, updated = vending.sync_machines(merchant)
+        flash(f"Machines synced: {added} new, {updated} updated.", "success")
+    except vending.VendingError as exc:
+        flash(str(exc), "error")
+    except Exception as exc:
+        flash(f"Could not reach the machine operator's system: {exc}", "error")
+    return redirect(url_for("dashboard.vending_settings", merchant_id=merchant.id))
 
 
 @bp.post("/dashboard/<int:merchant_id>/vending/toggle")

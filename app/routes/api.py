@@ -419,26 +419,50 @@ def retry_vending_order(order_id: str):
 
 @bp.get("/vending/machines")
 def list_vending_machines():
-    """The merchant's machines, straight from the supplier's cloud."""
-    from ..services import xy_vending
+    """Your machines, from our registry. Run a sync first to populate it."""
+    from ..services import vending
+    merchant = _auth()
+    if not getattr(merchant, "vending_enabled", False):
+        abort(403, description="vending is not enabled for this merchant")
+    machines = vending.machines_for(merchant)
+    return jsonify(machines=[vending.machine_dict(m) for m in machines],
+                   count=len(machines)), 200
+
+
+@bp.post("/vending/machines/sync")
+@limiter.limit("10 per minute")
+def sync_vending_machines():
+    """Refresh the registry from the supplier using YOUR XY credentials."""
+    from ..services import vending
+    _check_timestamp()
     merchant = _auth()
     if not getattr(merchant, "vending_enabled", False):
         abort(403, description="vending is not enabled for this merchant")
     try:
-        return jsonify(xy_vending.query_machines()), 200
-    except xy_vending.XYVendingError as exc:
+        added, updated = vending.sync_machines(merchant)
+    except vending.VendingError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+    except Exception as exc:      # supplier unreachable / rejected
         return jsonify(ok=False, error=str(exc)), 502
+    machines = vending.machines_for(merchant)
+    log_event("vending.machines_synced", merchant_id=merchant.id,
+              detail={"added": added, "updated": updated})
+    return jsonify(ok=True, added=added, updated=updated,
+                   machines=[vending.machine_dict(m) for m in machines]), 200
 
 
 @bp.get("/vending/machines/<machine>/goods")
 def vending_machine_goods(machine: str):
     """Live tray inventory for one machine — build your menu from this."""
-    from ..services import xy_vending
+    from ..services import vending, xy_vending
     merchant = _auth()
     if not getattr(merchant, "vending_enabled", False):
         abort(403, description="vending is not enabled for this merchant")
+    if not vending.owns_machine(merchant, str(machine)):
+        abort(404, description="machine not registered to this merchant")
     try:
-        return jsonify(xy_vending.query_machine_goods(str(machine))), 200
+        return jsonify(xy_vending.query_machine_goods(
+            str(machine), creds=xy_vending.for_merchant(merchant))), 200
     except xy_vending.XYVendingError as exc:
         return jsonify(ok=False, error=str(exc)), 502
 
@@ -481,6 +505,10 @@ def vending_dispense():
         if txn.status != TxnStatus.SUCCEEDED:
             abort(400, description=f"cannot dispense: charge status is {txn.status.value}, not succeeded")
 
+    from ..services import vending as _vending
+    if not _vending.owns_machine(merchant, str(machine)):
+        abort(404, description="machine not registered to this merchant")
+
     try:
         resp = xy_vending.apply_export_goods(
             jqbh=str(machine),
@@ -488,6 +516,7 @@ def vending_dispense():
             third_party_txn_id=str(third_party_txn),
             pay_account=str(body.get("pay_account") or merchant.handle or merchant.id),
             goods=goods,
+            creds=xy_vending.for_merchant(merchant),
         )
     except xy_vending.XYVendingError as exc:
         log_event("vending.dispense_failed", merchant_id=merchant.id,

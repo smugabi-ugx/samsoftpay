@@ -68,6 +68,32 @@ xy_vending.apply_export_goods = fake_apply_export_goods
 vending.xy_vending.apply_export_goods = fake_apply_export_goods
 
 
+# Machine list the fake supplier returns, keyed by the operator key that asked.
+MACHINE_DIRECTORY = {
+    "tk-key": [
+        {"jqbh": "XY000123", "jqmc": "Kampala Road lobby", "jqlb": "1",
+         "dwmc": "Kampala Road", "dwjd": "32.58", "dwwd": "0.31"},
+        {"jqbh": "XY000124", "jqmc": "Garden City", "jqlb": "1",
+         "dwmc": "Yusuf Lule Rd", "dwjd": "32.59", "dwwd": "0.33"},
+    ],
+    "other-key": [
+        {"jqbh": "ZZ999", "jqmc": "Someone else's machine", "jqlb": "1"},
+    ],
+}
+
+
+def fake_query_machines(shbh=None, *, creds=None):
+    """Mimics the supplier: the machines you get depend on WHOSE key asked."""
+    if creds is None or not creds.configured:
+        raise xy_vending.XYVendingError("XY connector not configured")
+    return {"code": "1", "message": "ok",
+            "data": MACHINE_DIRECTORY.get(creds.key, [])}
+
+
+xy_vending.query_machines = fake_query_machines
+vending.xy_vending.query_machines = fake_query_machines
+
+
 def wait_for(fn, timeout=12.0, interval=0.25):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -297,6 +323,81 @@ def main():
         m.vending_enabled = True
         db.session.commit()
     print("[14] Kill switch honoured: payment taken, no dispense")
+
+    # 15. Per-merchant credentials: stored encrypted, never plaintext
+    from app.services.secrets_box import decrypt, encrypt
+    with app.app_context():
+        m = Merchant.query.filter_by(email="tk@x.com").one()
+        m.xy_key = "tk-key"
+        m.xy_secret_encrypted = encrypt("tk-secret-value")
+        m.xy_merchant_no = "0023"
+        db.session.commit()
+        assert m.xy_secret_encrypted != "tk-secret-value", "secret stored in plaintext!"
+        assert "tk-secret" not in m.xy_secret_encrypted, "secret leaks into the ciphertext"
+        assert decrypt(m.xy_secret_encrypted) == "tk-secret-value", "round-trip failed"
+        creds = xy_vending.for_merchant(m)
+        assert creds.key == "tk-key" and creds.secret == "tk-secret-value"
+    print("[15] XY secret encrypted at rest, decrypts for signing")
+
+    # 16. Sync machines — the operator's own list
+    with app.app_context():
+        m = Merchant.query.filter_by(email="tk@x.com").one()
+        added, updated = vending.sync_machines(m)
+        assert added == 2 and updated == 0, (added, updated)
+        names = sorted(x.jqbh for x in vending.machines_for(m))
+        assert names == ["XY000123", "XY000124"], names
+        # Re-syncing updates rather than duplicating
+        added2, updated2 = vending.sync_machines(m)
+        assert added2 == 0 and updated2 == 2, (added2, updated2)
+    print("[16] Machine registry synced: 2 machines, re-sync does not duplicate")
+
+    # 17. Two operators are isolated — different credentials, different machines
+    with app.app_context():
+        other = Merchant(
+            name="Other Vending Co", email="other@x.com",
+            public_key="pk_o", secret_key="sk_o", kyc_status="verified",
+            vending_enabled=True, xy_key="other-key",
+            xy_secret_encrypted=encrypt("other-secret"), xy_merchant_no="0099")
+        db.session.add(other); db.session.commit()
+        vending.sync_machines(other)
+        mine = {x.jqbh for x in vending.machines_for(
+            Merchant.query.filter_by(email="tk@x.com").one())}
+        theirs = {x.jqbh for x in vending.machines_for(other)}
+        assert mine == {"XY000123", "XY000124"}, mine
+        assert theirs == {"ZZ999"}, theirs
+        assert not mine & theirs, "operators can see each other's machines"
+
+        # And one operator cannot address the other's machine
+        try:
+            vending.create_order(merchant=other, machine="XY000123", amount=1000,
+                                 goods=[{"spbh": "0001", "spmc": "X", "spdj": 1000}])
+            raise AssertionError("cross-operator dispense was allowed")
+        except vending.VendingError as exc:
+            assert "not registered" in str(exc), exc
+    print("[17] Operators isolated: own machines only, no cross-addressing")
+
+    # 18. A dispense uses the OWNING merchant's credentials, not a global one
+    before = len(CALLS)
+    with app.app_context():
+        m = Merchant.query.filter_by(email="tk@x.com").one()
+        order = vending.create_order(
+            merchant=m, machine="XY000124", amount=1200,
+            goods=[{"spbh": "0004", "spmc": "Juice", "spdj": 1200}])
+        oid = order.public_id
+    client.post(f"/pay/{oid}/submit", data={"channel": "mtn_momo", "phone": "256780000004"})
+
+    def routed():
+        with app.app_context():
+            link = PaymentLink.query.filter_by(public_id=oid).one()
+            return link.vending_status == vending.DISPENSED
+
+    assert wait_for(routed), "order on the second machine never dispensed"
+    call = CALLS[-1]
+    assert len(CALLS) == before + 1
+    assert call["jqbh"] == "XY000124", call["jqbh"]
+    assert call["creds"].key == "tk-key", "dispense used the wrong operator's key"
+    assert call["creds"].secret == "tk-secret-value"
+    print("[18] Dispense routed to the right machine with the owner's credentials")
 
     print("\nALL VENDING FLOW TESTS PASSED")
 

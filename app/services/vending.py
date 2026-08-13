@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from flask import current_app
 
 from ..extensions import db
-from ..models import Merchant, PaymentLink, Transaction, TxnStatus
+from ..models import Merchant, PaymentLink, Transaction, TxnStatus, VendingMachine
 from . import xy_vending
 
 # vending_status lifecycle
@@ -82,6 +82,94 @@ def is_vending_order(link: PaymentLink) -> bool:
     return read_meta(link) is not None
 
 
+# ---------- machines ----------
+
+def machines_for(merchant: Merchant) -> list[VendingMachine]:
+    return (VendingMachine.query
+            .filter_by(merchant_id=merchant.id)
+            .order_by(VendingMachine.name, VendingMachine.jqbh)
+            .all())
+
+
+def owns_machine(merchant: Merchant, jqbh: str) -> bool:
+    """True if the merchant may address this machine.
+
+    A merchant who has never synced has no registry, and we do not want to lock
+    them out of a working integration — so an empty registry permits anything.
+    Once they have synced, the registry is authoritative.
+    """
+    if VendingMachine.query.filter_by(merchant_id=merchant.id).first() is None:
+        return True
+    return VendingMachine.query.filter_by(
+        merchant_id=merchant.id, jqbh=str(jqbh)
+    ).first() is not None
+
+
+def sync_machines(merchant: Merchant) -> tuple[int, int]:
+    """Pull this merchant's machines from the supplier into our registry.
+
+    Returns (added, updated). Machines that vanish upstream are marked inactive
+    rather than deleted, so historical orders still resolve to something.
+    """
+    creds = xy_vending.for_merchant(merchant)
+    if not creds.configured:
+        raise VendingError("no XY credentials configured for this merchant")
+
+    resp = xy_vending.query_machines(creds=creds)
+    if str(resp.get("code")) != "1":
+        raise VendingError(f"supplier rejected the machine query: {resp.get('message') or resp}")
+
+    data = resp.get("data") or []
+    if isinstance(data, dict):        # the doc's example returns a bare object
+        data = [data]
+
+    now = datetime.now(timezone.utc)
+    seen, added, updated = set(), 0, 0
+    for m in data:
+        jqbh = str(m.get("jqbh") or "").strip()
+        if not jqbh:
+            continue
+        seen.add(jqbh)
+        row = VendingMachine.query.filter_by(merchant_id=merchant.id, jqbh=jqbh).one_or_none()
+        if row is None:
+            row = VendingMachine(merchant_id=merchant.id, jqbh=jqbh)
+            db.session.add(row)
+            added += 1
+        else:
+            updated += 1
+        row.name = str(m.get("jqmc") or "").strip()[:160] or None
+        row.category = str(m.get("jqlb") or "").strip()[:40] or None
+        row.machine_type = str(m.get("jqlx") or "").strip()[:40] or None
+        row.address = str(m.get("dwmc") or "").strip()[:255] or None
+        row.latitude = str(m.get("dwwd") or "").strip()[:40] or None
+        row.longitude = str(m.get("dwjd") or "").strip()[:40] or None
+        row.image_url = str(m.get("jqtp") or "").strip()[:500] or None
+        row.is_active = True
+        row.last_synced_at = now
+
+    # Anything we knew about that the supplier no longer lists.
+    for row in VendingMachine.query.filter_by(merchant_id=merchant.id).all():
+        if row.jqbh not in seen:
+            row.is_active = False
+
+    db.session.commit()
+    return added, updated
+
+
+def machine_dict(m: VendingMachine) -> dict:
+    return {
+        "machine": m.jqbh,
+        "name": m.name,
+        "address": m.address,
+        "category": m.category,
+        "type": m.machine_type,
+        "latitude": m.latitude,
+        "longitude": m.longitude,
+        "active": m.is_active,
+        "last_synced_at": m.last_synced_at.isoformat() if m.last_synced_at else None,
+    }
+
+
 # ---------- order creation ----------
 
 def create_order(*, merchant: Merchant, machine: str, goods: list[dict],
@@ -97,6 +185,12 @@ def create_order(*, merchant: Merchant, machine: str, goods: list[dict],
         raise VendingError("machine is required")
     if not isinstance(amount, int) or amount <= 0:
         raise VendingError("amount must be a positive integer")
+    # If the merchant has synced their machines, the order must name one of
+    # theirs. Catches a typo'd machine number before a customer pays for a
+    # dispense that can never happen, and stops one operator addressing
+    # another's machine. Merchants who have not synced are not blocked.
+    if not owns_machine(merchant, machine):
+        raise VendingError(f"machine {machine} is not registered to this merchant")
 
     meta = build_meta(machine=machine, goods=goods, pay_account=pay_account)
     names = ", ".join(g.get("spmc") or g.get("spbh") for g in json.loads(meta)["goods"])
@@ -168,6 +262,9 @@ def dispense_for_link(link: PaymentLink, txn: Transaction) -> bool:
     # The payer account the supplier records: prefer whoever actually paid.
     pay_account = (txn.customer_phone or meta.get("pay_account")
                    or f"merchant-{txn.merchant_id}")
+    # Always the OWNING merchant's own supplier credentials — never a global
+    # account. This is what keeps two operators on the platform isolated.
+    merchant = db.session.get(Merchant, txn.merchant_id)
     try:
         xy_vending.apply_export_goods(
             jqbh=str(meta["machine"]),
@@ -175,6 +272,7 @@ def dispense_for_link(link: PaymentLink, txn: Transaction) -> bool:
             third_party_txn_id=txn.public_id,
             pay_account=str(pay_account),
             goods=meta["goods"],
+            creds=xy_vending.for_merchant(merchant),
         )
     except Exception as exc:  # supplier down, rejected, non-JSON, anything
         _finish(link_id, ok=False, error=str(exc))
