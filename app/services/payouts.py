@@ -70,6 +70,12 @@ def create_payout(
     if not merchant.is_active:
         raise PayoutError("merchant is not active")
 
+    # Resolve the rail BEFORE any money moves. This used to happen after the
+    # earmark was staged, so an unsupported channel (e.g. airtel_money) returned
+    # a 400 while the merchant had already been debited amount+fee, with the
+    # amount stranded in suspense and the payout stuck PENDING forever.
+    adapter = _get_disbursement_adapter(channel)
+
     fee = calculate_payout_fee(currency=currency)
 
     # Check the merchant has enough available balance (amount + fee).
@@ -126,9 +132,19 @@ def create_payout(
         memo=f"payout {payout.public_id} earmarked (fee {fee})",
     )
 
-    # Pick a disbursement adapter and initiate.
-    adapter = _get_disbursement_adapter(channel)
-    result = adapter.initiate(payout)
+    # From here the merchant is already debited, so NOTHING may escape without
+    # either committing a coherent state or undoing the earmark. `initiate` talks
+    # to a real rail over the network: a timeout or an unexpected error must not
+    # leave money in suspense against a payout that never left.
+    try:
+        result = adapter.initiate(payout)
+    except PayoutError:
+        db.session.rollback()
+        raise
+    except Exception as exc:
+        db.session.rollback()
+        raise PayoutError(f"disbursement rail unavailable: {exc}") from exc
+
     if not result.accepted:
         # Reverse the earmark; payout never left.
         ledger.post(

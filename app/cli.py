@@ -165,6 +165,87 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"{m.name} ({m.email}) instant_settlement = {m.instant_settlement}")
 
+    @app.cli.command("stranded-payouts")
+    def stranded_payouts():
+        """List payouts that took the merchant's money but never reached a rail.
+
+        Until the guard in services/payouts.py landed, a payout on an unsupported
+        channel (or one where the rail call raised) was rejected AFTER the ledger
+        earmark had been staged — and the caller's commit persisted it. The result
+        is a payout stuck PENDING with no rail_reference, its amount sitting in
+        the merchant's SUSPENSE account. This finds them; `reverse-payout` undoes one.
+        """
+        from .models import Account, AccountType, Payout, PayoutStatus
+
+        with app.app_context():
+            rows = (Payout.query
+                    .filter(Payout.status == PayoutStatus.PENDING,
+                            Payout.rail_reference.is_(None))
+                    .order_by(Payout.created_at)
+                    .all())
+            if not rows:
+                print("No stranded payouts.")
+            total = 0
+            for p in rows:
+                total += p.amount
+                print(f"{p.public_id}  merchant={p.merchant_id}  {p.amount} {p.currency}"
+                      f"  channel={p.channel.value}  created={p.created_at}")
+            if rows:
+                print(f"\n{len(rows)} stranded, {total} total held in suspense")
+
+            print("\nSUSPENSE balances by merchant:")
+            for a in Account.query.filter_by(type=AccountType.SUSPENSE).all():
+                held = -a.cached_balance
+                if held:
+                    print(f"  merchant={a.merchant_id}  {held} {a.currency}")
+
+    @app.cli.command("reverse-payout")
+    @click.argument("public_id")
+    def reverse_payout(public_id):
+        """Return a stranded payout's money to the merchant's available balance.
+
+        Reverses the earmark (suspense -> available, and the fee back out of PSP
+        revenue) and marks the payout FAILED. Refuses if the payout ever reached
+        a rail, so this can never claw back money that actually went out.
+        """
+        from .models import AccountType, Payout, PayoutStatus
+        from .services import ledger
+
+        with app.app_context():
+            p = Payout.query.filter_by(public_id=public_id).first()
+            if not p:
+                print(f"No payout {public_id}")
+                return
+            if p.rail_reference:
+                print(f"REFUSING: {public_id} has rail_reference={p.rail_reference} — "
+                      "it reached the rail. Check with the provider before touching it.")
+                return
+            if p.status != PayoutStatus.PENDING:
+                print(f"REFUSING: {public_id} is {p.status.value}, not pending.")
+                return
+
+            avail = ledger.get_or_create_account(
+                type=AccountType.MERCHANT_AVAILABLE, merchant_id=p.merchant_id,
+                currency=p.currency)
+            suspense = ledger.get_or_create_account(
+                type=AccountType.SUSPENSE, merchant_id=p.merchant_id, currency=p.currency)
+            revenue = ledger.get_or_create_account(
+                type=AccountType.PSP_REVENUE, merchant_id=None, currency=p.currency)
+            ledger.post(
+                [
+                    (suspense, +p.amount),
+                    (revenue, +p.fee_amount),
+                    (avail, -(p.amount + p.fee_amount)),
+                ],
+                currency=p.currency,
+                memo=f"payout {p.public_id} reversed (never reached a rail)",
+            )
+            p.status = PayoutStatus.FAILED
+            p.failure_reason = "reversed: never reached a rail"
+            db.session.commit()
+            print(f"Reversed {public_id}: {p.amount + p.fee_amount} {p.currency} "
+                  f"returned to merchant {p.merchant_id}")
+
     @app.cli.command("disable-2fa")
     @click.argument("email", required=False)
     def disable_2fa(email):
