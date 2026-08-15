@@ -83,6 +83,7 @@
     <div class="docs-nav-section">
       <div class="docs-nav-title">Endpoints</div>
       <a href="#charges" class="docs-nav-link">Charges</a>
+      <a href="#balance" class="docs-nav-link">Balance</a>
       <a href="#payouts" class="docs-nav-link">Payouts</a>
       <a href="#payment-links" class="docs-nav-link">Payment Links</a>
       <a href="#vending" class="docs-nav-link">Vending Machines</a>
@@ -241,6 +242,40 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
     headers={"Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}"}
 )
 # status: "pending" | "authorized" | "succeeded" | "failed"</code></pre>
+    </div>
+
+    <!-- Balance -->
+    <div class="docs-section" id="balance">
+      <h2><i data-feather="pie-chart" style="width:22px;height:22px;color:var(--primary);"></i> Balance</h2>
+      <p>What Samsoftpay is currently holding for you, per currency. Use this to reconcile your own records against ours — if you run a platform with its own user wallets, this is the figure your internal balances must add up to.</p>
+      <div class="callout">The key you use decides which ledger you see. An <code>sk_test_</code> key returns your <strong>sandbox</strong> balance, which is not real money. Never reconcile real liabilities against a sandbox figure.</div>
+
+      <h3>Retrieve your balance</h3>
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/balance</div>
+      <pre><code>resp = requests.get(
+    "{{ request.host_url }}v1/balance",
+    headers={"Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}"}
+)
+
+# {
+#   "mode": "live",
+#   "balances": [
+#     {"currency": "UGX", "available": 186250, "pending": 0, "cached": 186250, "total": 186250}
+#   ],
+#   "consistent": true,
+#   "as_of": 1755900000
+# }</code></pre>
+      <table class="param-table">
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>available</code></td><td>integer</td><td>Settled funds you can pay out right now.</td></tr>
+          <tr><td><code>pending</code></td><td>integer</td><td>Collected but not yet available for payout.</td></tr>
+          <tr><td><code>total</code></td><td>integer</td><td><code>available + pending</code> — what we hold for you in this currency.</td></tr>
+          <tr><td><code>cached</code></td><td>integer</td><td>Our cached figure. Normally identical to <code>total</code>.</td></tr>
+          <tr><td><code>consistent</code></td><td>boolean</td><td><code>false</code> means our cached balance disagrees with our journal. The figures above are still the journal totals and remain authoritative — but tell us if you see this.</td></tr>
+        </tbody>
+      </table>
+      <p>Amounts are in minor units, like everywhere else in this API. Currencies are always reported separately and never summed together.</p>
     </div>
 
     <!-- Payouts -->

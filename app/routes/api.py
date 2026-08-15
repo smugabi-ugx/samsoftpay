@@ -709,3 +709,91 @@ def get_payment_link(public_id: str):
         transaction_status=txn_status,
         url=url_for("checkout.checkout_page", public_id=link.public_id, _external=True),
     )
+
+
+# ---------- balance ----------
+
+@bp.get("/balance")
+@limiter.limit("60 per minute;1000 per hour")
+def get_balance():
+    """What Samsoftpay is holding for this merchant, per currency.
+
+    Exists because a platform built on top of Samsoftpay (KarlPOS, TK Vending)
+    keeps its own sub-ledger of what it owes each of ITS users, and needs to
+    check that total against the cash actually held here. Without this endpoint
+    that reconciliation cannot be automated at all — the asset side has to be
+    typed in by hand.
+
+    Two properties matter for that use, and drive the shape of this response:
+
+    1. It reports the JOURNAL sum, not `cached_balance`. The cache is derived
+       and can drift; a reconciliation endpoint that trusts a cache cannot
+       detect the very thing it exists to detect. `cached` is returned
+       alongside, and `consistent` says whether they agree — so a caller can
+       tell "you hold less than I thought" apart from "your own books
+       disagree with each other".
+
+    2. It is mode-scoped like everything else. An sk_test_ key sees the sandbox
+       ledger only. Sandbox balances are not real money and must never be
+       reconciled against, so returning them under a live-looking figure would
+       be worse than returning nothing.
+
+    Merchant accounts are credit-normal — a positive balance owed to the
+    merchant is stored negative — so the sign is flipped here, matching
+    wallet.py. Amounts are minor units, like every other amount in this API.
+    """
+    merchant = _auth()
+    is_test = (g.api_mode == "test")
+
+    from sqlalchemy import func as safunc
+
+    from ..models import Account, AccountType, JournalEntry
+
+    accounts = Account.query.filter(
+        Account.merchant_id == merchant.id,
+        Account.is_test.is_(is_test),
+        Account.type.in_([AccountType.MERCHANT_AVAILABLE, AccountType.MERCHANT_PENDING]),
+    ).all()
+
+    by_currency: dict[str, dict] = {}
+    consistent = True
+
+    for acct in accounts:
+        journal_sum = int(
+            db.session.query(safunc.coalesce(safunc.sum(JournalEntry.amount), 0))
+            .filter(JournalEntry.account_id == acct.id)
+            .scalar()
+        )
+        if journal_sum != int(acct.cached_balance):
+            consistent = False
+
+        slot = by_currency.setdefault(
+            acct.currency,
+            {"currency": acct.currency, "available": 0, "pending": 0, "cached": 0},
+        )
+        # Flip: liability accounts hold what we owe as a negative number.
+        owed = -journal_sum
+        if acct.type == AccountType.MERCHANT_AVAILABLE:
+            slot["available"] = owed
+        else:
+            slot["pending"] = owed
+        slot["cached"] += -int(acct.cached_balance)
+
+    balances = []
+    for slot in by_currency.values():
+        slot["total"] = slot["available"] + slot["pending"]
+        balances.append(slot)
+    balances.sort(key=lambda b: b["currency"])
+
+    log_event("balance.read", merchant_id=merchant.id,
+              detail={"mode": g.api_mode, "currencies": [b["currency"] for b in balances]})
+
+    return jsonify(
+        mode=g.api_mode,
+        balances=balances,
+        # False means Samsoftpay's own cached balance disagrees with its journal.
+        # The journal figures above are still authoritative; this is a signal that
+        # something here needs investigating, not that the caller did anything wrong.
+        consistent=consistent,
+        as_of=int(time.time()),
+    )
