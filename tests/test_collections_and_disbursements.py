@@ -10,10 +10,30 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Force mocks and fast settings BEFORE creating the app.
-os.environ.pop("MOMO_USE_REAL", None)
+# SET this rather than popping it: .env sets MOMO_USE_REAL=1 and dotenv refills a
+# popped variable, which sends this test at MTN's real sandbox and leaves every
+# charge stuck in "authorized".
+os.environ["MOMO_USE_REAL"] = "0"
 os.environ["RAIL_CALLBACK_DELAY_SECONDS"] = "1"
 os.environ["RAIL_SUCCESS_PROBABILITY"] = "1.0"
-os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
+# A FILE database, not :memory:. The mock rail completes on a timer thread, and
+# in-memory SQLite is per-connection, so that thread would write into a different
+# empty database and the completion would never be visible here.
+import atexit
+import tempfile
+
+_FD, _P = tempfile.mkstemp(suffix=".db", prefix="collections_test_")
+os.close(_FD)
+os.environ["DATABASE_URL"] = "sqlite:///" + _P.replace("\\", "/")
+
+
+@atexit.register
+def _cleanup_db():
+    try:
+        os.unlink(_P)
+    except OSError:
+        pass
 
 from app import create_app
 from app.extensions import db
@@ -97,8 +117,18 @@ def main():
 
         db.session.refresh(available)
         avail_now = -available.cached_balance
-        # Started with 0, got 98500 (100k charge - 1.5k fee), paid out 50k -> 48500
-        assert avail_now == 48_500, f"available: expected 48500, got {avail_now}"
+        # Started with 0, collected 100k less the 1.5k collection fee -> 98,500.
+        # Paid out 50k, which also costs the flat payout fee. Derive that fee
+        # rather than hardcoding a total: this assertion previously read 48,500,
+        # forgetting the payout fee, and never failed because the test died
+        # earlier and its later assertions were never reached.
+        from app.services.fees import calculate_payout_fee
+        payout_fee = calculate_payout_fee(currency="UGX")
+        expected = 98_500 - 50_000 - payout_fee
+        assert avail_now == expected, (
+            f"available: expected {expected} (98,500 - 50,000 - {payout_fee} payout fee), "
+            f"got {avail_now}"
+        )
         print(f"[4] Final available: {avail_now} UGX (ledger balanced & reconciled)")
         print("\nALL ASSERTIONS PASSED")
 

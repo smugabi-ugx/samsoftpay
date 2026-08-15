@@ -164,6 +164,11 @@ class Account(db.Model):
     type = Column(SAEnum(AccountType), nullable=False)
     merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True)
     currency = Column(String(3), nullable=False, default="UGX")
+    # Sandbox money is a SEPARATE ledger from real money. A charge or payout made
+    # with an sk_test_ key posts only to is_test=True accounts, so no amount of
+    # integration testing can move a balance a merchant could actually withdraw.
+    # Every account is identified by (type, merchant, currency, MODE).
+    is_test = Column(Boolean, default=False, nullable=False)
     # Cached for performance; the journal is source of truth.
     cached_balance = Column(BigInteger, default=0, nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False)
@@ -171,7 +176,7 @@ class Account(db.Model):
     merchant = relationship("Merchant", back_populates="accounts")
 
     __table_args__ = (
-        UniqueConstraint("type", "merchant_id", "currency", name="uq_account"),
+        UniqueConstraint("type", "merchant_id", "currency", "is_test", name="uq_account"),
     )
 
 

@@ -78,11 +78,17 @@ def create_payout(
 
     fee = calculate_payout_fee(currency=currency)
 
+    # Which ledger this payout draws on. A test key spends the sandbox balance,
+    # so integration testing can never drain a merchant's real funds. Resolved
+    # once, here, and used for every account below.
+    is_test = g.get("api_mode") == "test"
+
     # Check the merchant has enough available balance (amount + fee).
     avail_acct = ledger.get_or_create_account(
         type=AccountType.MERCHANT_AVAILABLE,
         merchant_id=merchant.id,
         currency=currency,
+        is_test=is_test,
     )
     # Lock the balance row FOR UPDATE before reading it. Without this, two
     # concurrent payouts can both pass the check and overdraft the merchant
@@ -104,7 +110,7 @@ def create_payout(
         currency=currency,
         channel=channel,
         status=PayoutStatus.PENDING,
-        is_test=g.get("api_mode") == "test",
+        is_test=is_test,
         recipient_phone=recipient_phone,
         recipient_name=recipient_name,
     )
@@ -116,11 +122,13 @@ def create_payout(
         type=AccountType.SUSPENSE,
         merchant_id=merchant.id,
         currency=currency,
+        is_test=is_test,
     )
     revenue = ledger.get_or_create_account(
         type=AccountType.PSP_REVENUE,
         merchant_id=None,
         currency=currency,
+        is_test=is_test,
     )
     ledger.post(
         [
@@ -186,10 +194,13 @@ def complete_payout(
         )
     )
 
+    # Completion must land in the SAME ledger the payout was earmarked from.
+    mode = bool(payout.is_test)
     in_flight = ledger.get_or_create_account(
         type=AccountType.SUSPENSE,
         merchant_id=payout.merchant_id,
         currency=payout.currency,
+        is_test=mode,
     )
 
     if success:
@@ -197,6 +208,7 @@ def complete_payout(
             type=AccountType.PSP_FLOAT,
             merchant_id=None,
             currency=payout.currency,
+            is_test=mode,
         )
         # Money left our MoMo float; release the in_flight earmark.
         ledger.post(
@@ -214,11 +226,13 @@ def complete_payout(
             type=AccountType.MERCHANT_AVAILABLE,
             merchant_id=payout.merchant_id,
             currency=payout.currency,
+            is_test=mode,
         )
         psp_revenue = ledger.get_or_create_account(
             type=AccountType.PSP_REVENUE,
             merchant_id=None,
             currency=payout.currency,
+            is_test=mode,
         )
         ledger.post(
             [

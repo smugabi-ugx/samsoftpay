@@ -116,10 +116,14 @@ def complete_transaction(
         # amount-fee, psp_revenue gets fee.
         merchant = db.session.get(Merchant, txn.merchant_id)
         instant = bool(getattr(merchant, "instant_settlement", False))
+        # Sandbox charges post to the sandbox ledger only — a test key can never
+        # move a balance the merchant could withdraw.
+        mode = bool(txn.is_test)
         rail_acct = ledger.get_or_create_account(
             type=AccountType.RAIL_CLEARING,
             merchant_id=None,
             currency=txn.currency,
+            is_test=mode,
         )
         # Instant-settlement merchants (e.g. our own products like KarlPOS) skip the
         # 24h hold — funds land directly in MERCHANT_AVAILABLE and are withdrawable now.
@@ -128,11 +132,13 @@ def complete_transaction(
             type=dest_type,
             merchant_id=txn.merchant_id,
             currency=txn.currency,
+            is_test=mode,
         )
         revenue = ledger.get_or_create_account(
             type=AccountType.PSP_REVENUE,
             merchant_id=None,
             currency=txn.currency,
+            is_test=mode,
         )
         ledger.post(
             [

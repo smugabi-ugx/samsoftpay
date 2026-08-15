@@ -197,7 +197,8 @@ def register(app: Flask) -> None:
             for a in Account.query.filter_by(type=AccountType.SUSPENSE).all():
                 held = -a.cached_balance
                 if held:
-                    print(f"  merchant={a.merchant_id}  {held} {a.currency}")
+                    mode = "sandbox" if a.is_test else "LIVE"
+                    print(f"  merchant={a.merchant_id}  {held} {a.currency}  [{mode}]")
 
     @app.cli.command("reverse-payout")
     @click.argument("public_id")
@@ -224,13 +225,17 @@ def register(app: Flask) -> None:
                 print(f"REFUSING: {public_id} is {p.status.value}, not pending.")
                 return
 
+            # Reverse into the SAME ledger the payout was earmarked from.
+            mode = bool(p.is_test)
             avail = ledger.get_or_create_account(
                 type=AccountType.MERCHANT_AVAILABLE, merchant_id=p.merchant_id,
-                currency=p.currency)
+                currency=p.currency, is_test=mode)
             suspense = ledger.get_or_create_account(
-                type=AccountType.SUSPENSE, merchant_id=p.merchant_id, currency=p.currency)
+                type=AccountType.SUSPENSE, merchant_id=p.merchant_id,
+                currency=p.currency, is_test=mode)
             revenue = ledger.get_or_create_account(
-                type=AccountType.PSP_REVENUE, merchant_id=None, currency=p.currency)
+                type=AccountType.PSP_REVENUE, merchant_id=None,
+                currency=p.currency, is_test=mode)
             ledger.post(
                 [
                     (suspense, +p.amount),

@@ -224,10 +224,10 @@ def merchant_detail(merchant_id: int):
         .all()
     )
     pending = Account.query.filter_by(
-        merchant_id=merchant_id, type=AccountType.MERCHANT_PENDING
+        merchant_id=merchant_id, type=AccountType.MERCHANT_PENDING, is_test=False
     ).first()
     available = Account.query.filter_by(
-        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     webhooks = (
         WebhookDelivery.query.filter_by(merchant_id=merchant_id)
@@ -491,7 +491,7 @@ def new_payout_form(merchant_id: int):
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     # Show current available balance so the merchant knows what they can spend.
     avail = Account.query.filter_by(
-        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail.cached_balance if avail else 0
     return render_template(
@@ -509,7 +509,7 @@ def new_payout_submit(merchant_id: int):
         abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     avail = Account.query.filter_by(
-        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail.cached_balance if avail else 0
 
@@ -544,7 +544,7 @@ def bulk_payout_form(merchant_id: int):
         abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     avail = Account.query.filter_by(
-        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail.cached_balance if avail else 0
     return render_template(
@@ -570,7 +570,7 @@ def bulk_payout_submit(merchant_id: int):
 
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     avail = Account.query.filter_by(
-        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail.cached_balance if avail else 0
 
