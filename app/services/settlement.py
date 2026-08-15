@@ -31,9 +31,12 @@ def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
     """
     cutoff = utcnow() - timedelta(hours=hold_hours)
 
-    # Collect the distinct merchant/currency pairs that have anything due.
+    # Collect the distinct merchant/currency/MODE groups that have anything due.
+    # Mode is part of the key: sandbox and live are separate ledgers, and a sweep
+    # that mixed them would move sandbox money into a withdrawable balance.
     pairs = (
-        db.session.query(Transaction.merchant_id, Transaction.currency)
+        db.session.query(Transaction.merchant_id, Transaction.currency,
+                         Transaction.is_test)
         .filter(
             Transaction.status == TxnStatus.SUCCEEDED,
             Transaction.settled_at.is_(None),
@@ -44,16 +47,18 @@ def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
     )
 
     moved = {}
-    for merchant_id, currency in pairs:
+    for merchant_id, currency, is_test in pairs:
         try:
             merchant_moved = _settle_one_merchant(
                 merchant_id=merchant_id,
                 currency=currency,
+                is_test=bool(is_test),
                 cutoff=cutoff,
                 batch_size=batch_size,
             )
             if merchant_moved:
-                moved[merchant_id] = merchant_moved
+                # Accumulate: one merchant can now appear twice (live + sandbox).
+                moved[merchant_id] = moved.get(merchant_id, 0) + merchant_moved
             db.session.commit()   # commit per merchant — bounded lock scope
         except Exception:
             db.session.rollback()
@@ -65,12 +70,13 @@ def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
     return moved
 
 
-def _settle_one_merchant(*, merchant_id, currency, cutoff, batch_size) -> int:
-    """Settle all due transactions for one merchant. Caller commits."""
+def _settle_one_merchant(*, merchant_id, currency, is_test, cutoff, batch_size) -> int:
+    """Settle all due transactions for one merchant, in ONE ledger. Caller commits."""
     due = (
         Transaction.query.filter(
             Transaction.merchant_id == merchant_id,
             Transaction.currency == currency,
+            Transaction.is_test.is_(True) if is_test else Transaction.is_test.is_(False),
             Transaction.status == TxnStatus.SUCCEEDED,
             Transaction.settled_at.is_(None),
             Transaction.completed_at <= cutoff,
@@ -83,10 +89,12 @@ def _settle_one_merchant(*, merchant_id, currency, cutoff, batch_size) -> int:
         return 0
 
     pending = ledger.get_or_create_account(
-        type=AccountType.MERCHANT_PENDING, merchant_id=merchant_id, currency=currency
+        type=AccountType.MERCHANT_PENDING, merchant_id=merchant_id,
+        currency=currency, is_test=is_test,
     )
     available = ledger.get_or_create_account(
-        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id,
+        currency=currency, is_test=is_test,
     )
 
     now = utcnow()

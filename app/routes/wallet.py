@@ -27,10 +27,10 @@ def wallet_home():
                    .order_by(WithdrawalRequest.created_at.desc())
                    .limit(20).all())
     avail_acct = Account.query.filter_by(
-        merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     pending_acct = Account.query.filter_by(
-        merchant_id=current_user.id, type=AccountType.MERCHANT_PENDING
+        merchant_id=current_user.id, type=AccountType.MERCHANT_PENDING, is_test=False
     ).first()
     available = -avail_acct.cached_balance if avail_acct else 0
     pending   = -pending_acct.cached_balance if pending_acct else 0
@@ -142,7 +142,7 @@ def request_withdrawal():
         return redirect(url_for("wallet.wallet_home"))
 
     avail_acct = Account.query.filter_by(
-        merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE
+        merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail_acct.cached_balance if avail_acct else 0
     total_needed = amount + _WITHDRAWAL_FEE
@@ -391,9 +391,11 @@ def _settle_topup(merchant_id: int, txn, ref: str) -> None:
     currency   = txn.currency
 
     pending = ledger.get_or_create_account(
-        type=AccountType.MERCHANT_PENDING,  merchant_id=merchant_id, currency=currency)
+        type=AccountType.MERCHANT_PENDING,  merchant_id=merchant_id, currency=currency,
+        is_test=False)   # wallet top-ups are always real money
     avail   = ledger.get_or_create_account(
-        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency)
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency,
+        is_test=False)
 
     # Move net from pending → available. Fee stays in psp_revenue.
     ledger.post(
@@ -407,10 +409,11 @@ def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:
     """Used ONLY for bank/admin top-up approvals where no prior charge was made."""
     from ..services import ledger
     avail = ledger.get_or_create_account(
-        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency="UGX"
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency="UGX",
+        is_test=False,
     )
     psp_float = ledger.get_or_create_account(
-        type=AccountType.PSP_FLOAT, merchant_id=None, currency="UGX"
+        type=AccountType.PSP_FLOAT, merchant_id=None, currency="UGX", is_test=False,
     )
     ledger.post([(psp_float, +amount), (avail, -amount)],
                 currency="UGX", memo=f"bank/admin top-up {ref}")

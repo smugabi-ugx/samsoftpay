@@ -45,32 +45,36 @@ class LedgerError(Exception):
 
 
 def get_or_create_account(
-    *, type: AccountType, merchant_id: int | None = None, currency: str = "UGX"
+    *, type: AccountType, merchant_id: int | None = None, currency: str = "UGX",
+    is_test: bool = False,
 ) -> Account:
     """Race-safe get-or-create.
 
     Under concurrency two requests can both miss the SELECT and try to INSERT the
-    same (type, merchant_id, currency), which violates the uq_account UNIQUE
-    constraint. We insert inside a SAVEPOINT so a clash rolls back ONLY the insert
-    (not the caller's whole transaction) and then re-read the winning row.
+    same (type, merchant_id, currency, is_test), which violates the uq_account
+    UNIQUE constraint. We insert inside a SAVEPOINT so a clash rolls back ONLY the
+    insert (not the caller's whole transaction) and then re-read the winning row.
+
+    `is_test` selects the LEDGER, not a label: sandbox and live money live in
+    different accounts. Callers must pass the mode of the transaction or payout
+    they are posting for — never a hardcoded default at a money site. Defaulting
+    to False is deliberate: an un-updated caller posts to the live ledger, which
+    is the pre-existing behaviour, rather than silently inventing sandbox money.
     """
-    acct = (
-        Account.query.filter_by(type=type, merchant_id=merchant_id, currency=currency)
-        .one_or_none()
-    )
+    lookup = dict(type=type, merchant_id=merchant_id, currency=currency,
+                  is_test=bool(is_test))
+    acct = Account.query.filter_by(**lookup).one_or_none()
     if acct is not None:
         return acct
     try:
         with db.session.begin_nested():
-            acct = Account(type=type, merchant_id=merchant_id, currency=currency)
+            acct = Account(**lookup)
             db.session.add(acct)
             db.session.flush()
         return acct
     except IntegrityError:
         # Another request created it first — use theirs.
-        return Account.query.filter_by(
-            type=type, merchant_id=merchant_id, currency=currency
-        ).one()
+        return Account.query.filter_by(**lookup).one()
 
 
 def lock_account_for_update(account: Account) -> Account:
