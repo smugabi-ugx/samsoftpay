@@ -1,6 +1,6 @@
 # Samsoftpay — Project Context & Guardrails
 > Authoritative state for this repo. READ THIS FIRST every session.
-> Last updated: August 2026 (after PRs #10–#12 merged to main; GET /v1/balance in PR from feat/balance-endpoint).
+> Last updated: August 2026 (after PRs #10–#14 merged to main).
 > Companion docs: COMMERCIAL_READINESS.md (audit + roadmap), C:\Users\DELL\Desktop\tk\MASTER_CLAUDE.md (TK Vending).
 
 ---
@@ -169,11 +169,13 @@ supplier's `forwardPayCode` model expects the payment provider to own the QR —
   money. Existing accounts migrated to `is_test=False` (preserves balances exactly).
   Tests: `tests/test_ledger_mode_split.py`. Also repaired the long-broken
   `tests/test_collections_and_disbursements.py` (dotenv pop + :memory: pitfalls, wrong fee).
-- **feat/balance-endpoint (PR open) — `GET /v1/balance`**: per-currency reconciliation
+- **PRs #13/#14 — `GET /v1/balance`**: per-currency reconciliation
   endpoint for platforms (KarlPOS, TK Vending). Reports the JOURNAL sum, not
   `cached_balance` (returns `consistent` flag when they disagree); mode-scoped (sk_test_
   sees sandbox only); credit-normal sign flipped so merchants see positive numbers.
   Documented on the docs page. Tests: `tests/test_balance_endpoint.py` (7 checks).
+  KarlPOS already calls this from its `samsoftpay-balance-sync` edge function (retro-pos-cart
+  PR #334) — it shipped before this endpoint existed, so keep the response shape stable.
 
 ## POST-DEPLOY checklist (after a main deploy)
 1. `flask db current` → expect `f9a0b1c2d3e4`
