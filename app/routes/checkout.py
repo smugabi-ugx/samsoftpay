@@ -89,12 +89,7 @@ def checkout_page(public_id: str):
         "checkout.html",
         link=link,
         merchant=merchant,
-        channels=[
-            ("mtn_momo",     "MTN Mobile Money",       "phone"),
-            ("airtel_money", "Airtel Money",            "phone"),
-            ("card",         "Visa / Mastercard",       "card"),
-            ("crypto",       "Crypto (BTC/ETH/USDT…)", "crypto"),
-        ],
+        channels=_channel_options(include_crypto=True),
         crypto_url=url_for("checkout.crypto_checkout", public_id=link.public_id),
         voucher_applied=bool(voucher_data),
         voucher_discount=voucher_data.get("discount", 0),
@@ -118,11 +113,7 @@ def checkout_submit(public_id: str):
     except ValueError:
         return render_template(
             "checkout.html", link=link, merchant=merchant,
-            channels=[
-                ("mtn_momo", "MTN Mobile Money", "phone"),
-                ("airtel_money", "Airtel Money", "phone"),
-                ("card", "Card (Visa/Mastercard)", "card"),
-            ],
+            channels=_channel_options(),
             error="Please choose a payment method.",
         )
 
@@ -317,12 +308,33 @@ def vending_display_state(public_id: str):
     )
 
 
-def _channel_options():
-    return [
-        ("mtn_momo", "MTN Mobile Money", "phone"),
-        ("airtel_money", "Airtel Money", "phone"),
-        ("card", "Card (Visa/Mastercard)", "card"),
+def _channel_options(include_crypto: bool = False):
+    """Payment methods to show a customer — simulated rails removed.
+
+    Airtel and Card have no real rail yet. create_charge refuses them for live
+    payments, so offering them here would only walk the customer into an error
+    (and at a vending machine, into a product that never drops). Filtering the
+    list is the UX half of that guard; the orchestrator remains the real one.
+    """
+    options = [
+        ("mtn_momo",     "MTN Mobile Money",       "phone"),
+        ("airtel_money", "Airtel Money",            "phone"),
+        ("card",         "Visa / Mastercard",       "card"),
     ]
+    if include_crypto:
+        options.append(("crypto", "Crypto (BTC/ETH/USDT…)", "crypto"))
+
+    from ..services.orchestrator import _simulated_rail_forbidden
+
+    available = []
+    for value, label, kind in options:
+        try:
+            if _simulated_rail_forbidden(Channel(value)):
+                continue
+        except Exception:      # unknown channel / no app context — show it
+            pass
+        available.append((value, label, kind))
+    return available
 
 
 # ── Crypto checkout (ChangeNow) ────────────────────────────────────────

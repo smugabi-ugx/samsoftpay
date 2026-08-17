@@ -235,6 +235,7 @@ def _finish(link_id: int, *, ok: bool, error: str | None = None) -> None:
     link = db.session.get(PaymentLink, link_id)
     if link is None:
         return
+    previous = link.vending_status
     if ok:
         link.vending_status = DISPENSED
         link.vending_error = None
@@ -243,6 +244,57 @@ def _finish(link_id: int, *, ok: bool, error: str | None = None) -> None:
         link.vending_status = FAILED
         link.vending_error = (error or "unknown")[:255]
     db.session.commit()
+    # Only announce a real change of outcome. The supplier's result callback can
+    # confirm an order we already marked dispensed, and a platform does not want
+    # the same "dispensed" event twice for one soda.
+    if link.vending_status != previous:
+        _emit_event(link)
+
+
+def _emit_event(link: PaymentLink) -> None:
+    """Tell the merchant's backend what the machine did. Never raises.
+
+    This is the event a platform actually needs: `charge.succeeded` says the
+    money arrived, which is NOT the same as the product coming out. A jammed
+    tray produces a succeeded charge and a `vending.dispense_failed`.
+    """
+    try:
+        from .webhooks import enqueue
+
+        merchant = db.session.get(Merchant, link.merchant_id)
+        meta = read_meta(link) or {}
+        event = ("vending.dispensed" if link.vending_status == DISPENSED
+                 else "vending.dispense_failed")
+        enqueue(
+            merchant,
+            event,
+            {
+                "order_id": link.public_id,
+                "machine": meta.get("machine"),
+                "goods": meta.get("goods"),
+                "amount": link.amount,
+                "currency": link.currency,
+                "charge_id": _charge_public_id(link),
+                "reference": link.reference,
+                "vending_status": link.vending_status,
+                "error": link.vending_error,
+                "dispensed_at": (link.vending_dispensed_at.isoformat()
+                                 if link.vending_dispensed_at else None),
+            },
+            transaction_id=link.transaction_id,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        try:
+            current_app.logger.warning("vending webhook enqueue failed: %s", exc)
+        except Exception:
+            pass
+
+
+def _charge_public_id(link: PaymentLink) -> str | None:
+    if not link.transaction_id:
+        return None
+    txn = db.session.get(Transaction, link.transaction_id)
+    return txn.public_id if txn else None
 
 
 def dispense_for_link(link: PaymentLink, txn: Transaction) -> bool:

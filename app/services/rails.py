@@ -102,6 +102,22 @@ class CardAdapter(_MockRail):
         super().__init__(Channel.CARD)
 
 
+def is_simulated(channel: Channel) -> bool:
+    """True if this channel would be settled by a mock, not a real rail.
+
+    A mock rail flips a transaction to SUCCEEDED on a timer without any money
+    having moved. In live mode that is not a harmless stub — it credits the
+    merchant's ledger with funds nobody paid, and for a vending order it makes
+    a real machine dispense a real product for free.
+
+    Airtel Money and Card have no real adapter yet, so they are always
+    simulated. MTN is simulated only when MOMO_USE_REAL is off. Visa/Crypto are
+    passthrough rather than mock: those are already settled by Flutterwave or
+    ChangeNow before create_charge is ever called, so they are NOT simulated.
+    """
+    return isinstance(get_adapter(channel), _MockRail)
+
+
 def get_adapter(channel: Channel) -> RailAdapter:
     from flask import g
     sandbox = g.get("api_mode") == "test"  # sandbox key → always mock

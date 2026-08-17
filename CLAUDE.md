@@ -72,6 +72,17 @@
     idempotency layer committed the session. Repair tools: `flask stranded-payouts`,
     `flask reverse-payout <id>` (refuses if the payout ever reached a rail).
 
+14. **A simulated rail must never settle live money.** `rails.is_simulated(channel)` is true when
+    a channel resolves to `_MockRail` — the mock flips a charge to SUCCEEDED on a timer with
+    NOTHING collected, which credits the merchant ledger with money nobody paid and makes a
+    vending machine dispense a real product for free. `orchestrator._simulated_rail_forbidden()`
+    refuses those charges on Render BEFORE any row is written (sandbox keys exempt — mocks are
+    the point of a sandbox; local/dev exempt or the offline suite could not run). Airtel Money
+    and Card have NO real adapter yet and are therefore refused in production, and hidden by
+    `checkout._channel_options()`. When a real Airtel rail lands, that adapter stops being a
+    `_MockRail` and both the guard and the UI open up on their own — do not special-case names.
+    Escape hatch for a staging box: `ALLOW_SIMULATED_RAILS`.
+
 ---
 
 ## Who is Sam
@@ -187,6 +198,32 @@ order to `failed` so a refund decision becomes possible.
 - Blueprint must stay CSRF-exempt in `app/__init__.py` or every callback 400s.
 - Give the supplier: `https://api.samsoftpay.com/inbound/xy/dispense-result`
 - Tests: `tests/test_xy_dispense_callback.py` (11 checks).
+
+### Vending webhook events (for platforms integrating on top)
+`charge.succeeded` means the MONEY arrived; it does NOT mean the product came out. Two vending
+events now say what the machine actually did, emitted from `vending._finish()` — the one place
+an order's outcome is settled — via the shared `webhooks.enqueue()`:
+- **`vending.dispensed`** / **`vending.dispense_failed`** — payload carries order_id, machine,
+  goods, amount, currency, charge_id, reference, vending_status, error, dispensed_at.
+- Emitted only on a CHANGE of outcome, so the §2.2.3 supplier callback confirming an order we
+  already marked dispensed does not send a second event for the same soda.
+- Requires `merchant.webhook_url`. Delivery reuses the existing signed queue + 30s beat sweep.
+- Full event catalogue is now: `charge.succeeded`, `charge.failed`, `vending.dispensed`,
+  `vending.dispense_failed`. Tests: `tests/test_rail_guard_and_vending_events.py` (18 checks).
+
+### Vending readiness — what is NOT built (as of Aug 17, 2026)
+- **No emails, at all, on payment or dispense.** The ONLY email in the system is auth OTP
+  (`app/services/email_service.py`, called only from `auth.py`). No receipt, no merchant order
+  mail; `customer_email` is stored and never used. SMTP is not even provisioned — MAIL_* appear
+  only inside a COMMENT in render.yaml, so OTPs print to the console in production too.
+  Notification today = HTTP webhook only.
+- **Nothing lets an XY machine START an order** (see the supplier-doc note above) — that must
+  come from our own app on the board.
+- `TKVendingApp` (C:\Users\DELL\Desktop\tk) still calls `POST /v1/charges` with a phone typed on
+  the machine and dispenses over RS232 itself, bypassing the QR + dispense-gate path. It also
+  embeds a Samsoftpay secret key in `res/values/strings.xml` (sk_test_ today) — a secret key on
+  a public kiosk can create charges AND payouts, so it needs a restricted credential before any
+  live key ships.
 
 ### Merged after vending (Aug 2026)
 - **PR #11 — payout earmark money leak fix** (see guardrail 13). KarlPOS's detectChannel()
