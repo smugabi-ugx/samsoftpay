@@ -117,8 +117,12 @@ def create_app(config: dict | None = None) -> Flask:
         RAIL_CALLBACK_DELAY_SECONDS=int(
             os.environ.get("RAIL_CALLBACK_DELAY_SECONDS", "5")
         ),
+        # Default is 1.0, not a coin flip: an ordinary sandbox test number should
+        # never randomly fail. Deliberate failure comes from a TEST_PHONE_OUTCOMES
+        # magic number (rails.py), the way Stripe/Pesapal test cards work. This
+        # knob still exists for anyone who wants old-style randomness on purpose.
         RAIL_SUCCESS_PROBABILITY=float(
-            os.environ.get("RAIL_SUCCESS_PROBABILITY", "0.85")
+            os.environ.get("RAIL_SUCCESS_PROBABILITY", "1.0")
         ),
         # ---- MTN MoMo real-rail config (only used when MOMO_USE_REAL=1) ----
         MOMO_USE_REAL=os.environ.get("MOMO_USE_REAL", "0") == "1",

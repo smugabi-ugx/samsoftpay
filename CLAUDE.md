@@ -93,6 +93,19 @@
     for real end-to-end testing without ever touching the live ledger or weakening
     the guard for genuine live traffic. Tests: `tests/test_payment_link_mode.py`.
 
+16. **The mock rail is DETERMINISTIC, like a real sandbox (Stripe/Pesapal/Flutterwave),
+    not a coin flip.** `RAIL_SUCCESS_PROBABILITY` defaults to **1.0** — an ordinary test
+    phone number succeeds every time. Deliberate failure comes ONLY from a magic number in
+    `rails.TEST_PHONE_OUTCOMES` (256700000001 = insufficient_funds, …0002 = user_cancelled,
+    …0003 = timeout, …0000 = documented always-succeeds). Matched on the customer phone's
+    last 9 digits, so 07.../256.../spaced forms all hit the same entry. Do NOT lower the
+    default probability back down "to be more realistic" — a sandbox that randomly fails an
+    integrator's ordinary test transaction is a bug, not realism; that was reported live as
+    "the app is broken" when it was actually the dice. Tests: `tests/test_deterministic_sandbox.py`.
+    Known pre-existing flake: `tests/test_rail_guard_and_vending_events.py`'s supplier-failure
+    checks occasionally miss their 12s deadline under heavy concurrent load on the dev
+    machine (confirmed unrelated to this guardrail — re-running in isolation is reliably green).
+
 ---
 
 ## Who is Sam
