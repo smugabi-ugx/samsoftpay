@@ -83,6 +83,7 @@
     <div class="docs-nav-section">
       <div class="docs-nav-title">Endpoints</div>
       <a href="#charges" class="docs-nav-link">Charges</a>
+      <a href="#testing" class="docs-nav-link">Testing</a>
       <a href="#balance" class="docs-nav-link">Balance</a>
       <a href="#payouts" class="docs-nav-link">Payouts</a>
       <a href="#payment-links" class="docs-nav-link">Payment Links</a>
@@ -242,6 +243,22 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
     headers={"Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}"}
 )
 # status: "pending" | "authorized" | "succeeded" | "failed"</code></pre>
+    </div>
+
+    <!-- Testing -->
+    <div class="docs-section" id="testing">
+      <h2><i data-feather="check-circle" style="width:22px;height:22px;color:var(--primary);"></i> Testing</h2>
+      <p>With an <code>sk_test_</code> key, MTN Mobile Money and Airtel Money never touch a real network — a charge settles a few seconds after you request it, using the phone number as the signal for what should happen. An ordinary phone number always succeeds. Use one of these to test a specific outcome on purpose:</p>
+      <table class="param-table">
+        <thead><tr><th>Phone number</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td><code>256700000000</code></td><td>Always succeeds (same as any ordinary number — documented for clarity)</td></tr>
+          <tr><td><code>256700000001</code></td><td>Fails with <code>insufficient_funds</code></td></tr>
+          <tr><td><code>256700000002</code></td><td>Fails with <code>user_cancelled</code></td></tr>
+          <tr><td><code>256700000003</code></td><td>Fails with <code>timeout</code></td></tr>
+        </tbody>
+      </table>
+      <div class="callout">Matched on the last 9 digits, so <code>0700000001</code>, <code>256700000001</code> and <code>256 700 000 001</code> all trigger the same outcome. Any other number succeeds — a sandbox should never make an ordinary test transaction randomly fail.</div>
     </div>
 
     <!-- Balance -->
