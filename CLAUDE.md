@@ -1,6 +1,6 @@
 # Samsoftpay — Project Context & Guardrails
 > Authoritative state for this repo. READ THIS FIRST every session.
-> Last updated: June 2026 (after PR #2 merged to main).
+> Last updated: August 2026 (after PRs #10–#12 merged to main; GET /v1/balance in PR from feat/balance-endpoint).
 > Companion docs: COMMERCIAL_READINESS.md (audit + roadmap), C:\Users\DELL\Desktop\tk\MASTER_CLAUDE.md (TK Vending).
 
 ---
@@ -56,6 +56,22 @@
     The supplier call is also wrapped so a machine/supplier outage can never roll back or hide
     a payment we already took — the order goes `failed` and is retried, the money stays recorded.
 
+12. **Test and live ledgers are SPLIT.** Accounts are keyed by (type, merchant, currency,
+    **is_test**) — `is_test` selects the LEDGER, not a label (PR #12, migration
+    `f9a0b1c2d3e4`). Every money site must pass the mode of the thing it posts for (charge →
+    `txn.is_test`, payout completion/reversal → `payout.is_test`, etc.), and the settlement
+    sweep groups by mode as well as merchant+currency. Before the split, sandbox charges and
+    payouts moved REAL withdrawable money (verified in production). Balance reads (dashboard,
+    wallet, withdrawals) are scoped to the live ledger. Don't collapse the modes back together.
+
+13. **Resolve the payout rail BEFORE any money moves** (`app/services/payouts.py`, PR #11).
+    An unsupported channel (e.g. Airtel — no disbursement adapter yet) must be rejected with
+    ZERO database writes. The post-earmark section is guarded: any rail exception rolls the
+    session back so create_payout commits a coherent state or nothing. The old order (earmark
+    first, resolve later) stranded amount+fee in SUSPENSE on every rejected attempt because the
+    idempotency layer committed the session. Repair tools: `flask stranded-payouts`,
+    `flask reverse-payout <id>` (refuses if the payout ever reached a rail).
+
 ---
 
 ## Who is Sam
@@ -91,7 +107,9 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **d7e8f9a0b1c2**.
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **f9a0b1c2d3e4**
+  (chain: b2f1a9c4d5e6 → … → d7e8f9a0b1c2 vending → e8f9a0b1c2d3 per-merchant XY →
+  f9a0b1c2d3e4 test/live ledger split).
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -124,7 +142,7 @@ b2f1a9c4d5e6 (refund cols + settled_at + key-hash cols + indexes) — applies cl
 MTN SIT: re-run against live sandbox = 8/9 (only fail = disbursement balance, a sandbox limitation;
 returns 200 in production). Sheet: C:\Users\DELL\Desktop\tk\MTN_MoMo_SIT_Report.xlsx (annotated).
 
-### Vending (TK Vending / XY machines) — built Aug 13, 2026, NOT yet committed or deployed
+### Vending (TK Vending / XY machines) — MERGED to main (PR #10, Aug 2026)
 The whole scan-to-pay-to-dispense loop, driven by Samsoftpay:
 - `app/services/xy_vending.py` — supplier cloud client (MD5 sign, queries, `ApplyExportGoods`).
 - `app/services/vending.py` — orders, the dispense gate (see guardrail 11), QR rendering (segno).
@@ -134,14 +152,31 @@ The whole scan-to-pay-to-dispense loop, driven by Samsoftpay:
 - Public: `/pay/<id>/qr.png|.svg`, `/vending/display/<id>` (the machine's own screen — polls
   `state.json` and flips itself to "collect your item"), all QR-enabled for ANY payment link.
 - Merchant UI: Dashboard → Vending (on/off kill switch, create order, order log, retry).
-- Migration `d7e8f9a0b1c2`; new dep **segno** (pure-Python QR, no Pillow).
-- Tests: `tests/test_vending_flow.py` — 14 checks incl. no-dispense-on-failed-payment,
-  double-dispense guard, supplier-outage recovery, kill switch. All passing.
+- Migrations `d7e8f9a0b1c2` + `e8f9a0b1c2d3`; new dep **segno** (pure-Python QR, no Pillow).
+- Per-merchant XY supplier credentials + machine registry (`app/services/secrets_box.py`,
+  vending settings UI) — XY_* env vars are now the fallback, not the only source.
+- Tests: `tests/test_vending_flow.py` (incl. no-dispense-on-failed-payment, double-dispense
+  guard, supplier-outage recovery, kill switch) + `tests/test_xy_vending_sign.py`. All passing.
 NOTE: the customer QR points at our hosted checkout, so the machine never touches money. The
 supplier's `forwardPayCode` model expects the payment provider to own the QR — that provider is us.
 
+### Merged after vending (Aug 2026)
+- **PR #11 — payout earmark money leak fix** (see guardrail 13). KarlPOS's detectChannel()
+  sends `airtel_money` for 70/75/74/20 numbers; each rejected payout used to strand
+  amount+fee in SUSPENSE. New CLI: `flask stranded-payouts`, `flask reverse-payout <id>`.
+  Tests: `tests/test_payout_guards.py`.
+- **PR #12 — test/live ledger split** (see guardrail 12). Sandbox money is no longer real
+  money. Existing accounts migrated to `is_test=False` (preserves balances exactly).
+  Tests: `tests/test_ledger_mode_split.py`. Also repaired the long-broken
+  `tests/test_collections_and_disbursements.py` (dotenv pop + :memory: pitfalls, wrong fee).
+- **feat/balance-endpoint (PR open) — `GET /v1/balance`**: per-currency reconciliation
+  endpoint for platforms (KarlPOS, TK Vending). Reports the JOURNAL sum, not
+  `cached_balance` (returns `consistent` flag when they disagree); mode-scoped (sk_test_
+  sees sandbox only); credit-normal sign flipped so merchants see positive numbers.
+  Documented on the docs page. Tests: `tests/test_balance_endpoint.py` (7 checks).
+
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `b2f1a9c4d5e6`
+1. `flask db current` → expect `f9a0b1c2d3e4`
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to
