@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Samsoftpay — East Africa Payment Gateway</title>
-  <meta name="description" content="Accept MTN MoMo, Airtel Money, Visa/Mastercard and crypto payments across East Africa. One API, one dashboard. 1.5% fee, no monthly charges.">
+  <meta name="description" content="Accept MTN Mobile Money and crypto payments in Uganda — powering shops and scan-to-pay vending machines. One API, one dashboard. 1.5% fee, no monthly charges.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="{{ request.host_url }}">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Samsoftpay — East Africa Payment Gateway">
-  <meta property="og:description" content="MTN MoMo, Airtel, Visa and crypto. One API, instant settlement. No monthly fees.">
+  <meta property="og:description" content="MTN Mobile Money and crypto for Uganda. One API, real products live on it. No monthly fees.">
   <meta property="og:url" content="{{ request.host_url }}">
   <meta property="og:image" content="{{ url_for('static', filename='img/logo.png', _external=True) }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
@@ -305,7 +305,7 @@
 
   <h1>Accept payments<br>across <b>East Africa</b></h1>
 
-  <p class="hero-sub">MTN MoMo, Airtel Money, Visa, Mastercard and crypto — one clean API, one dashboard, instant settlement.</p>
+  <p class="hero-sub">MTN Mobile Money and crypto today — Airtel and cards next. One clean API, one dashboard, powering real shops and vending machines right now.</p>
 
   <div class="hero-ctas">
     <a href="{{ url_for('auth.signup_page') }}" class="btn-dark">
@@ -318,12 +318,13 @@
     </a>
   </div>
 
+  <!-- Live rails shown plainly; rails still being built say so. -->
   <div class="channels">
     <span class="ch"><span class="ch-dot" style="background:#ffcb05;"></span>MTN MoMo</span>
-    <span class="ch"><span class="ch-dot" style="background:#e60000;"></span>Airtel Money</span>
-    <span class="ch"><span class="ch-dot" style="background:#1a1f71;"></span>Visa / MC</span>
     <span class="ch"><span class="ch-dot" style="background:#f7931a;"></span>Crypto</span>
     <span class="ch"><span class="ch-dot" style="background:#10b981;"></span>Bill Collection</span>
+    <span class="ch" style="opacity:.55;"><span class="ch-dot" style="background:#e60000;"></span>Airtel Money — soon</span>
+    <span class="ch" style="opacity:.55;"><span class="ch-dot" style="background:#1a1f71;"></span>Visa / MC — soon</span>
   </div>
 </section>
 
@@ -331,7 +332,7 @@
 <div class="stats">
   <div class="stat"><div class="stat-n">1.5%</div><div class="stat-l">Collection fee</div></div>
   <div class="stat"><div class="stat-n">UGX 0</div><div class="stat-l">Monthly fee</div></div>
-  <div class="stat"><div class="stat-n">5</div><div class="stat-l">Payment channels</div></div>
+  <div class="stat"><div class="stat-n">48h</div><div class="stat-l">Webhook retry window</div></div>
   <div class="stat"><div class="stat-n">60s</div><div class="stat-l">To get API keys</div></div>
 </div>
 
@@ -344,13 +345,17 @@
       <p>Collections, payouts, subscriptions, bill collection, gift cards — production-ready for East Africa.</p>
     </div>
     <div class="feat-grid">
+      {# Every claim here must be TRUE today. A payment company caught
+         overstating its rails or its licensing on its own landing page never
+         gets that trust back — "coming soon" honestly stated builds more
+         confidence than a capability that turns out not to exist. #}
       {% for em, bg, title, desc in [
-        ('📱','#fff7ed','Mobile Money','Accept MTN MoMo and Airtel Money. Customers receive a USSD prompt — no app needed.'),
-        ('💳','#f0fdf4','Visa &amp; Mastercard','Full card acceptance with 3DS security. Licensed in Uganda. No countries blocked.'),
-        ('₿','#fffbeb','Crypto Payments','Accept BTC, ETH, USDT via ChangeNow. Instant UGX conversion. Never hold volatile assets.'),
+        ('📱','#fff7ed','MTN Mobile Money','Live today. Customers receive a USSD prompt on their phone and approve with their PIN — no app needed. Airtel Money is coming next.'),
+        ('🤖','#f0fdf4','Vending & Machines','Scan-to-pay for vending machines and kiosks: QR on the machine, payment on the customer phone, automatic dispense on success.'),
+        ('₿','#fffbeb','Crypto Payments','Accept BTC, ETH, USDT via ChangeNow. Instant UGX conversion — we never hold volatile assets.'),
         ('📄','#f8fafc','Bill Collection','Issue bills with account references. Customers look up by ID and pay on mobile.'),
         ('🔄','#fdf4ff','Subscriptions','Weekly, monthly or yearly billing plans. Subscribe once, charged automatically.'),
-        ('🔗','#eff6ff','Payment Links','Share one URL on TikTok or WhatsApp. Customer picks channel and pays — no code.'),
+        ('🔗','#eff6ff','Payment Links','Share one URL on TikTok or WhatsApp. Customer scans or taps and pays — no code.'),
       ] %}
       <div class="feat">
         <div class="feat-ico" style="background:{{ bg }};">{{ em }}</div>
@@ -393,24 +398,27 @@
   </div>
 </section>
 
-<!-- TESTIMONIALS -->
+<!-- IN PRODUCTION — real products on these rails, not testimonials.
+     Fabricated reviews from invented people are the fastest way for a payment
+     company to destroy trust the day one prospect checks a name. What's
+     actually running is more convincing than what a fictional person says. -->
 <section class="section">
   <div class="wrap">
     <div class="sh anim">
-      <div class="eyebrow">Stories</div>
-      <h2>Loved by builders &amp; merchants</h2>
+      <div class="eyebrow">In production</div>
+      <h2>Real products run on these rails</h2>
+      <p>Not case studies written for a landing page — live systems taking real payments on Samsoftpay today.</p>
     </div>
     <div class="testi-row">
       {% for av, nm, rl, q in [
-        ('MK','Michael Kato','E-commerce, Kampala','"Finally a gateway built for Uganda. The API docs are the clearest I have seen. We were live with MTN MoMo in under an hour."'),
-        ('SN','Sarah Namutebi','School Admin, Masaka','"Parents look up their child by student ID and pay from their phone. No queues, no cash. The bill collection feature changed everything."'),
-        ('JO','James Ochieng','Developer, Nairobi','"The sandbox mode is brilliant. I built the full integration in test mode then switched to live keys in production. Zero surprises."'),
+        ('🤖','Vending machines','Scan-to-pay, Kampala','A customer taps a product on the machine, scans the QR with their own phone, approves the MTN prompt — and the machine dispenses automatically. Payment, dispense confirmation and refund-safety all run through this API.'),
+        ('🛒','Point of sale','KarlPOS retail platform','Wallet deposits, withdrawals and batch payouts for a multi-merchant POS platform — reconciled daily against the Samsoftpay balance API, with webhook-driven settlement into merchant wallets.'),
+        ('🧪','Your integration','Sandbox first, then flip','Every ordinary test number succeeds deterministically; documented test numbers trigger exact failures on demand — the way Stripe test cards work. Build against test keys, switch to live keys, nothing else changes.'),
       ] %}
       <div class="testi">
-        <div class="stars">{% for _ in range(5) %}<span class="star">★</span>{% endfor %}</div>
-        <div class="testi-q">{{ q }}</div>
+        <div class="testi-q" style="font-style:normal;">{{ q }}</div>
         <div class="testi-who">
-          <div class="testi-av">{{ av }}</div>
+          <div class="testi-av" style="font-size:1.05rem;">{{ av }}</div>
           <div><div class="testi-nm">{{ nm }}</div><div class="testi-rl">{{ rl }}</div></div>
         </div>
       </div>
@@ -474,7 +482,7 @@
       </div>
     </div>
     <div class="foot-bottom">
-      <span>© 2025 Samsoftpay</span>
+      <span>© 2026 Samsoftpay</span>
       <span>Uganda · Kenya · Tanzania · Rwanda</span>
     </div>
   </div>
