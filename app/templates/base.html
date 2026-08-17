@@ -1071,14 +1071,25 @@
 
     // ── COPY KEY HELPER ──
     window.copyKey = function(id, btn) {
-      const text = document.getElementById(id)?.textContent || '';
-      navigator.clipboard.writeText(text.trim()).then(() => {
+      const el = document.getElementById(id);
+      // data-real wins over textContent: masked secret keys display dots but
+      // must copy the actual key.
+      const text = (el?.dataset.real || el?.textContent || '').trim();
+      navigator.clipboard.writeText(text).then(() => {
         btn.classList.add('copied');
         const prev = btn.innerHTML;
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>';
         showToast('Copied to clipboard', 'success', 2000);
-        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = prev; feather.replace({'stroke-width':2}); }, 2000);
+        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = prev; if (window.feather) feather.replace({'stroke-width':2}); }, 2000);
       });
+    };
+
+    // Show/hide a masked secret key (see account.html's .secret-maskable).
+    window.toggleKey = function(id, btn) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const masked = el.textContent.indexOf('•') !== -1;
+      el.textContent = masked ? el.dataset.real : '••••••••••••••••••••';
     };
 
     // ── MODE TOGGLE ──
@@ -1089,7 +1100,7 @@
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
       const btn = document.getElementById(`btn-${mode}`);
       if (btn) btn.classList.add('active');
-      feather.replace({'stroke-width':2});
+      if (window.feather) feather.replace({'stroke-width':2});
     };
   </script>
 

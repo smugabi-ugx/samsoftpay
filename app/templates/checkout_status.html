@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Payment status — {{ merchant.name }}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -203,7 +204,8 @@
 
     <div class="detail">
       <div class="detail-row"><span>Reference</span><span>{{ txn.public_id }}</span></div>
-      <div class="detail-row"><span>Method</span><span>{{ txn.channel.value }}</span></div>
+      {# Human name, not the enum ('MTN Mobile Money', not 'mtn_momo') #}
+      <div class="detail-row"><span>Method</span><span>{% if txn.channel.value == 'mtn_momo' %}MTN Mobile Money{% elif txn.channel.value == 'airtel_money' %}Airtel Money{% else %}{{ txn.channel.value.replace('_',' ')|title }}{% endif %}</span></div>
       {% if link.reference %}
       <div class="detail-row"><span>Order</span><span>{{ link.reference }}</span></div>
       {% endif %}
@@ -264,7 +266,7 @@
       hint.style.display = 'none';
       retryBtn.style.display = 'inline-block';
       {% if link.cancel_url %}
-      addReturnLink("{{ link.cancel_url }}", "Return to {{ merchant.name }}");
+      addReturnLink({{ link.cancel_url|tojson }}, "Return to " + {{ merchant.name|tojson }});
       {% endif %}
     }
 
@@ -278,14 +280,18 @@
 
     function showReturnButton() {
       {% if link.success_url %}
-      addReturnLink("{{ link.success_url }}", "Continue to {{ merchant.name }}");
+      {# |tojson, not quoted HTML-escaping: inside a JS string literal, HTML
+         autoescape turns '&' into '&amp;' — a success_url with query params
+         (?a=1&b=2) redirected to a mangled URL. tojson emits a correct JS
+         string for any characters. #}
+      addReturnLink({{ link.success_url|tojson }}, "Continue to " + {{ merchant.name|tojson }});
       let countdown = 5;
       const cd = document.getElementById('countdown');
       cd.style.display = 'block';
       const tick = setInterval(() => {
         countdown--;
         cd.textContent = `Redirecting in ${countdown}…`;
-        if (countdown <= 0) { clearInterval(tick); window.location.href = "{{ link.success_url }}"; }
+        if (countdown <= 0) { clearInterval(tick); window.location.href = {{ link.success_url|tojson }}; }
       }, 1000);
       {% endif %}
     }
@@ -298,7 +304,7 @@
     // Initial state from server-rendered status
     const initial = "{{ txn.status.value }}";
     if (initial === 'succeeded') setSuccess();
-    else if (initial === 'failed') setFailure("{{ txn.failure_reason or '' }}");
+    else if (initial === 'failed') setFailure({{ (txn.failure_reason or '')|tojson }});
 
     // Poll until terminal, with a friendly timeout after ~100s.
     let pollTimer = null, polls = 0;

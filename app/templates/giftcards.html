@@ -102,12 +102,16 @@
         voucher field. The balance is deducted automatically. Partial redemption supported.
       </p>
     </div>
+    {# Describes the redemption path that actually exists. The old box claimed
+       "scan with the MTN MoMo app to receive the balance as mobile money" — a
+       feature that was never built; the QR encoded a made-up URI no MoMo app
+       can parse. #}
     <div style="background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:1rem;">
-      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">MTN Gift Card Redemption</div>
+      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Sharing a card</div>
       <p style="font-size:.875rem;color:var(--gray-600);line-height:1.65;">
-        Gift cards can be redeemed directly to MTN MoMo. Click the
-        <i data-feather="grid" style="width:13px;height:13px;vertical-align:middle;"></i> QR button
-        on any card — customers scan the QR with their MTN MoMo app to receive the balance as mobile money.
+        Click the <i data-feather="grid" style="width:13px;height:13px;vertical-align:middle;"></i>
+        button on any card to display its code full-screen — easy to photograph, screenshot
+        or read out to the customer. They redeem it in the voucher field at checkout.
       </p>
     </div>
   </div>
@@ -116,10 +120,8 @@
 <!-- QR Modal -->
 <div id="gc-qr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:9000;align-items:center;justify-content:center;padding:1rem;">
   <div style="background:white;border-radius:20px;padding:2rem;text-align:center;max-width:300px;width:100%;">
-    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-900);margin-bottom:.25rem;">Gift Card QR Code</h3>
+    <h3 style="font-size:1rem;font-weight:700;color:var(--gray-900);margin-bottom:.25rem;">Gift Card Code</h3>
     <p id="gc-qr-label" style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;"></p>
-    <img id="gc-qr-img" width="180" height="180"
-         style="border-radius:12px;border:1px solid var(--gray-200);margin:0 auto 1rem;display:block;" alt="QR">
     <div id="gc-qr-code-text"
          style="font-family:monospace;font-size:1.125rem;font-weight:700;letter-spacing:.12em;
                 color:var(--gray-900);background:var(--gray-50);border-radius:8px;
@@ -136,13 +138,12 @@
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  if (window.feather) feather.replace();
 
   function showGCQR(code, value) {
-    // QR encodes the gift card code so MTN/Airtel apps can scan it
-    const qrData = 'samsoftpay:giftcard:' + code;
-    const qrSrc  = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=2&data=' + encodeURIComponent(qrData);
-    document.getElementById('gc-qr-img').src = qrSrc;
+    // No QR: the old one encoded a made-up samsoftpay:giftcard: URI (nothing
+    // can scan it) AND shipped the live bearer code to a third-party QR host.
+    // The code itself, displayed large, is the real sharing mechanism.
     document.getElementById('gc-qr-label').textContent = value + ' gift card';
     document.getElementById('gc-qr-code-text').textContent = code;
     const modal = document.getElementById('gc-qr-modal');

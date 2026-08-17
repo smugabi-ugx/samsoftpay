@@ -57,8 +57,12 @@
   <div class="card" style="text-align:center;padding:3rem;">
     <span class="status-icon">✅</span>
     <h2 style="font-family:'Urbanist',sans-serif;font-size:1.5rem;font-weight:800;margin-bottom:.5rem;">Top-up successful!</h2>
+    {# Honest about the fee: _settle_topup credits amount MINUS the 1.5%
+       (min UGX 200) collection fee — claiming the full amount landed made
+       every top-up look like money went missing. #}
     <p style="color:var(--gray-500);margin-bottom:1.5rem;">
-      UGX {{ "{:,}".format(topup.amount) }} has been added to your available balance.
+      Your UGX {{ "{:,}".format(topup.amount) }} top-up was received and credited
+      to your available balance, minus the 1.5% collection fee (min UGX 200).
     </p>
     <a href="{{ url_for('wallet.wallet_home') }}" class="btn btn-success" style="width:100%;">
       <i data-feather="check-circle"></i> View Wallet Balance
@@ -83,8 +87,10 @@
     <div class="qr-label">to {{ current_user.name }}</div>
 
     {% if checkout_url %}
+    {# Our own segno QR endpoint — a payment QR must not depend on a third
+       party's uptime, and the payment URL should not leak to one either. #}
     <div style="margin:1.25rem 0;">
-      <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&qzone=2&data={{ checkout_url|urlencode }}"
+      <img src="{{ url_for('checkout.order_qr_png', public_id=link.public_id) }}"
            width="220" height="220" alt="Payment QR">
     </div>
     <div class="or-divider">or use the link</div>

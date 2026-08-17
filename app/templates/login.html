@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign In | Samsoftpay</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -69,10 +70,11 @@
 </head>
 <body>
   <div class="login-wrap">
-    <div class="logo" style="display:flex;align-items:center;gap:.625rem;margin-bottom:2rem;">
+    {# A link, not a div — signup's logo already goes home; login's didn't. #}
+    <a href="/" class="logo" style="display:flex;align-items:center;gap:.625rem;margin-bottom:2rem;text-decoration:none;">
       <img src="/static/img/logo.png" alt="Samsoftpay" style="width:40px;height:40px;border-radius:10px;object-fit:cover;">
       <span style="font-size:1.125rem;font-weight:800;color:#0f172a;">Samsoftpay</span>
-    </div>
+    </a>
 
     <h2>Welcome back</h2>
     <p class="subtitle">Sign in to your merchant dashboard.</p>

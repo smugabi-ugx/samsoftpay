@@ -15,11 +15,29 @@ from ..utils import verified_required
 
 bp = Blueprint("subscriptions", __name__)
 
-_CHANNELS = [
-    ("mtn_momo",     "MTN Mobile Money"),
-    ("airtel_money", "Airtel Money"),
-    ("card",         "Visa / Mastercard"),
-]
+def _live_channels():
+    """Only channels a live billing cycle can actually charge.
+
+    Offering Airtel/card here created plans whose every renewal silently
+    failed — the orchestrator refuses simulated rails for live money
+    (guardrail 14). Same gate the checkout page uses.
+    """
+    from ..models import Channel
+    from ..services.orchestrator import _simulated_rail_forbidden
+    options = [
+        ("mtn_momo",     "MTN Mobile Money"),
+        ("airtel_money", "Airtel Money"),
+        ("card",         "Visa / Mastercard"),
+    ]
+    out = []
+    for value, label in options:
+        try:
+            if _simulated_rail_forbidden(Channel(value)):
+                continue
+        except Exception:
+            pass
+        out.append((value, label))
+    return out
 
 _INTERVALS = [
     ("weekly",  "Weekly"),
@@ -47,7 +65,7 @@ def list_plans():
     return render_template("subscriptions.html",
                            plans=plans, counts=counts,
                            total_subs=total_subs,
-                           channels=_CHANNELS, intervals=_INTERVALS)
+                           channels=_live_channels(), intervals=_INTERVALS)
 
 
 @bp.post("/dashboard/subscriptions/new-plan")

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f172a">
   <title>Pay {{ merchant.name }}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -42,7 +43,7 @@
       position: sticky; top: 0; z-index: 10;
     }
     .back-btn {
-      width: 36px; height: 36px; border-radius: 8px;
+      width: 40px; height: 40px; border-radius: 8px;
       background: var(--bg); border: 1px solid var(--line);
       display: flex; align-items: center; justify-content: center;
       color: var(--ink); text-decoration: none;
@@ -89,12 +90,6 @@
     }
     .summary-desc {
       font-size: 0.875rem; opacity: .65; margin-top: 0.5rem;
-    }
-    .summary-fee {
-      display: inline-block;
-      background: rgba(255,255,255,.1); border-radius: 6px;
-      padding: 0.25rem 0.625rem; font-size: 0.75rem;
-      margin-top: 0.5rem;
     }
 
     /* ── Form body ── */
@@ -387,7 +382,10 @@
         </div>
       </div>
 
-      <!-- Gift card / voucher -->
+      <!-- Gift card / voucher — hidden entirely on sandbox links: apply_voucher
+           unconditionally refuses them, so showing the field only offered a
+           dead end. -->
+      {% if not link.is_test %}
       {% if voucher_applied %}
       <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:.875rem 1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem;font-size:.9rem;color:#065f46;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -414,6 +412,7 @@
         </div>
         {% if voucher_error %}<p style="color:var(--danger);font-size:.8125rem;margin-top:.375rem;">{{ voucher_error }}</p>{% endif %}
       </div>
+      {% endif %}
       {% endif %}
 
       <!-- Email (always shown) -->
@@ -495,7 +494,10 @@
       const checked = document.querySelector('input[name="channel"]:checked');
       if (checked && checked.value === 'crypto') {
         e.preventDefault();
-        window.location.href = '{{ crypto_url }}';
+        {# Computed here, not passed in: five different error re-renders of
+           this template forgot to pass crypto_url, leaving the crypto option
+           redirecting to an empty href on any validation error. #}
+        window.location.href = {{ url_for('checkout.crypto_checkout', public_id=link.public_id)|tojson }};
         return;
       }
       payBtn.classList.add('loading');

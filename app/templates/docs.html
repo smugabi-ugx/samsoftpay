@@ -125,7 +125,7 @@ headers = {
         </div>
         <div class="tab-content">
 <pre><code>curl -H "Authorization: Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}" \
-     https://yourapp.onrender.com/v1/charges</code></pre>
+     {{ request.host_url }}v1/charges</code></pre>
         </div>
       </div>
       <div class="callout warning">Never expose your Secret Key in client-side JavaScript, mobile apps, or public repos. Use environment variables.</div>
@@ -170,7 +170,7 @@ headers = {
         <tbody>
           <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in UGX (minor units). Must be &gt; 0.</td></tr>
           <tr><td><code>currency</code> <span class="optional">optional</span></td><td>string</td><td>Currently only <code>"UGX"</code>. Default: <code>"UGX"</code>.</td></tr>
-          <tr><td><code>channel</code> <span class="required">required</span></td><td>string</td><td><code>"mtn_momo"</code>, <code>"airtel_money"</code>, or <code>"card"</code>.</td></tr>
+          <tr><td><code>channel</code> <span class="required">required</span></td><td>string</td><td><code>"mtn_momo"</code> (live). <code>"airtel_money"</code> and <code>"card"</code> work with <strong>test keys only</strong> — live charges on them are refused until those rails launch.</td></tr>
           <tr><td><code>customer.phone</code> <span class="required">required</span></td><td>string</td><td>Customer's phone number. E.g. <code>"256700123456"</code>.</td></tr>
           <tr><td><code>reference</code> <span class="optional">optional</span></td><td>string</td><td>Your internal order/reference ID.</td></tr>
         </tbody>
@@ -378,6 +378,8 @@ print(resp.json())
     headers={
         "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
         "Content-Type": "application/json",
+        "Idempotency-Key": str(uuid.uuid4()),
+        "X-Timestamp": str(int(time.time())),
     },
     json={
         "amount": 25000,

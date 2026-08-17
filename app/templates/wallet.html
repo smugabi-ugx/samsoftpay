@@ -39,12 +39,20 @@
 
 <!-- Balance Cards -->
 <div class="stats-grid" style="margin-bottom:2rem;">
+  {# Masked by default, same pattern + same localStorage key as
+     merchant_detail.html — one preference governs both pages. #}
   <div class="stat-card success">
     <div class="stat-header">
-      <span class="stat-label">Available to Withdraw</span>
+      <span class="stat-label">Available to Withdraw
+        <button type="button" id="wallet-balance-toggle" aria-label="Show or hide balances"
+                style="background:none;border:none;cursor:pointer;color:var(--gray-400);padding:0 0 0 .3rem;vertical-align:middle;">
+          <svg id="w-eye-open" style="display:none;width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg id="w-eye-closed" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </span>
       <div class="stat-icon success"><i data-feather="dollar-sign"></i></div>
     </div>
-    <div class="stat-value">UGX {{ "{:,}".format(available) }}</div>
+    <div class="stat-value balance-maskable" data-real="UGX {{ "{:,}".format(available) }}">••••••</div>
     <div class="stat-change positive">
       <i data-feather="check-circle"></i>
       <span>You can withdraw this now</span>
@@ -55,7 +63,7 @@
       <span class="stat-label">Customer Payments Processing</span>
       <div class="stat-icon warning"><i data-feather="clock"></i></div>
     </div>
-    <div class="stat-value" style="font-size:1.5rem;">UGX {{ "{:,}".format(pending) }}</div>
+    <div class="stat-value balance-maskable" style="font-size:1.5rem;" data-real="UGX {{ "{:,}".format(pending) }}">••••••</div>
     <div class="stat-change">
       <i data-feather="info"></i>
       <span>Customer payments confirming on the rail — moves to Available automatically</span>
@@ -66,7 +74,7 @@
       <span class="stat-label">Total Balance</span>
       <div class="stat-icon info"><i data-feather="layers"></i></div>
     </div>
-    <div class="stat-value" style="font-size:1.5rem;">UGX {{ "{:,}".format(available + pending) }}</div>
+    <div class="stat-value balance-maskable" style="font-size:1.5rem;" data-real="UGX {{ "{:,}".format(available + pending) }}">••••••</div>
     <div class="stat-change">
       <i data-feather="trending-up"></i>
       <span>Available + processing</span>
@@ -170,7 +178,9 @@
                     onchange="toggleBank(this.value)">
               <option value="">Select type</option>
               <option value="momo_mtn">MTN Mobile Money</option>
-              <option value="momo_airtel">Airtel Money</option>
+              {# No live Airtel disbursement rail exists — offering it here let a
+                 merchant register a destination every payout to which fails. #}
+              <option value="momo_airtel" disabled>Airtel Money — coming soon</option>
               <option value="bank">Bank Account</option>
             </select>
           </div>
@@ -204,15 +214,18 @@
       <div class="card-header">
         <h3 class="card-title"><i data-feather="arrow-down-circle"></i> Top Up Wallet</h3>
       </div>
-      <p class="text-muted mb-3" style="font-size:.875rem;">Add funds to your available balance. MoMo top-up generates a QR you scan — credited instantly on payment.</p>
+      {# Copy must match what _settle_topup actually credits: amount MINUS the
+         1.5% (min UGX 200) collection fee — and only MTN has a live rail, so
+         no Airtel promise here. #}
+      <p class="text-muted mb-3" style="font-size:.875rem;">Add funds to your available balance. MoMo top-up generates a QR you scan — credited on payment, minus the 1.5% collection fee (min UGX 200).</p>
 
       <!-- ── MTN MoMo top-up (generates QR) ── -->
       <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
         <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
           <span style="font-size:1.5rem;">📱</span>
           <div>
-            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">MTN / Airtel Mobile Money</div>
-            <div style="font-size:.8rem;color:var(--gray-500);">Scan QR with your phone — wallet credited instantly on success</div>
+            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">MTN Mobile Money</div>
+            <div style="font-size:.8rem;color:var(--gray-500);">Scan QR with your phone — wallet credited on success (fee deducted)</div>
           </div>
         </div>
         <form method="POST" action="{{ url_for('wallet.topup_momo') }}">
@@ -227,7 +240,7 @@
               <i data-feather="grid"></i> Get QR
             </button>
           </div>
-          <div class="form-hint" style="margin-top:.375rem;">A payment page with QR code opens. Scan it with your MTN MoMo or Airtel app to pay.</div>
+          <div class="form-hint" style="margin-top:.375rem;">A payment page with QR code opens. Scan it with your phone and approve the MTN MoMo prompt.</div>
         </form>
       </div>
 
@@ -241,10 +254,12 @@
           </div>
         </div>
 
-        <!-- Our bank details -->
+        {# No fabricated account numbers: the previous hardcoded bank+account
+           pair was a placeholder formatted like a real account — a merchant
+           could have wired real money at it. Details come from support until
+           a real account is configured to display here. #}
         <div style="background:var(--gray-50);border-radius:8px;padding:.75rem;font-size:.875rem;margin-bottom:.875rem;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;"><span style="color:var(--gray-600);">Bank</span><strong>Stanbic Bank Uganda</strong></div>
-          <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;"><span style="color:var(--gray-600);">Account</span><strong>9030-SAMSOFTPAY</strong></div>
+          <div style="margin-bottom:.25rem;color:var(--gray-600);">Request our bank details from <a href="mailto:samsoftware75@gmail.com?subject=Bank%20transfer%20top-up%20TOPUP-{{ current_user.id }}" style="font-weight:600;">support</a> before transferring.</div>
           <div style="display:flex;justify-content:space-between;"><span style="color:var(--gray-600);">Your Reference</span><strong>TOPUP-{{ current_user.id }}</strong></div>
         </div>
 
@@ -349,8 +364,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">Amount (UGX) *</label>
+          {# max must never fall below min: for balances of 5,000-5,749 the old
+             max (available - fee < 5000) made the browser reject EVERY amount
+             with no way to submit. The route still validates the real limit. #}
           <input class="form-input" type="number" name="amount" required
-                 min="5000" max="{{ available - withdrawal_fee }}"
+                 min="5000" max="{{ [available - withdrawal_fee, 5000]|max }}"
                  placeholder="Minimum UGX 5,000">
           <div class="form-hint">
             Available: <strong>UGX {{ "{:,}".format(available) }}</strong> ·
@@ -420,5 +438,27 @@
     document.getElementById('bank-name-group').style.display =
       type === 'bank' ? 'block' : 'none';
   }
+
+  // Balance masking — same key as merchant_detail.html so one preference
+  // governs both pages.
+  (function () {
+    var KEY = 'ssp_show_balance';
+    var els = document.querySelectorAll('.balance-maskable');
+    var eyeOpen = document.getElementById('w-eye-open');
+    var eyeClosed = document.getElementById('w-eye-closed');
+    function render(show) {
+      els.forEach(function (el) { el.textContent = show ? el.dataset.real : '••••••'; });
+      if (eyeOpen) eyeOpen.style.display = show ? 'inline' : 'none';
+      if (eyeClosed) eyeClosed.style.display = show ? 'none' : 'inline';
+    }
+    var show = localStorage.getItem(KEY) === '1';
+    render(show);
+    var btn = document.getElementById('wallet-balance-toggle');
+    if (btn) btn.addEventListener('click', function () {
+      show = !show;
+      localStorage.setItem(KEY, show ? '1' : '0');
+      render(show);
+    });
+  })();
 </script>
 {% endblock %}

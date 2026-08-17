@@ -1,13 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ merchant.name }} — Dashboard{% endblock %}
 
-{% block breadcrumb %}
-<nav class="breadcrumb">
-  <a href="{{ url_for('dashboard.index') }}">Home</a>
-  <span class="bc-sep">/</span>
-  <span class="bc-cur">{{ merchant.name }}</span>
-</nav>
-{% endblock %}
+{# No breadcrumb: for a merchant this page IS Home (the app's own convention —
+   logo and bottom-nav Home both land here), so "Home / name" led to the
+   public landing page from inside the product. #}
 
 {% block extra_head %}
 <style>
@@ -155,7 +151,7 @@
       <div class="balance-item">
         <div class="balance-label">Available Balance
           <button type="button" id="balance-toggle" aria-label="Show or hide balances"
-                  style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.55);padding:0 0 0 .4rem;vertical-align:middle;">
+                  style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.55);padding:.75rem;margin:-.75rem -.75rem -.75rem -.35rem;vertical-align:middle;">
             <svg id="eye-open" style="display:none;width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg id="eye-closed" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           </button>
@@ -240,10 +236,12 @@
 <div class="stats-grid">
   <div class="stat-card info">
     <div class="stat-header">
-      <span class="stat-label">Total Collected</span>
+      <span class="stat-label">Succeeded Payments</span>
       <div class="stat-icon info"><i data-feather="trending-up"></i></div>
     </div>
-    <div class="stat-value">{{ txns|selectattr('status.value', 'equalto', 'succeeded')|list|length }}</div>
+    {# Real aggregate from the route — counting the capped 50-row list froze
+       this number at 50 forever. #}
+    <div class="stat-value">{{ "{:,}".format(succeeded_count) }}</div>
     <div class="stat-change positive"><i data-feather="check-circle"></i> <span>Succeeded transactions</span></div>
   </div>
   <div class="stat-card">
@@ -251,11 +249,7 @@
       <span class="stat-label">Total Volume</span>
       <div class="stat-icon primary"><i data-feather="dollar-sign"></i></div>
     </div>
-    <div class="stat-value" style="font-size:1.5rem;">
-      {% set vol = namespace(v=0) %}
-      {% for t in txns %}{% if t.status.value == 'succeeded' %}{% set vol.v = vol.v + t.amount %}{% endif %}{% endfor %}
-      {{ "{:,}".format(vol.v) }}
-    </div>
+    <div class="stat-value" style="font-size:1.5rem;">{{ "{:,}".format(succeeded_volume) }}</div>
     <div class="stat-change"><i data-feather="layers"></i> <span>UGX collected</span></div>
   </div>
   <div class="stat-card">
@@ -263,7 +257,7 @@
       <span class="stat-label">Payouts Sent</span>
       <div class="stat-icon success"><i data-feather="send"></i></div>
     </div>
-    <div class="stat-value">{{ payouts|length }}</div>
+    <div class="stat-value">{{ "{:,}".format(payout_count) }}</div>
     <div class="stat-change"><i data-feather="arrow-up-right"></i> <span>Disbursements</span></div>
   </div>
   <div class="stat-card">
@@ -271,7 +265,7 @@
       <span class="stat-label">Payment Links</span>
       <div class="stat-icon warning"><i data-feather="link"></i></div>
     </div>
-    <div class="stat-value">{{ links|length }}</div>
+    <div class="stat-value">{{ "{:,}".format(active_link_count) }}</div>
     <div class="stat-change"><i data-feather="external-link"></i> <span>Active links</span></div>
   </div>
 </div>
@@ -298,8 +292,10 @@
     <h3 class="card-title"><i data-feather="activity"></i> Recent Transactions</h3>
     <div style="display:flex;align-items:center;gap:.625rem;">
       <span class="badge" style="background:var(--gray-100);color:var(--gray-700);">{{ txns|length }}</span>
+      {# Admin-only: sweep_pending is @admin_required — rendering this for a
+         merchant gave them a button that 403'd every time. #}
       {% set pend = txns|selectattr('status.value','in',['pending','authorized'])|list|length %}
-      {% if pend > 0 %}
+      {% if pend > 0 and current_user.is_authenticated and current_user.role == 'admin' %}
       <form method="post" action="{{ url_for('dashboard.sweep_pending') }}">
         <button type="submit" class="btn btn-outline" style="padding:.375rem .75rem;font-size:.8125rem;color:var(--warning);">
           <i data-feather="refresh-cw"></i> Settle {{ pend }}
@@ -332,7 +328,13 @@
       <div>
         <span class="badge {{ t.status.value }}">{{ t.status.value }}</span>
       </div>
+      {# Green "+" is EARNED money only — a failed or still-pending charge
+         painted green with a plus sign misstates what the merchant has. #}
+      {% if t.status.value == 'succeeded' %}
       <div class="activity-amount in">+ {{ "{:,}".format(t.amount) }} UGX</div>
+      {% else %}
+      <div class="activity-amount out" style="color:var(--gray-400);">{{ "{:,}".format(t.amount) }} UGX</div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -387,7 +389,7 @@
   <div class="empty-state">
     <div class="empty-state-icon">📤</div>
     <h4>No payouts yet</h4>
-    <p>Send money to your recipients via MTN MoMo or Airtel Money.</p>
+    <p>Send money to your recipients via MTN Mobile Money. Airtel payouts are coming next.</p>
   </div>
   {% endif %}
 </div>
@@ -444,7 +446,7 @@
 
 {% block extra_scripts %}
 <script>
-  feather.replace({ 'stroke-width': 2 });
+  if (window.feather) feather.replace({ 'stroke-width': 2 });
 
   // Charts — built inline to avoid SQLAlchemy serialisation issues
   const statusCounts = {};
@@ -454,16 +456,37 @@
   channelCounts["{{ t.channel.value }}"] = (channelCounts["{{ t.channel.value }}"] || 0) + 1;
   {% endfor %}
 
+  // Colors carry MEANING for statuses: succeeded must always be green and
+  // failed always red. Assigning a rotating palette by key-insertion order
+  // could paint "failed" green depending on which status happened to appear
+  // first in the transaction list.
+  const STATUS_COLORS = {
+    succeeded: '#10b981', failed: '#ef4444',
+    pending: '#f59e0b', authorized: '#3b82f6', refunded: '#8b5cf6',
+  };
   const palette = ['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'];
 
-  function makeChart(id, labels, data) {
+  function makeChart(id, labels, data, colorMap) {
     const ctx = document.getElementById(id);
-    if (!ctx || !data.length) return;
+    if (!ctx) return;
+    if (!data.length) {
+      // Empty state instead of a titled card with a blank canvas — every
+      // other section on this page has one.
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.style.padding = '2rem 1rem';
+      empty.innerHTML = '<div class="empty-state-icon" style="font-size:2rem;">📊</div><p style="font-size:.85rem;color:var(--gray-500);">No data yet — appears after your first transaction.</p>';
+      ctx.replaceWith(empty);
+      return;
+    }
+    const colors = colorMap
+      ? labels.map((l, i) => colorMap[l] || palette[i % palette.length])
+      : palette;
     new Chart(ctx, {
       type: 'doughnut',
       data: {
         labels,
-        datasets: [{ data, backgroundColor: palette, borderWidth: 2, borderColor: '#fff' }]
+        datasets: [{ data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
       },
       options: {
         responsive: true,
@@ -475,7 +498,7 @@
     });
   }
 
-  makeChart('statusChart', Object.keys(statusCounts), Object.values(statusCounts));
-  makeChart('channelChart', Object.keys(channelCounts), Object.values(channelCounts));
+  makeChart('statusChart', Object.keys(statusCounts), Object.values(statusCounts), STATUS_COLORS);
+  makeChart('channelChart', Object.keys(channelCounts), Object.values(channelCounts), null);
 </script>
 {% endblock %}

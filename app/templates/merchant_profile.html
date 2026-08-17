@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f0c29">
   <title>Pay {{ merchant.name }} | Samsoftpay</title>
-  <meta name="description" content="Pay {{ merchant.name }} securely via MTN MoMo, Airtel Money, Visa or crypto.">
+  <meta name="description" content="Pay {{ merchant.name }} securely via MTN Mobile Money or crypto — powered by Samsoftpay.">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Urbanist:wght@700;800;900&display=swap" rel="stylesheet">
@@ -240,11 +240,12 @@
     <div class="hero-handle">@{{ merchant.handle }}</div>
     {% endif %}
 
+    {# Only methods a customer can actually complete — promising Airtel/cards
+       on a public pay page stranded people at checkout. #}
     <div class="hero-channels">
       <span class="ch-pill"><span class="ch-swatch" style="background:#ffcb05;"></span>MTN MoMo</span>
-      <span class="ch-pill"><span class="ch-swatch" style="background:#e60000;"></span>Airtel</span>
-      <span class="ch-pill"><span class="ch-swatch" style="background:#1a1f71;"></span>Visa/MC</span>
       <span class="ch-pill"><span class="ch-swatch" style="background:#f7931a;"></span>Crypto</span>
+      <span class="ch-pill" style="opacity:.55;"><span class="ch-swatch" style="background:#e60000;"></span>Airtel — soon</span>
     </div>
 
     {% if merchant.handle %}
@@ -345,8 +346,9 @@
   // QR modal
   const profileUrl = '{{ request.host_url }}pay/@{{ merchant.handle }}';
   function showQR() {
+    // In-house segno QR — no third-party dependency for a payment-adjacent QR.
     document.getElementById('qr-img').src =
-      'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=2&data=' + encodeURIComponent(profileUrl);
+      '{{ url_for("checkout.profile_qr_png", handle=merchant.handle) }}';
     document.getElementById('qr-url').textContent = profileUrl;
     document.getElementById('qr-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
