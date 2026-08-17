@@ -32,6 +32,15 @@
   .qr img { width: min(300px, 60vw); height: auto; display: block; }
   .hint { margin-top: 1.4rem; font-size: 1.15rem; font-weight: 700; }
   .sub  { margin-top: .35rem; font-size: .95rem; color: #666; }
+  /* Brand chips, not grey text: at machine-viewing distance a customer
+     recognises the MTN yellow instantly — they don't read small copy. */
+  .pay-brands { margin-top: .6rem; display: flex; gap: .5rem; justify-content: center; }
+  .pay-brand {
+    padding: .3rem .7rem; border-radius: 999px;
+    font-size: .8rem; font-weight: 800; letter-spacing: .01em;
+  }
+  .pay-brand.mtn { background: #ffcb05; color: #003566; }
+  .pay-brand.momo { background: #ede9fe; color: #6b21a8; }
   .state { display: none; }
   .state.on { display: block; }
   .big { font-size: clamp(1.6rem, 6vw, 2.4rem); font-weight: 900; line-height: 1.15; }
@@ -64,7 +73,13 @@
              alt="Scan to pay with Mobile Money">
       </div>
       <div class="hint">Scan with your phone to pay</div>
-      <div class="sub">MTN Mobile Money &middot; Airtel Money</div>
+      <!-- Only methods that actually work are advertised — Airtel has no live
+           rail yet (see rails.is_simulated) and promising it on a machine
+           screen would strand a customer mid-purchase. -->
+      <div class="pay-brands">
+        <span class="pay-brand mtn">MTN MoMo</span>
+        <span class="pay-brand momo">Mobile Money</span>
+      </div>
     </div>
 
     <!-- 2. Paid, machine releasing the product -->
