@@ -1,208 +1,212 @@
 # Samsoftpay — Payment Gateway
 
-A full payment gateway built with Flask + SQLAlchemy. Handles both **Collections** (money in) and **Disbursements** (money out) with MTN MoMo sandbox integration.
+A Flask + SQLAlchemy payment gateway for Uganda: MTN MoMo Collections and
+Disbursements, a double-entry ledger with a hard split between sandbox and
+live money, a merchant API with idempotency and hashed keys, Celery/Redis
+background processing, hourly settlement, refunds, payment links, hosted
+checkout, webhook delivery, and a scan-to-pay vending machine integration
+(the first live external client, TK Vending).
 
-## What this does
+**Live:** <https://api.samsoftpay.com> · Render fallback:
+<https://samsoftpay.onrender.com>
 
-End-to-end, you can:
+---
 
-1. Create a **merchant** account with API keys (public + secret).
-2. Initiate a **charge** (Collections) via HTTP API with an idempotency key.
-3. The orchestrator picks a rail (MTN MoMo real sandbox, or mock Airtel/Card).
-4. Async lifecycle: pending → authorized → succeeded/failed.
-5. Every state change writes **double-entry journal entries** to the ledger.
-6. A **webhook** is delivered (with HMAC signature) to the merchant's URL.
-7. Initiate a **payout** (Disbursements) to send money out.
-8. **Reconciliation** report verifies ledger consistency at any time.
+## Start here, not here
+
+This README is the front door. The actual authoritative, continuously
+updated state of the project — what's built, what broke and why, sixteen
+guardrails each documenting a real past production incident with real
+numbers — lives in **[`CLAUDE.md`](./CLAUDE.md)**. Read that first if you're
+about to change anything. This file exists to get a new machine (or a new
+Claude session) running quickly and to say who to ask when you're stuck.
+
+Companion docs, if you need the wider picture:
+- `COMMERCIAL_READINESS.md` — audit + business roadmap
+- `C:\Users\DELL\Desktop\tk\MASTER_CLAUDE.md` — TK Vending, the first external client
+- `C:\Users\DELL\Desktop\tk\SAMSOFTPAY_INTEGRATION_GUIDE.md` — the contracted integration model for machine partners
+
+## What this actually does today
+
+- **Collections**: MTN MoMo (real sandbox adapter, `MOMO_USE_REAL` gates it),
+  Airtel/Card (mocked — no real rail exists yet), Visa/Crypto (passthrough,
+  settled by Flutterwave/ChangeNow before we're called).
+- **Disbursements**: real MTN MoMo payout adapter, row-locked balance checks
+  (no double-spend), rail resolved before any money moves (a rejected
+  channel writes nothing).
+- **Ledger**: double-entry, sums to zero, accounts keyed by
+  `(type, merchant, currency, is_test)` — sandbox and live money physically
+  cannot mix. Settlement sweeps each transaction once, after its own 24h
+  hold, committed per merchant.
+- **A sandbox that behaves like one**: an ordinary test phone number
+  succeeds every time; specific magic numbers (documented at `/docs`)
+  deterministically trigger `insufficient_funds` / `user_cancelled` /
+  `timeout`, the same pattern Stripe uses with test cards.
+- **A rail guard**: a channel with no real adapter behind it (Airtel, Card)
+  is refused for live charges before anything is written — it cannot
+  silently fake-succeed a payment nobody made.
+- **Vending**: `POST /v1/payment-links` returns a QR a customer scans on
+  their own phone; the machine dispenses itself and Samsoftpay never
+  touches the hardware. A supplier dispense-result callback
+  (`/inbound/xy/dispense-result`) corrects an order from `dispensed` to
+  `failed` when a tray jams, and `vending.dispensed` /
+  `vending.dispense_failed` webhooks tell the merchant's own backend what
+  actually happened — not just that the money arrived.
+- **Security**: API keys hashed at rest (dual-path auth during backfill),
+  inbound webhooks fail closed on a bad/missing signature, the app refuses
+  to boot in production with default secrets.
+- **Ops**: `/healthz` reports the exact running commit (`RENDER_GIT_COMMIT`)
+  so a deploy can be confirmed with one `curl`, `/livez` for pure liveness,
+  Redis-backed rate limiting, structured audit log, optional Sentry.
+
+## Tech stack
+
+Python 3.10, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL (SQLite fine for local
+dev only — the boot guard refuses SQLite in production), Celery 5.3.6 +
+Redis, Gunicorn, Alembic migrations. Deployed on Render as three services
+(web / worker / beat) sharing one Postgres and one Redis instance.
 
 ## Project structure
 
 ```
-samsoftpay/
-├── app/
-│   ├── __init__.py              # App factory, env config
-│   ├── extensions.py            # SQLAlchemy instance
-│   ├── cli.py                   # init-db, seed-demo CLI commands
-│   ├── worker.py                # Background webhook delivery loop
-│   ├── models/__init__.py       # All ORM models (Merchant, Transaction, Payout,
-│   │                            # Account, JournalEntry, RailEvent, etc.)
-│   ├── services/
-│   │   ├── ledger.py            # Double-entry posting + balance checks
-│   │   ├── orchestrator.py      # COLLECTIONS: create_charge / complete_transaction
-│   │   ├── payouts.py           # DISBURSEMENTS: create_payout / complete_payout
-│   │   ├── rails.py             # Collection rail adapter selector (mock + real)
-│   │   ├── rails_mtn_real.py    # Real MTN MoMo Collections sandbox adapter
-│   │   ├── rails_mtn_disbursement.py  # Real MTN MoMo Disbursement adapter
-│   │   ├── fees.py              # Fee calculation per channel
-│   │   ├── webhooks.py          # HMAC signing + delivery with backoff
-│   │   ├── idempotency.py       # Idempotency-Key handling
-│   │   ├── reconciliation.py    # Internal + external consistency checks
-│   │   └── settlement.py        # Sweep merchant_pending -> merchant_available
-│   ├── routes/
-│   │   ├── api.py               # /v1/charges, /v1/payouts (public API)
-│   │   ├── dashboard.py         # Merchant dashboard + reconciliation pages
-│   │   └── webhooks_inbound.py  # /inbound/<channel> for rail callbacks
-│   └── templates/               # Jinja templates for the dashboard
-├── tests/
-│   ├── test_end_to_end.py                       # Collections only (mock)
-│   └── test_collections_and_disbursements.py    # Full gateway flow (mock)
-├── requirements.txt
-├── run.py                       # Flask entry point
-├── .env.example                 # Template for credentials
-└── .gitignore
+app/
+├── __init__.py                  # app factory, boot guard, security headers, healthz
+├── celery_app.py                # Celery factory + beat schedule
+├── celery_worker.py             # REAL worker/beat entrypoint — see CLAUDE.md guardrail 2
+├── cli.py                       # flask db, backfill-key-hashes, reconcile, stranded-payouts, ...
+├── models/__init__.py           # Merchant, Transaction, Payout, PaymentLink, Account, ...
+├── services/
+│   ├── ledger.py                # double-entry posting, race-safe account creation
+│   ├── orchestrator.py          # COLLECTIONS: create_charge / complete_transaction
+│   ├── payouts.py               # DISBURSEMENTS: create_payout / complete_payout
+│   ├── rails.py                 # rail adapter selection, mock outcomes, simulated-rail guard
+│   ├── rails_mtn_real.py        # real MTN Collections sandbox adapter
+│   ├── rails_mtn_disbursement.py# real MTN Disbursement adapter
+│   ├── vending.py               # vending orders, the dispense gate, QR rendering
+│   ├── xy_vending.py            # XY supplier cloud client (signed, per-merchant creds)
+│   ├── webhooks.py              # HMAC signing, the shared outbound-event queue
+│   ├── settlement.py            # per-txn, per-merchant settlement sweep
+│   ├── reconciliation.py        # internal + external consistency checks
+│   └── secrets_box.py           # encrypted per-merchant credential storage
+├── routes/
+│   ├── api.py                   # merchant API — charges, payouts, payment-links, vending
+│   ├── checkout.py               # public hosted checkout — no auth, mode-scoped from the link
+│   ├── dashboard.py             # merchant dashboard
+│   ├── webhooks_inbound.py      # /inbound/<channel> — MTN/Airtel rail callbacks
+│   └── webhooks_xy.py           # /inbound/xy/dispense-result — supplier callback
+├── tasks/                       # Celery tasks: polling, webhook delivery, sweep, billing
+└── templates/                   # Jinja — dashboard, checkout, docs
+tests/                           # script-style — run directly, not pytest (see below)
+migrations/versions/             # Alembic — current head in CLAUDE.md
+render.yaml                      # web + worker + beat + Postgres + Redis
 ```
 
-## Quick start
+## Local dev quick start
 
 ```powershell
-# 1. Set up environment
-python -m venv .venv
+# Python 3.10 specifically — 3.14 is broken with this SQLAlchemy version.
+py -3.10 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Configure credentials — copy .env.example to .env and fill in
 copy .env.example .env
-notepad .env
+notepad .env          # fill in secrets; leave MOMO_USE_REAL=0 for mock rails
 
-# 3. Initialize database and create a demo merchant
-flask --app run.py init-db
-flask --app run.py seed-demo
+flask --app run.py db upgrade      # apply migrations — this is the real setup path
+flask --app run.py seed-demo       # optional: a demo merchant + API keys
 
-# 4. Run the server (keep this terminal open)
 flask --app run.py run --debug
 ```
 
-Open <http://localhost:5000> to see the dashboard.
-
-## MTN MoMo Credentials
-
-You need two separate subscriptions on <https://momodeveloper.mtn.com>:
-
-1. **Collections** — for receiving payments from customers
-2. **Disbursements** — for sending payments out
-
-Each subscription has its own Primary Key and requires its own API User + API Key (generated via PowerShell calls to the portal). After generation, put the six values into your `.env`:
-
-```
-MOMO_SUBSCRIPTION_KEY=<collections primary key>
-MOMO_API_USER=<collections api user uuid>
-MOMO_API_KEY=<collections api key>
-
-MOMO_DISBURSEMENT_SUBSCRIPTION_KEY=<disbursement primary key>
-MOMO_DISBURSEMENT_API_USER=<disbursement api user uuid>
-MOMO_DISBURSEMENT_API_KEY=<disbursement api key>
-
-MOMO_USE_REAL=1
-MOMO_BASE_URL=https://sandbox.momodeveloper.mtn.com
-MOMO_TARGET_ENV=sandbox
-MOMO_CURRENCY=EUR
-```
-
-Set `MOMO_USE_REAL=0` (or omit) to use fast local mocks instead of real sandbox calls.
-
-## Try it out
-
-### Collection (charge a customer)
-
-```powershell
-$body = @{
-  amount = 10000
-  currency = "UGX"
-  channel = "mtn_momo"
-  customer = @{ phone = "256780000001" }
-  reference = "order-001"
-} | ConvertTo-Json
-
-$headers = @{
-  "Authorization" = "Bearer sk_test_demo123"
-  "Idempotency-Key" = [guid]::NewGuid().ToString()
-  "Content-Type" = "application/json"
-}
-
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/v1/charges" -Headers $headers -Body $body
-```
-
-Wait ~30 seconds, then:
-
-```powershell
-# replace txn_xxx with the id from the response above
-Invoke-RestMethod -Headers @{"Authorization"="Bearer sk_test_demo123"} `
-  -Uri "http://127.0.0.1:5000/v1/charges/txn_xxx"
-```
-
-### Grant the merchant available balance (for testing payouts)
-
-```powershell
-python -c "
-from app import create_app
-from app.extensions import db
-from app.services import ledger
-from app.models import AccountType
-app = create_app()
-with app.app_context():
-    avail = ledger.get_or_create_account(type=AccountType.MERCHANT_AVAILABLE, merchant_id=1, currency='UGX')
-    psp = ledger.get_or_create_account(type=AccountType.PSP_FLOAT, merchant_id=None, currency='UGX')
-    ledger.post([(avail, -100000), (psp, +100000)], currency='UGX', memo='test seed')
-    db.session.commit()
-    print('granted 100,000 UGX available to merchant 1')
-"
-```
-
-### Disbursement (pay out to a recipient)
-
-```powershell
-$body = @{
-  amount = 50000
-  currency = "UGX"
-  channel = "mtn_momo"
-  recipient = @{ phone = "256780000001"; name = "Test Recipient" }
-} | ConvertTo-Json
-
-$headers = @{
-  "Authorization" = "Bearer sk_test_demo123"
-  "Idempotency-Key" = [guid]::NewGuid().ToString()
-  "Content-Type" = "application/json"
-}
-
-Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:5000/v1/payouts" -Headers $headers -Body $body
-```
-
-### Dashboard pages
-
-- <http://localhost:5000/> — home, list of merchants
-- <http://localhost:5000/dashboard/1> — merchant detail with balances, transactions, payouts
-- <http://localhost:5000/admin/reconciliation> — ledger integrity report
+Open <http://localhost:5000>. `app/worker.py` is legacy and unused — real
+background processing is Celery, run via `app.celery_worker` (see
+`CLAUDE.md` guardrail 2 for why pointing Celery at the wrong module silently
+breaks both collections and disbursements).
 
 ## Running the tests
 
+Script-style — run each file directly, not through pytest:
+
 ```powershell
-python tests/test_end_to_end.py
-python tests/test_collections_and_disbursements.py
+$env:MOMO_USE_REAL="0"
+python tests\test_end_to_end.py
+python tests\test_settlement_sweep.py
+python tests\test_ledger_mode_split.py
+python tests\test_payout_guards.py
+python tests\test_payment_link_mode.py
+python tests\test_deterministic_sandbox.py
+python tests\test_checkout.py
+python tests\test_vending_flow.py
+python tests\test_xy_dispense_callback.py
+python tests\test_xy_vending_sign.py
+python tests\test_rail_guard_and_vending_events.py
+python tests\test_balance_endpoint.py
+python tests\test_collections_and_disbursements.py
 ```
 
-Both should print `ALL ASSERTIONS PASSED`. These use mock rails — no MoMo credentials needed.
+Every one should print an explicit `ALL ... PASSED` / `All N checks passed`
+line. All run against mock rails — no MTN credentials needed. Note:
+`test_rail_guard_and_vending_events.py` has one known pre-existing timing
+flake under heavy concurrent machine load (documented in `CLAUDE.md`
+guardrail 16) — it's reliably green in isolation.
 
-## What's intentionally NOT here (and why)
+## Try the API
 
-A real PSP has all of these. Left out to keep the core flow clear:
+```powershell
+$headers = @{
+  "Authorization"   = "Bearer sk_test_YOUR_TEST_KEY"
+  "Idempotency-Key" = [guid]::NewGuid().ToString()
+  "X-Timestamp"     = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+  "Content-Type"    = "application/json"
+}
+$body = @{ amount = 2500; description = "Test purchase" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "https://api.samsoftpay.com/v1/payment-links" -Headers $headers -Body $body
+```
 
-- **Real KYC** — stub field only. Real PSPs do ID checks, sanctions screening, beneficial ownership.
-- **Real fraud engine** — only basic velocity-ready scaffolding. Real PSPs use ML scoring and rules engines.
-- **PCI-DSS card handling** — card channel is mocked. Never touch real PANs without certification.
-- **Real Airtel Money / card integrations** — those rails are mocked. Pattern is the same as MTN; adapters just need to be written.
-- **HSM, secrets manager** — uses env vars.
-- **Disputes & chargebacks**.
-- **Multi-currency FX**.
-- **Distributed tracing, full audit log**.
-- **Auth on the dashboard** — anyone can view any merchant's dashboard via the URL.
-- **Persistent job queue** — webhook delivery and rail polling run in-process threads. Real PSPs use Celery/RQ with Redis so jobs survive restarts.
+Full endpoint reference, request/response shapes, webhook signature
+verification, and the sandbox test-phone-number table:
+**<https://api.samsoftpay.com/docs>**
+
+## What's genuinely still missing
+
+Honest, not aspirational — checked against the live system, not the code's
+intentions:
+
+- **Dashboard auth** — no login gate on merchant dashboard URLs yet.
+- **PCI-DSS card handling** — the card channel is mocked; never touch a real
+  PAN without certification.
+- **Real Airtel Money / card rails** — both mocked, refused for live traffic
+  by the rail guard rather than silently faking a charge.
+- **MTN production credentials** — sandbox only; production onboarding
+  (SIT + Web Access Form to MTN) is submitted but not yet approved.
+- **No load test has ever run** against this deployment.
+- **Real KYC, fraud engine, disputes/chargebacks, multi-currency FX** — not
+  built.
+- **CHANGENOW_API_KEY** — crypto checkout needs this configured in Render or
+  it returns a dev placeholder deposit address.
 
 ## Roadmap
 
-1. **Airtel Money sandbox integration** — second MNO on the Collections side
-2. **Postgres + concurrency hardening** — replace SQLite, add `SELECT ... FOR UPDATE` around ledger writes
-3. **Persistent job queue (Celery + Redis)** — so polling/webhook jobs survive restarts
-4. **Risk engine** — velocity rules, blocklists, anomaly detection
-5. **Refunds** — using the Disbursement rail to reverse charges
-6. **Merchant onboarding + KYC**
-7. **Proper auth and dashboard sessions** (Flask-Login + bcrypt + MFA)
+1. MTN production onboarding (compliance papers already filed)
+2. Airtel Money real collections rail
+3. Equity Bank API for bank settlement
+4. Migrate KarlPOS fully off Pesapal
+5. BOU PSP license
+6. Card sub-processing via Flutterwave
+7. Security headers (HSTS, CSP, X-Frame-Options) — Cloudflare fronts the app
+   but it should set these itself
+8. Apex domain DNS (`samsoftpay.com` currently has no records at all)
+
+## Getting help / reminding yourself what's going on
+
+- **Read `CLAUDE.md` first, always.** It's dated, it lists exactly what's
+  done vs open, and every guardrail exists because something broke in
+  production once — the numbers are real.
+- **Owner:** Rogers Mugabi, trading as Sam Software.
+  samsoftware75@gmail.com / smugabi@gmail.com. MTN +256783647260.
+- **Repo:** <https://github.com/smugabi-ugx/samsoftpay> (default branch `main`)
+- **If something in production looks wrong:** check `/healthz` first (it
+  reports the exact commit serving traffic), then `flask reconcile` for
+  ledger integrity, then the audit log before assuming the worst.
+- **Security issue?** Don't open a public issue with details — email the
+  addresses above directly.

@@ -43,12 +43,30 @@ def create_gift_card(
     return card
 
 
-def redeem_gift_card(code: str, amount: int) -> tuple[bool, str, GiftCard | None]:
+def redeem_gift_card(
+    code: str, amount: int, *, merchant_id: int | None = None, dry_run: bool = False
+) -> tuple[bool, str, GiftCard | None]:
     """Attempt to redeem `amount` from a gift card code.
+
+    `merchant_id`, if given, scopes the lookup — a checkout for merchant A must
+    never be able to redeem merchant B's code even though codes are globally
+    unique (defense in depth, not load-bearing on its own).
+
+    `dry_run=True` runs every check WITHOUT deducting or committing — this is
+    what powers the checkout-page preview (apply_voucher), so the preview and
+    the real redemption can never disagree about whether a code is valid.
+
+    Row-locked (`with_for_update`) on a real redemption: two concurrent
+    redemptions of the same code must serialise, the same reasoning as
+    ledger.lock_account_for_update for merchant balances. A no-op on SQLite —
+    fine for single-threaded local dev, matches the existing ledger pattern.
 
     Returns (success, message, card).
     """
-    card = GiftCard.query.filter_by(code=code.upper().strip()).first()
+    query = GiftCard.query.filter_by(code=code.upper().strip())
+    if merchant_id is not None:
+        query = query.filter_by(merchant_id=merchant_id)
+    card = query.with_for_update().first() if not dry_run else query.first()
     if not card:
         return False, "Gift card code not found.", None
     if not card.is_active:
@@ -60,6 +78,9 @@ def redeem_gift_card(code: str, amount: int) -> tuple[bool, str, GiftCard | None
             return False, "This gift card has expired.", None
     if amount > card.balance:
         return False, f"Insufficient balance. Available: {card.balance} {card.currency}.", None
+
+    if dry_run:
+        return True, "Gift card is valid.", card
 
     card.balance -= amount
     if card.balance == 0:

@@ -15,7 +15,7 @@ import uuid
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 
 from ..extensions import db
-from ..models import Channel, Merchant, PaymentLink, Transaction, TxnStatus
+from ..models import Channel, Merchant, PaymentLink, Transaction, TxnStatus, utcnow
 from ..services.orchestrator import OrchestratorError, create_charge
 
 bp = Blueprint("checkout", __name__)
@@ -142,34 +142,77 @@ def checkout_submit(public_id: str):
 
     from flask import session
 
-    # Apply gift card discount if one was validated
+    # Gift card discount — VALIDATED here (dry_run), REDEEMED only once we
+    # know a charge attempt will actually go through. Redeeming eagerly and
+    # only then trying to charge left a real gap: if create_charge is
+    # rejected below (a blocked channel, an inactive merchant), the gift
+    # card's balance was already gone with nothing delivered for it.
     charge_amount = link.amount
+    voucher_code = None
+    discount = 0
     voucher_data = session.get(f"voucher_{public_id}", {})
-    if voucher_data:
+    # A sandbox checkout can never redeem a real gift card — see apply_voucher.
+    # This should already be unreachable (apply_voucher refuses to store one),
+    # but a voucher placed in the session before that guard existed, or a
+    # differently-crafted request, must not get a second chance here.
+    if voucher_data and not link.is_test:
         from ..services.giftcards import redeem_gift_card
+        voucher_code = voucher_data.get("code")
         discount = voucher_data.get("discount", 0)
-        ok, msg, _ = redeem_gift_card(voucher_data["code"], discount)
-        if ok:
-            charge_amount = max(0, link.amount - discount)
+        ok, msg, _ = redeem_gift_card(voucher_code, discount, merchant_id=merchant.id, dry_run=True)
+        if not ok:
+            # Balance moved since the preview (race, or deactivated meanwhile)
+            # — drop the stale voucher rather than silently charge full price.
+            voucher_code = None
+            discount = 0
             session.pop(f"voucher_{public_id}", None)
+        else:
+            charge_amount = max(0, link.amount - discount)
 
     if charge_amount == 0:
-        # Fully covered by gift card — mark as succeeded without a rail charge
-        from ..models import TxnStatus
-        import uuid as _uuid
-        from ..extensions import db as _db
-        from ..models import Transaction as _Txn
-        txn_obj = _Txn(
-            public_id=f"txn_{_uuid.uuid4().hex[:16]}",
+        # Fully covered by gift card — no rail is ever involved, so there is
+        # no "the charge might still fail" risk; safe to redeem for real now.
+        from ..services.giftcards import redeem_gift_card
+        ok, msg, _ = redeem_gift_card(voucher_code, discount, merchant_id=merchant.id)
+        if not ok:
+            session.pop(f"voucher_{public_id}", None)
+            return render_template(
+                "checkout.html", link=link, merchant=merchant,
+                channels=_channel_options(), voucher_error=msg,
+            )
+        session.pop(f"voucher_{public_id}", None)
+
+        txn_obj = Transaction(
+            public_id=f"txn_{uuid.uuid4().hex[:16]}",
             merchant_id=merchant.id,
             amount=link.amount, fee_amount=0,
             currency=link.currency, channel=channel,
-            status=TxnStatus.SUCCEEDED, is_test=False,
+            status=TxnStatus.SUCCEEDED, is_test=link.is_test,
+            completed_at=utcnow(),
             merchant_reference=link.reference or link.public_id,
         )
-        _db.session.add(txn_obj)
+        db.session.add(txn_obj)
+        db.session.flush()   # txn_obj.id is only assigned by the DB on flush —
+                              # reading it immediately after add() without one is
+                              # not reliably safe. This bug existed in the code
+                              # before this change too, just intermittently.
         link.transaction_id = txn_obj.id
-        _db.session.commit()
+        db.session.commit()
+
+        # Same side effects a rail-collected SUCCEEDED charge gets — a fully
+        # gift-card-covered vending order must still dispense, and the
+        # merchant's webhook consumer must still see it, exactly as if MTN
+        # had actually collected the money.
+        from ..services.vending import maybe_dispense_on_success
+        maybe_dispense_on_success(txn_obj)
+        from ..services.webhooks import enqueue
+        enqueue(merchant, "charge.succeeded", {
+            "id": txn_obj.public_id, "amount": txn_obj.amount, "fee": txn_obj.fee_amount,
+            "currency": txn_obj.currency, "channel": txn_obj.channel.value,
+            "status": txn_obj.status.value, "merchant_reference": txn_obj.merchant_reference,
+            "failure_reason": None, "completed_at": txn_obj.completed_at.isoformat(),
+        }, transaction_id=txn_obj.id)
+
         return redirect(url_for("checkout.status_page", public_id=public_id))
 
     # Vending orders always carry the link id as the reference: it is how a
@@ -190,6 +233,8 @@ def checkout_submit(public_id: str):
             merchant_reference=charge_reference,
         )
     except OrchestratorError as exc:
+        # The gift card, if any, was only validated (dry_run) above — never
+        # redeemed — so there is nothing to roll back here.
         return render_template(
             "checkout.html", link=link, merchant=merchant,
             channels=_channel_options(),
@@ -201,6 +246,27 @@ def checkout_submit(public_id: str):
     if not link.transaction_id:
         link.transaction_id = txn.id
         db.session.commit()
+
+    # Only now — after create_charge has NOT raised — actually redeem the
+    # discount. create_charge can also return normally with status FAILED
+    # (a synchronous rail rejection, e.g. a malformed phone number) without
+    # raising OrchestratorError at all, so that must be checked too, or the
+    # gift card would still be burned for a charge that never went anywhere.
+    if voucher_code and discount and txn.status != TxnStatus.FAILED:
+        from ..services.giftcards import redeem_gift_card
+        ok, redeem_msg, _ = redeem_gift_card(voucher_code, discount, merchant_id=merchant.id)
+        if ok:
+            session.pop(f"voucher_{public_id}", None)
+        else:
+            # Extremely rare: the balance changed between the dry_run check
+            # above and now. The charge itself already succeeded/is in
+            # flight — never fail a real payment over a discount-bookkeeping
+            # race; log it for manual follow-up instead.
+            from flask import current_app
+            current_app.logger.error(
+                "gift card %s could not be redeemed after charge %s: %s",
+                voucher_code, txn.public_id, redeem_msg,
+            )
 
     return redirect(url_for("checkout.status_page", public_id=public_id))
 
@@ -353,25 +419,29 @@ def _channel_options(include_crypto: bool = False):
 def apply_voucher(public_id: str):
     """Validate a gift card code and store the discount in the session."""
     from flask import session
-    from ..services.giftcards import redeem_gift_card
     link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
     if link is None or not link.is_active:
         abort(404)
     code = request.form.get("code", "").strip().upper()
     merchant = db.session.get(Merchant, link.merchant_id)
-    # Peek at the card without redeeming yet
-    from ..models import GiftCard
+
+    # Gift cards are dashboard-issued real merchant liability — they carry no
+    # test/live mode of their own (unlike PaymentLink.is_test). A sandbox
+    # checkout must therefore never be allowed to touch one at all, rather
+    # than trying to give gift cards their own sandbox split.
+    if link.is_test:
+        return render_template("checkout.html", link=link, merchant=merchant,
+                               channels=_channel_options(),
+                               voucher_error="Gift cards can't be used on a sandbox (test-mode) checkout.")
+
     from datetime import datetime, timezone
-    card = GiftCard.query.filter_by(code=code, merchant_id=link.merchant_id).first()
-    error = None
-    if not card:
-        error = "Gift card code not found."
-    elif not card.is_active:
-        error = "This gift card is not active."
-    elif card.balance <= 0:
-        error = "This gift card has no remaining balance."
-    elif card.expires_at and datetime.now(timezone.utc) > card.expires_at.replace(tzinfo=timezone.utc):
-        error = "This gift card has expired."
+
+    # Peek at the card without redeeming yet — dry_run shares the exact same
+    # validation the real redemption uses, so this preview can never approve
+    # a code that redemption later rejects.
+    from ..services.giftcards import redeem_gift_card
+    ok, msg, card = redeem_gift_card(code, 0, merchant_id=link.merchant_id, dry_run=True)
+    error = None if ok else msg
 
     if error:
         return render_template("checkout.html", link=link, merchant=merchant,
