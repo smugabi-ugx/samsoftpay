@@ -66,6 +66,19 @@
       padding: 1.5rem 1.25rem;
       color: white; text-align: center;
     }
+    /* Merchant identity — a checkout that visibly belongs to the merchant
+       converts better than an anonymous gateway page. Uploaded logo when the
+       merchant has one; their initial in a brand chip when they don't. */
+    .summary-logo {
+      width: 52px; height: 52px; border-radius: 14px;
+      margin: 0 auto 0.75rem;
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.18);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.375rem; font-weight: 800; color: white;
+      overflow: hidden;
+    }
+    .summary-logo img { width: 100%; height: 100%; object-fit: cover; }
     .summary-to { font-size: 0.8125rem; opacity: .7; margin-bottom: 0.25rem; }
     .summary-merchant { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; }
     .summary-amount {
@@ -87,9 +100,14 @@
     /* ── Form body ── */
     .form-body {
       flex: 1;
-      padding: 1.25rem 1rem 7rem;
+      padding: 1.25rem 1rem 8.5rem;   /* clears the fixed footer + reassure line */
       max-width: 480px; margin: 0 auto; width: 100%;
     }
+    .support-line {
+      text-align: center; font-size: 0.8125rem; color: var(--muted);
+      margin-top: 1.25rem;
+    }
+    .support-line a { color: var(--primary); font-weight: 600; text-decoration: none; }
 
     .section-title {
       font-size: 0.75rem; font-weight: 700;
@@ -207,7 +225,8 @@
     .pay-btn {
       display: flex; align-items: center; justify-content: center; gap: 0.5rem;
       width: 100%; height: 56px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      /* Same brand family as the summary band — one purple, not two. */
+      background: linear-gradient(135deg, #2d1060 0%, #6b21a8 100%);
       color: white; border: none; border-radius: 12px;
       font-size: 1.0625rem; font-weight: 700; font-family: inherit;
       cursor: pointer; transition: all .2s;
@@ -216,6 +235,12 @@
     }
     .pay-btn:active { transform: scale(0.99); }
     .pay-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .pay-reassure {
+      display: flex; align-items: center; justify-content: center; gap: 0.375rem;
+      margin: 0.625rem auto 0; max-width: 480px;
+      font-size: 0.75rem; color: var(--muted);
+    }
+    .pay-reassure svg { width: 12px; height: 12px; flex-shrink: 0; }
 
     /* loading spinner */
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -260,6 +285,13 @@
 
   <!-- Amount summary -->
   <div class="summary">
+    <div class="summary-logo">
+      {% if merchant.logo_filename %}
+        <img src="{{ url_for('auth.serve_logo', merchant_id=merchant.id) }}" alt="">
+      {% else %}
+        {{ merchant.name[0].upper() }}
+      {% endif %}
+    </div>
     <div class="summary-to">You are paying</div>
     <div class="summary-merchant">{{ merchant.name }}</div>
     <div class="summary-amount">
@@ -268,7 +300,11 @@
     {% if link.description %}
     <div class="summary-desc">{{ link.description }}</div>
     {% endif %}
-    <div class="summary-fee">Processing fee: 1.5% (min UGX 200)</div>
+    <!-- No fee line here on purpose: the processing fee is deducted from the
+         MERCHANT's settlement (see complete_transaction), the customer pays
+         exactly the amount shown. Advertising the merchant's fee at the
+         customer's moment of decision reads as a surcharge that doesn't
+         exist — no major PSP surfaces it here. -->
   </div>
 
   <!-- Form -->
@@ -389,6 +425,13 @@
                autocomplete="email">
       </div>
 
+      <!-- A stuck customer who can ask a question finishes the payment; one
+           who has to leave the page to find contact details doesn't. -->
+      <div class="support-line">
+        Questions about this payment?
+        <a href="mailto:{{ merchant.email }}?subject=Payment%20to%20{{ merchant.name|urlencode }}%20({{ link.public_id }})">Contact {{ merchant.name }}</a>
+      </div>
+
     </div><!-- /form-body -->
 
     <!-- Sticky footer -->
@@ -399,6 +442,13 @@
           Pay {{ link.currency }} {{ "{:,}".format(link.amount) }}
         </span>
       </button>
+      <!-- Reassurance goes HERE, not the header: trust anxiety peaks at the
+           moment of pressing pay, and a badge at the top of the page is out
+           of view by then. -->
+      <div class="pay-reassure">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Payments are encrypted and processed securely by Samsoftpay
+      </div>
     </div>
 
   </form>
