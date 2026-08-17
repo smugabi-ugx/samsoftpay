@@ -36,6 +36,29 @@ class OrchestratorError(Exception):
     pass
 
 
+def _simulated_rail_forbidden(channel: Channel) -> bool:
+    """Whether this channel must be refused for a live charge.
+
+    Sandbox is exempt: an sk_test_ key is *supposed* to hit mocks, and since the
+    test/live ledger split that money cannot reach a real balance anyway.
+
+    Enforced only on Render. Locally and in the test suite the mocks ARE the
+    rails — that is how the suite runs offline — so gating on the production
+    environment keeps development working while closing the hole where it counts.
+    """
+    import os
+
+    if not os.environ.get("RENDER"):
+        return False
+    if current_app.config.get("ALLOW_SIMULATED_RAILS"):
+        return False
+    if g.get("api_mode") == "test":
+        return False
+    from .rails import is_simulated
+
+    return is_simulated(channel)
+
+
 def create_charge(
     *,
     merchant: Merchant,
@@ -52,6 +75,19 @@ def create_charge(
         raise OrchestratorError("demo only supports UGX")
     if not merchant.is_active:
         raise OrchestratorError("merchant is not active")
+
+    # A simulated rail must never settle live money. The mock flips a charge to
+    # SUCCEEDED on a timer with nothing collected, which credits the merchant's
+    # ledger with funds nobody paid and — for a vending order — dispenses a real
+    # product for free. Airtel and Card have no real adapter yet, so in
+    # production they are refused here rather than at the machine.
+    #
+    # Checked BEFORE anything is written, so a rejected channel leaves no
+    # transaction and no ledger entry behind (same rule as payouts).
+    if _simulated_rail_forbidden(channel):
+        raise OrchestratorError(
+            f"{channel.value} is not available for live payments yet"
+        )
 
     fee = calculate_fee(amount=amount, channel=channel, currency=currency)
     if fee >= amount:

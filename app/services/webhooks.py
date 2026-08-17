@@ -25,6 +25,40 @@ def verify_signature(payload: str, signature: str, secret: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
+def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = None) -> bool:
+    """Queue one signed webhook for a merchant. Returns True if it was queued.
+
+    The single place an outbound event is created, so every event — charge or
+    vending — is signed the same way and picked up by the same delivery sweep.
+    A merchant with no webhook_url configured is simply skipped.
+
+    Canonical JSON (no spaces) because the signature is computed over the exact
+    bytes we send; re-serialising differently on the receiving side would break
+    verification.
+    """
+    import json
+
+    from flask import current_app
+
+    if not merchant or not getattr(merchant, "webhook_url", None):
+        return False
+
+    payload = json.dumps({"event": event, "data": data}, separators=(",", ":"))
+    secret = current_app.config["WEBHOOK_SIGNING_SECRET"]
+    db.session.add(
+        WebhookDelivery(
+            merchant_id=merchant.id,
+            transaction_id=transaction_id,
+            url=merchant.webhook_url,
+            payload=payload,
+            signature=sign_payload(payload, secret),
+            next_attempt_at=utcnow(),
+        )
+    )
+    db.session.commit()
+    return True
+
+
 def deliver_pending_webhooks(*, limit: int = 50) -> int:
     """Send any pending webhooks whose next_attempt_at <= now. Returns count sent.
 
