@@ -147,18 +147,48 @@
       </div>
     </div>
 
+    <!-- Balances are MASKED by default (the Pesapal pattern): a merchant
+         showing this screen to a customer, or screen-sharing with support,
+         should not leak their balance without choosing to. The choice is
+         remembered per browser. -->
     <div class="balance-row">
       <div class="balance-item">
-        <div class="balance-label">Available Balance</div>
-        <div class="balance-amount">UGX {{ "{:,}".format(available_balance) }}</div>
-        <div class="balance-sub">Ready to withdraw</div>
+        <div class="balance-label">Available Balance
+          <button type="button" id="balance-toggle" aria-label="Show or hide balances"
+                  style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,.55);padding:0 0 0 .4rem;vertical-align:middle;">
+            <svg id="eye-open" style="display:none;width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-closed" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <div class="balance-amount balance-maskable" data-real="UGX {{ "{:,}".format(available_balance) }}">••••••</div>
+        <div class="balance-sub">Ready to withdraw · <span style="opacity:.9;">SETTLED</span></div>
       </div>
       <div class="balance-item" style="border-left:1px solid rgba(255,255,255,.1);padding-left:1.25rem;">
         <div class="balance-label">Pending Settlement</div>
-        <div class="balance-amount" style="opacity:.65;">UGX {{ "{:,}".format(pending_balance) }}</div>
-        <div class="balance-sub">Processing</div>
+        <div class="balance-amount balance-maskable" style="opacity:.65;" data-real="UGX {{ "{:,}".format(pending_balance) }}">••••••</div>
+        <div class="balance-sub">Settles after the 24h hold</div>
       </div>
     </div>
+    <script>
+      (function () {
+        var KEY = 'ssp_show_balance';
+        var els = document.querySelectorAll('.balance-maskable');
+        var eyeOpen = document.getElementById('eye-open');
+        var eyeClosed = document.getElementById('eye-closed');
+        function render(show) {
+          els.forEach(function (el) { el.textContent = show ? el.dataset.real : '••••••'; });
+          eyeOpen.style.display = show ? 'inline' : 'none';
+          eyeClosed.style.display = show ? 'none' : 'inline';
+        }
+        var show = localStorage.getItem(KEY) === '1';
+        render(show);
+        document.getElementById('balance-toggle').addEventListener('click', function () {
+          show = !show;
+          localStorage.setItem(KEY, show ? '1' : '0');
+          render(show);
+        });
+      })();
+    </script>
 
     <div class="quick-actions">
       <a href="{{ url_for('wallet.wallet_home') }}" class="qa-btn primary-action">
@@ -295,7 +325,9 @@
           {{ t.channel.value.replace('_',' ').title() }}
           {% if t.is_test %}<span style="font-size:.7rem;background:rgba(245,158,11,.1);color:#d97706;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">TEST</span>{% endif %}
         </div>
-        <div class="activity-sub">{{ t.public_id }} · {{ t.created_at.strftime('%d %b %Y %H:%M') }}{% if t.merchant_reference %} · {{ t.merchant_reference }}{% endif %}</div>
+        {# The rail's own confirmation code resolves customer disputes on the
+           first phone call — Pesapal gives it its own column for a reason. #}
+        <div class="activity-sub">{{ t.public_id }} · {{ t.created_at.strftime('%d %b %Y %H:%M') }}{% if t.merchant_reference %} · {{ t.merchant_reference }}{% endif %}{% if t.rail_reference %} · conf: {{ t.rail_reference }}{% endif %}</div>
       </div>
       <div>
         <span class="badge {{ t.status.value }}">{{ t.status.value }}</span>
@@ -339,8 +371,12 @@
     <div class="activity-row">
       <div class="activity-icon" style="background:rgba(99,102,241,.08);">📤</div>
       <div class="activity-info">
-        <div class="activity-title">{{ p.recipient_name or p.recipient_phone }}</div>
-        <div class="activity-sub">{{ p.public_id }} · {{ p.channel.value.replace('_',' ').title() }} · {{ p.created_at.strftime('%d %b %Y') }}</div>
+        {# Phone masked at list level (2567xxx1234) — full number stays on the
+           payout detail, not on a screen anyone walking past can read. #}
+        {% set ph = p.recipient_phone or '' %}
+        {% set masked = (ph[:4] ~ 'xxx' ~ ph[-4:]) if ph|length > 8 else ph %}
+        <div class="activity-title">{{ p.recipient_name or masked }}</div>
+        <div class="activity-sub">{{ p.public_id }} · {{ p.channel.value.replace('_',' ').title() }}{% if p.recipient_name and ph %} · {{ masked }}{% endif %} · {{ p.created_at.strftime('%d %b %Y') }}</div>
       </div>
       <span class="badge {{ p.status.value }}">{{ p.status.value }}</span>
       <div class="activity-amount out">− {{ "{:,}".format(p.amount) }} UGX</div>
