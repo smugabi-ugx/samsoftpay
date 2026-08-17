@@ -106,6 +106,38 @@
     checks occasionally miss their 12s deadline under heavy concurrent load on the dev
     machine (confirmed unrelated to this guardrail — re-running in isolation is reliably green).
 
+17. **Gift-card redemption is deferred until AFTER the remaining charge is
+    known to go through** (`app/routes/checkout.py checkout_submit`). Found by an
+    independent review, not by the person who wrote the original code — the gift
+    card used to be debited BEFORE `create_charge` was attempted for the
+    remainder; if that charge was then rejected (blocked channel, inactive
+    merchant, fee ≥ amount), the customer's gift-card balance was gone with
+    nothing delivered for it. Now: validate with `redeem_gift_card(..., dry_run=True)`
+    up front, only actually redeem once `create_charge` has NOT raised AND
+    `txn.status != FAILED` (a synchronous rail rejection returns normally
+    without raising — check the status too, not just the absence of an exception).
+    `redeem_gift_card` is now row-locked (`with_for_update`, SQLite no-ops it,
+    same as `ledger.lock_account_for_update`) so two concurrent redemptions of
+    one code can't over-spend it.
+    **Gift cards have no test/live mode of their own** — they're dashboard-issued
+    real merchant liability, not API-key-scoped like PaymentLink. A sandbox
+    checkout (`link.is_test`) must be refused a gift card at the `apply_voucher`
+    step, never given a parallel sandbox gift-card system.
+    **A fully-covered ($0 remainder) charge must still get the exact same side
+    effects a rail-collected SUCCEEDED charge gets** — `is_test` from `link.is_test`
+    (was hardcoded `False`), `completed_at` set, `maybe_dispense_on_success` called
+    (a vending order fully paid by gift card must still dispense), and the
+    `charge.succeeded` webhook enqueued.
+    **Reading a newly-added row's autoincrement id without an explicit
+    `db.session.flush()` first is not reliably safe** — `link.transaction_id =
+    txn_obj.id` right after `db.session.add(txn_obj)` intermittently persisted
+    `None` (implicit autoflush didn't reliably fire before the attribute read,
+    especially after another commit earlier in the same request). This is a
+    general SQLAlchemy gotcha, not gift-card-specific — grep for `.id` read
+    immediately after `.add()` anywhere else before assuming it's safe.
+    Tests: `tests/test_giftcard_checkout.py` (11 checks, including the exact
+    money case: a rejected remainder leaves the gift card completely untouched).
+
 ---
 
 ## Who is Sam
@@ -221,6 +253,13 @@ order to `failed` so a refund decision becomes possible.
 - Blueprint must stay CSRF-exempt in `app/__init__.py` or every callback 400s.
 - Give the supplier: `https://api.samsoftpay.com/inbound/xy/dispense-result`
 - Tests: `tests/test_xy_dispense_callback.py` (11 checks).
+- **Flagged, not changed:** an independent review noted `_finish()` trusts a validly-signed
+  callback's `ok` flag unconditionally — it doesn't cross-check that the link was ever
+  actually claimed via `_claim()`/had a real `ApplyExportGoods` call before accepting
+  `ok=True`. In practice this requires the caller to already hold the merchant's own XY
+  secret (same trust boundary as the real supplier), and the module never moves money either
+  way — but it's a real gap in defense-in-depth, not a bug fix, worth a second opinion before
+  changing it, since tightening it wrong could reject XY's genuine callbacks.
 
 ### Vending webhook events (for platforms integrating on top)
 `charge.succeeded` means the MONEY arrived; it does NOT mean the product came out. Two vending
