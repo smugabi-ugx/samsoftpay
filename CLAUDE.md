@@ -83,6 +83,16 @@
     `_MockRail` and both the guard and the UI open up on their own — do not special-case names.
     Escape hatch for a staging box: `ALLOW_SIMULATED_RAILS`.
 
+15. **`PaymentLink.is_test` is set ONCE, at creation, from the key that made it** —
+    `create_payment_link`/`create_vending_order` in `app/routes/api.py`. The public
+    checkout page (`GET /pay/<id>`, `submit`, crypto settlement — no auth on any of
+    them) reads `link.is_test` to set `g.api_mode` for that request; it must NEVER
+    hardcode `"live"` again. Migration `a3b4c5d6e7f8`. This is what lets an `sk_test_`
+    order (1) post to the sandbox ledger, not live (guardrail 12), and (2) get
+    exempted from guardrail 14's simulated-rail guard, so MTN's mock rail is usable
+    for real end-to-end testing without ever touching the live ledger or weakening
+    the guard for genuine live traffic. Tests: `tests/test_payment_link_mode.py`.
+
 ---
 
 ## Who is Sam
@@ -118,9 +128,9 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **f9a0b1c2d3e4**
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **a3b4c5d6e7f8**
   (chain: b2f1a9c4d5e6 → … → d7e8f9a0b1c2 vending → e8f9a0b1c2d3 per-merchant XY →
-  f9a0b1c2d3e4 test/live ledger split).
+  f9a0b1c2d3e4 test/live ledger split → a3b4c5d6e7f8 payment_links.is_test).
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -260,7 +270,7 @@ an order's outcome is settled — via the shared `webhooks.enqueue()`:
   PR #334) — it shipped before this endpoint existed, so keep the response shape stable.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `f9a0b1c2d3e4`
+1. `flask db current` → expect `a3b4c5d6e7f8`
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to

@@ -345,6 +345,7 @@ def create_vending_order():
             pay_account=body.get("pay_account"),
             description=str(body.get("description") or "")[:255] or None,
             success_url=body.get("success_url"),
+            is_test=(g.api_mode == "test"),
         )
     except vending.VendingError as exc:
         abort(400, description=str(exc))
@@ -667,6 +668,7 @@ def create_payment_link():
         success_url=_safe_url(body.get("success_url")),
         cancel_url=_safe_url(body.get("cancel_url")),
         allow_multiple_uses=bool(body.get("allow_multiple_uses", False)),
+        is_test=(g.api_mode == "test"),
     )
     db.session.add(link)
     db.session.commit()

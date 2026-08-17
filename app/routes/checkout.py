@@ -83,7 +83,12 @@ def checkout_page(public_id: str):
             "checkout_inactive.html", link=link, merchant=merchant
         )
 
-    from flask import session
+    from flask import g, session
+    # No auth on this route — link.is_test (set at creation from the key that
+    # made it) is the only record of which mode this checkout runs in. Set it
+    # BEFORE listing channels so the page never offers a method that
+    # checkout_submit would then refuse — see orchestrator._simulated_rail_forbidden.
+    g.api_mode = "test" if link.is_test else "live"
     voucher_data = session.get(f"voucher_{public_id}", {})
     return render_template(
         "checkout.html",
@@ -108,6 +113,12 @@ def checkout_submit(public_id: str):
 
     merchant = db.session.get(Merchant, link.merchant_id)
 
+    from flask import g
+    # Scope this whole submission to the mode the link was CREATED under, not
+    # a hardcoded "live" — see PaymentLink.is_test. Set before anything below
+    # touches channel filtering or create_charge.
+    g.api_mode = "test" if link.is_test else "live"
+
     try:
         channel = Channel(request.form.get("channel", ""))
     except ValueError:
@@ -129,8 +140,7 @@ def checkout_submit(public_id: str):
             selected_channel=channel.value,
         )
 
-    from flask import g, session
-    g.api_mode = "live"
+    from flask import session
 
     # Apply gift card discount if one was validated
     charge_amount = link.amount
@@ -434,7 +444,7 @@ def crypto_status_json(public_id: str):
         if link and link.is_active:
             merchant = db.session.get(Merchant, link.merchant_id)
             from flask import g
-            g.api_mode = "live"
+            g.api_mode = "test" if link.is_test else "live"
             try:
                 txn = create_charge(
                     merchant=merchant,
