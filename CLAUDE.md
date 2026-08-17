@@ -219,11 +219,19 @@ an order's outcome is settled — via the shared `webhooks.enqueue()`:
   Notification today = HTTP webhook only.
 - **Nothing lets an XY machine START an order** (see the supplier-doc note above) — that must
   come from our own app on the board.
-- `TKVendingApp` (C:\Users\DELL\Desktop\tk) still calls `POST /v1/charges` with a phone typed on
-  the machine and dispenses over RS232 itself, bypassing the QR + dispense-gate path. It also
-  embeds a Samsoftpay secret key in `res/values/strings.xml` (sk_test_ today) — a secret key on
-  a public kiosk can create charges AND payouts, so it needs a restricted credential before any
-  live key ships.
+- `TKVendingApp` (C:\Users\DELL\Desktop\tk) now calls `POST /v1/payment-links`, shows the
+  returned QR, polls for `succeeded`, and dispenses over RS232 itself — see the payment-links
+  entry above. This is confirmed the RIGHT architecture per `SAMSOFTPAY_INTEGRATION_GUIDE.md`
+  (their contracted deliverable: MTN integration only, machine keeps its own dispensing) — but
+  is UNTESTED against real hardware. Nobody has confirmed with the supplier or on-device that
+  `VmcSerialPort`'s command/status bytes (`VmcProtocol.kt`) are correct for TK's actual board;
+  the file has its own "verify against the supplier's docs before going to hardware" warning.
+  No `gradlew` in the project and no Android build tooling in this dev environment — the Kotlin
+  was hand-written and could not be compiled here. Needs Android Studio to build/install/test.
+  Still embeds a Samsoftpay secret key in `res/values/strings.xml` (sk_test_ today) — a secret
+  key on a public kiosk can create charges AND payouts, so it needs a restricted credential
+  before any live key ships. Samsoftpay has no scoped/restricted key type yet — that is new
+  backend work, not yet scoped.
 
 ### Merged after vending (Aug 2026)
 - **PR #11 — payout earmark money leak fix** (see guardrail 13). KarlPOS's detectChannel()
@@ -234,6 +242,15 @@ an order's outcome is settled — via the shared `webhooks.enqueue()`:
   money. Existing accounts migrated to `is_test=False` (preserves balances exactly).
   Tests: `tests/test_ledger_mode_split.py`. Also repaired the long-broken
   `tests/test_collections_and_disbursements.py` (dotenv pop + :memory: pitfalls, wrong fee).
+- **`POST /v1/payment-links` now returns `qr_png_url` / `qr_svg_url`** (same renderer vending
+  orders use — public, no auth, works for ANY link since `_qr_response` never checks
+  `is_vending_order`). Built for TK's real machine architecture: their Android app
+  (`C:\Users\DELL\Desktop\tk\TKVendingApp`) is NOT registered with the XY supplier's cloud and
+  dispenses itself over RS232 — using `/v1/vending/orders` there would make Samsoftpay ALSO
+  attempt an XY-cloud dispense against an unregistered machine, which fails and reports a false
+  `vending.dispense_failed` for a product the customer already received. Plain links have no such
+  side effect (`maybe_dispense_on_success` only acts on links carrying `vending_meta`). Tests:
+  `tests/test_checkout.py` [1]/[1b].
 - **PRs #13/#14 — `GET /v1/balance`**: per-currency reconciliation
   endpoint for platforms (KarlPOS, TK Vending). Reports the JOURNAL sum, not
   `cached_balance` (returns `consistent` flag when they disagree); mode-scoped (sk_test_
