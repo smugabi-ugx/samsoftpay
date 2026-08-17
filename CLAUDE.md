@@ -160,6 +160,34 @@ The whole scan-to-pay-to-dispense loop, driven by Samsoftpay:
 NOTE: the customer QR points at our hosted checkout, so the machine never touches money. The
 supplier's `forwardPayCode` model expects the payment provider to own the QR — that provider is us.
 
+**Supplier doc lives at `C:\Users\DELL\Desktop\兴元XY_VendingCOM_SDK_V1.4\_apidoc.txt`** (plus the
+PDF beside it). It defines ALL the XY interfaces — read it before adding any. `forwardPayCode` is
+NOT an endpoint: it is one allowed value of the `paytype` field ("scan the QR code to buy"),
+alongside f2F, memberCard, getGoodsCode, delayExport, offline. There is no XY interface anywhere
+in that doc by which a machine asks us to START an order — machine-initiated ordering has to come
+from our own software on the board (see `C:\Users\DELL\Desktop\tk\TKVendingApp`, which already
+calls Samsoftpay), not from XY's cloud. Implemented: 2.1.1, 2.1.2, 2.1.4, 2.2.1. Not implemented:
+2.1.3 lockMachineGoodRepertory, 2.2.2 pickup-code verification.
+
+### XY §2.2.3 dispense-result callback — `POST /inbound/xy/dispense-result`
+`app/routes/webhooks_xy.py`. XY calls US after a machine finishes dispensing. This is the only
+ground truth we get: `ApplyExportGoods` returning code "1" means the command was ACCEPTED, not
+that a soda came out, so before this a jammed tray left the order marked `dispensed` with the
+customer's money kept. The callback carries `status`, per-product `chsl` (units actually
+dispensed, 1 or 0) and `tkje`/`tksj` (supplier-side refund), and flips a wrongly-optimistic
+order to `failed` so a refund decision becomes possible.
+- It RECORDS outcomes and NEVER moves money — a forged callback must not be able to trigger a
+  refund. Refunding stays a merchant action through the existing refund tooling.
+- Signature is `MD5(secret + timestamp + sorted k=v&k=v)` with the merchant's own XY secret,
+  and FAILS CLOSED (guardrail 9). The vendor doc contradicts itself on two field names
+  (`status`/`state`, `dsfshdh`/`dsfshbh`) so both spellings are accepted — that tolerance is
+  deliberate, do not "tidy" it away.
+- Unknown orders are acknowledged with `code:"1"` (their retry semantics) but audit-logged as
+  `vending.callback_unmatched`, never silently dropped.
+- Blueprint must stay CSRF-exempt in `app/__init__.py` or every callback 400s.
+- Give the supplier: `https://api.samsoftpay.com/inbound/xy/dispense-result`
+- Tests: `tests/test_xy_dispense_callback.py` (11 checks).
+
 ### Merged after vending (Aug 2026)
 - **PR #11 — payout earmark money leak fix** (see guardrail 13). KarlPOS's detectChannel()
   sends `airtel_money` for 70/75/74/20 numbers; each rejected payout used to strand
