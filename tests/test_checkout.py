@@ -56,7 +56,14 @@ def main():
     assert r.status_code == 201, r.data
     link_id = r.json["id"]
     link_url = r.json["url"]
-    print(f"[1] Link created: {link_id} -> {link_url}")
+    assert r.json["qr_png_url"] and r.json["qr_png_url"].endswith(f"/pay/{link_id}/qr.png"), r.json
+    assert r.json["qr_svg_url"] and r.json["qr_svg_url"].endswith(f"/pay/{link_id}/qr.svg"), r.json
+    print(f"[1] Link created: {link_id} -> {link_url} (with QR endpoints)")
+
+    # 1b. The QR renders for a PLAIN link too — not just vending orders
+    r_qr = client.get(f"/pay/{link_id}/qr.png")
+    assert r_qr.status_code == 200 and r_qr.mimetype == "image/png", r_qr.status_code
+    print("[1b] QR image renders for a plain (non-vending) link")
 
     # 2. Customer visits the checkout page
     r2 = client.get(f"/pay/{link_id}")

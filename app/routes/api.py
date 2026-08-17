@@ -680,6 +680,10 @@ def create_payment_link():
         description=link.description,
         reference=link.reference,
         url=url_for("checkout.checkout_page", public_id=link.public_id, _external=True),
+        # Same QR renderer vending orders use (checkout.py) — public, no auth,
+        # cached hard. A plain link's URL never changes once created.
+        qr_png_url=url_for("checkout.order_qr_png", public_id=link.public_id, _external=True),
+        qr_svg_url=url_for("checkout.order_qr_svg", public_id=link.public_id, _external=True),
     ), 201
 
 
