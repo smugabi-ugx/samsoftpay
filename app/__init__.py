@@ -299,12 +299,16 @@ def create_app(config: dict | None = None) -> Flask:
         """Liveness + DB connectivity. Returns 200 only if the database answers."""
         from flask import jsonify
         from sqlalchemy import text
+        # Render sets RENDER_GIT_COMMIT on every service automatically — surfacing
+        # it here is the difference between "curl one URL" and "open the Render
+        # dashboard" when confirming a deploy actually landed. Unset outside Render.
+        commit = os.environ.get("RENDER_GIT_COMMIT", "")[:12] or None
         try:
             db.session.execute(text("SELECT 1"))
-            return jsonify(status="ok", database="up"), 200
+            return jsonify(status="ok", database="up", commit=commit), 200
         except Exception as exc:  # pragma: no cover
             app.logger.error("healthz DB check failed: %s", exc)
-            return jsonify(status="degraded", database="down"), 503
+            return jsonify(status="degraded", database="down", commit=commit), 503
 
     @app.get("/livez")
     def livez():
