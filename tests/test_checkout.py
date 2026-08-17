@@ -77,6 +77,26 @@ def main():
     assert "Card" in html
     print("[2] Checkout page rendered with all 3 channels")
 
+    # 2b. The voucher "Apply" button must NOT be able to submit a payment.
+    # <form> cannot legally nest — a browser silently drops an inner <form>
+    # start tag, which used to turn "Apply" into just another submit button
+    # on the OUTER (payment) form. Assert structurally that the voucher
+    # controls are declared OUTSIDE #checkout-form's closing tag, wired to
+    # their own form via form="voucher-form" instead of physical nesting.
+    checkout_form_start = html.index('id="checkout-form"')
+    checkout_form_close = html.index("</form>", checkout_form_start)
+    voucher_form_decl = html.index('id="voucher-form"')
+    assert voucher_form_decl > checkout_form_close, (
+        "voucher-form must be declared AFTER checkout-form closes — "
+        "a <form> nested inside it gets silently dropped by the browser"
+    )
+    assert html.count('form="voucher-form"') >= 2, (
+        "the voucher code input and Apply button must both be explicitly "
+        "wired to voucher-form, since they render inside checkout-form's "
+        "markup but must never submit to it"
+    )
+    print("[2b] Voucher Apply button cannot submit the payment form")
+
     # 3. Customer submits the form
     r3 = client.post(
         f"/pay/{link_id}/submit",
