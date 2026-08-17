@@ -342,6 +342,11 @@ class PaymentLink(db.Model):
     cancel_url = Column(String(500), nullable=True)
     allow_multiple_uses = Column(Boolean, default=False, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    # Which key created this link. Read by the public checkout page/submit
+    # handler (no auth there, so this is the only record of the mode) to scope
+    # the resulting charge to the right ledger and exempt it from the
+    # simulated-rail guard the way a real sk_test_ charge already is.
+    is_test = Column(Boolean, default=False, nullable=False)
     # FK to a transaction once it's been paid — null until then.
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
     # For vending orders: JSON {machine, goods:[{spbh,spmc,spdj}], pay_account}.

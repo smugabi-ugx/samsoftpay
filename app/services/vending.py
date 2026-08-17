@@ -175,7 +175,7 @@ def machine_dict(m: VendingMachine) -> dict:
 def create_order(*, merchant: Merchant, machine: str, goods: list[dict],
                  amount: int, currency: str = "UGX", reference: str | None = None,
                  pay_account: str | None = None, description: str | None = None,
-                 success_url: str | None = None) -> PaymentLink:
+                 success_url: str | None = None, is_test: bool = False) -> PaymentLink:
     """Create a vending order (a one-shot payment link + machine context)."""
     import uuid
 
@@ -207,6 +207,7 @@ def create_order(*, merchant: Merchant, machine: str, goods: list[dict],
         is_active=True,
         vending_meta=meta,
         vending_status=PENDING,
+        is_test=is_test,
     )
     db.session.add(link)
     db.session.commit()
