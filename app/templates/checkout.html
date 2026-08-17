@@ -361,12 +361,21 @@
       {% else %}
       <div class="field" style="margin-top:.25rem;">
         <label class="section-title" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.5rem;display:block;">Gift Card / Voucher</label>
-        <form method="POST" action="{{ url_for('checkout.apply_voucher', public_id=link.public_id) }}" style="display:flex;gap:.5rem;">
-          <input type="text" name="code" placeholder="Enter code (e.g. SAMF-X4K2-9WQP)"
+        <!--
+          NOT a nested <form> — HTML forbids a <form> inside another <form>;
+          browsers silently drop the inner tag and its "Apply" button becomes
+          just another submit button on the OUTER (payment) form, so clicking
+          Apply used to complete a mobile-money payment instead of applying a
+          voucher. Fixed with the standard form="" attribute: these controls
+          sit here for layout only and belong to #voucher-form (declared as a
+          real sibling form below, outside #checkout-form).
+        -->
+        <div style="display:flex;gap:.5rem;">
+          <input type="text" name="code" form="voucher-form" placeholder="Enter code (e.g. SAMF-X4K2-9WQP)"
                  style="flex:1;border:2px solid var(--line);border-radius:10px;padding:0 1rem;height:48px;font-size:.9375rem;font-family:inherit;outline:none;transition:border-color .2s;"
                  onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--line)'">
-          <button type="submit" style="height:48px;padding:0 1rem;background:var(--bg);border:2px solid var(--line);border-radius:10px;font-weight:600;font-size:.875rem;cursor:pointer;white-space:nowrap;font-family:inherit;">Apply</button>
-        </form>
+          <button type="submit" form="voucher-form" style="height:48px;padding:0 1rem;background:var(--bg);border:2px solid var(--line);border-radius:10px;font-weight:600;font-size:.875rem;cursor:pointer;white-space:nowrap;font-family:inherit;">Apply</button>
+        </div>
         {% if voucher_error %}<p style="color:var(--danger);font-size:.8125rem;margin-top:.375rem;">{{ voucher_error }}</p>{% endif %}
       </div>
       {% endif %}
@@ -393,6 +402,12 @@
     </div>
 
   </form>
+
+  <!-- The real voucher form — a sibling of #checkout-form, never nested inside
+       it. Its own controls live above via form="voucher-form"; this element
+       just needs to exist with the right id/action/method. -->
+  <form method="POST" id="voucher-form"
+        action="{{ url_for('checkout.apply_voucher', public_id=link.public_id) }}"></form>
 
   <script>
     const labels = document.querySelectorAll('.channel-label');
