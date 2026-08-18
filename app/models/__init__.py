@@ -104,6 +104,14 @@ class Merchant(UserMixin, db.Model):
     # below. Plaintext columns are retained for one-time display + transition.
     secret_key_hash = Column(String(64), nullable=True, unique=True, index=True)
     test_secret_key_hash = Column(String(64), nullable=True, unique=True, index=True)
+    # COLLECTIONS-ONLY keys — for kiosks/devices. Can create charges, vending
+    # orders and payment links, but NOT move money out (payouts/refunds are
+    # 403'd). A key on a public machine that gets decompiled can then only take
+    # money IN, never drain the merchant. Generated on demand; NULL = none yet.
+    collections_key = Column(String(64), nullable=True)
+    collections_key_hash = Column(String(64), nullable=True, unique=True, index=True)
+    test_collections_key = Column(String(64), nullable=True)
+    test_collections_key_hash = Column(String(64), nullable=True, unique=True, index=True)
     handle = Column(String(40), nullable=True, unique=True, index=True)
     logo_filename = Column(String(255), nullable=True)   # uploaded business logo
     webhook_url = Column(String(500), nullable=True)
@@ -156,6 +164,8 @@ def _sync_key_hashes(mapper, connection, target: "Merchant") -> None:
     Merchant is created or its keys change — no need to edit each creation site."""
     target.secret_key_hash = hash_api_key(target.secret_key)
     target.test_secret_key_hash = hash_api_key(target.test_secret_key)
+    target.collections_key_hash = hash_api_key(target.collections_key)
+    target.test_collections_key_hash = hash_api_key(target.test_collections_key)
 
 
 # ---------- Ledger ----------

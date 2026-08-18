@@ -167,6 +167,16 @@
     `flask reconcile-mtn` runs it on demand. Testable against MTN sandbox now. This is the
     artifact a partner's compliance review asks for first. Tests: `tests/test_mtn_reconciliation.py`.
 
+24. **Collections-only (scoped) keys must NEVER move money out.** A full `sk_*` secret key on a
+    public kiosk/vending machine can be decompiled off the device and used to drain the merchant
+    via `/v1/payouts`. Fix: `sk_*_col_` collections keys (migration f0a1b2c3d4e5). `api._auth()`
+    sets `g.key_scope` = "full" or "collections"; `api._require_full_scope()` (a 403 guard) gates
+    the three money-OUT endpoints — POST /payouts, POST /payouts/bulk, POST /charges/<id>/refund.
+    The guard fires on SCOPE, BEFORE any resource lookup (a bogus charge id still 403s, not 404).
+    Do NOT gate money-IN endpoints (charges/vending/links) — a kiosk needs those. Hashes sync via
+    `_sync_key_hashes` alongside the full keys. Issue from the account page or `flask
+    issue-collections-key <email> [--live]`. Tests: `tests/test_scoped_keys.py`.
+
 22. **Per-merchant webhook secrets; the global WEBHOOK_SIGNING_SECRET is INBOUND-ONLY.**
     Outbound merchant deliveries are signed with `merchant.webhook_secret` (whsec_…, shown
     masked on Account → Webhooks); the global secret only authenticates inbound rail
@@ -254,9 +264,10 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **e9f0a1b2c3d4**
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **f0a1b2c3d4e5**
   (chain: … → a3b4c5d6e7f8 → b5c6d7e8f9a0 enum+indexes → c6d7e8f9a0b1 PSP account
-  unique → d8e9f0a1b2c3 merchant webhook_secret + txn vending_consumed_at -> e9f0a1b2c3d4 recon_exceptions).
+  unique → d8e9f0a1b2c3 merchant webhook_secret + txn vending_consumed_at -> e9f0a1b2c3d4
+  recon_exceptions -> f0a1b2c3d4e5 collections-only keys).
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -416,7 +427,7 @@ real sandbox payments. **Deferred engineering items live in the memory file
 `engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `e9f0a1b2c3d4`
+1. `flask db current` → expect `f0a1b2c3d4e5`
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to

@@ -128,6 +128,26 @@
       </div>
       <div class="form-hint">Use <code>Authorization: Bearer sk_test_…</code> (copy the full key above)</div>
     </div>
+    <div class="form-group" style="margin-top:1.25rem;margin-bottom:0;">
+      <label class="form-label">Test Collections Key <span class="badge succeeded" style="font-size:.65rem;">kiosk-safe</span></label>
+      <div class="api-key-display">
+        <code id="test-col-key" class="secret-maskable" data-real="{{ current_user.test_collections_key or 'Not generated' }}">••••••••••••••••••••</code>
+        {% if current_user.test_collections_key %}
+        <button class="copy-btn" onclick="toggleKey('test-col-key', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
+        <button class="copy-btn" onclick="copyKey('test-col-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+        {% endif %}
+      </div>
+      <div class="form-hint" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span>Takes payments only — <strong>403 on payouts &amp; refunds</strong>. Put this on a machine, not your live secret key.</span>
+        <form method="POST" action="{{ url_for('auth.collections_keys', key_type='test') }}"
+              onsubmit="return confirm('{% if current_user.test_collections_key %}Rotate{% else %}Generate{% endif %} the test collections key?{% if current_user.test_collections_key %} The old one stops working.{% endif %}')">
+          <button class="btn btn-outline btn-sm" type="submit">
+            <i data-feather="refresh-cw" style="width:13px;height:13px;"></i>
+            {% if current_user.test_collections_key %}Rotate{% else %}Generate{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 
   <!-- Live Keys -->
@@ -153,6 +173,26 @@
         <code id="live-sec-key" class="secret-maskable" data-real="{{ current_user.secret_key }}">••••••••••••••••••••</code>
         <button class="copy-btn" onclick="toggleKey('live-sec-key', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
         <button class="copy-btn" onclick="copyKey('live-sec-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:1.25rem;margin-bottom:0;">
+      <label class="form-label">Live Collections Key <span class="badge succeeded" style="font-size:.65rem;">kiosk-safe</span></label>
+      <div class="api-key-display">
+        <code id="live-col-key" class="secret-maskable" data-real="{{ current_user.collections_key or 'Not generated' }}">••••••••••••••••••••</code>
+        {% if current_user.collections_key %}
+        <button class="copy-btn" onclick="toggleKey('live-col-key', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
+        <button class="copy-btn" onclick="copyKey('live-col-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+        {% endif %}
+      </div>
+      <div class="form-hint" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span>Can take real payments but <strong>can never move money out</strong>. This is the key that goes on a public vending machine or kiosk.</span>
+        <form method="POST" action="{{ url_for('auth.collections_keys', key_type='live') }}"
+              onsubmit="return confirm('{% if current_user.collections_key %}Rotate{% else %}Generate{% endif %} the LIVE collections key?{% if current_user.collections_key %} Any device using the old one stops working until updated.{% endif %}')">
+          <button class="btn btn-outline btn-sm" type="submit">
+            <i data-feather="refresh-cw" style="width:13px;height:13px;"></i>
+            {% if current_user.collections_key %}Rotate{% else %}Generate{% endif %}
+          </button>
+        </form>
       </div>
     </div>
   </div>

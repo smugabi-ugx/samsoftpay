@@ -301,6 +301,32 @@ def register(app: Flask) -> None:
             if not password:
                 print(f"new password: {new_pw}")
 
+    @app.cli.command("issue-collections-key")
+    @click.argument("email")
+    @click.option("--live", is_flag=True, help="Issue the LIVE collections key (default: test).")
+    def issue_collections_key(email, live):
+        """Generate a collections-only (kiosk-safe) key for a merchant by EMAIL.
+
+        A collections key takes payments but is 403'd on payouts and refunds, so
+        it is safe to embed on a public machine. Prints the full key once.
+        """
+        import secrets as _secrets
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            if live:
+                m.collections_key = "sk_live_col_" + _secrets.token_urlsafe(24)
+                key = m.collections_key
+            else:
+                m.test_collections_key = "sk_test_col_" + _secrets.token_urlsafe(24)
+                key = m.test_collections_key
+            db.session.commit()
+            print(f"{'LIVE' if live else 'TEST'} collections key for {email}:")
+            print(f"  {key}")
+            print("  (takes payments only — cannot move money out)")
+
     @app.cli.command("reconcile-mtn")
     def reconcile_mtn():
         """Reconcile live MTN charges against MTN's OWN status, and list open exceptions."""
