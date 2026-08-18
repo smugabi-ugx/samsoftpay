@@ -82,6 +82,12 @@
 
   {% else %}
   <!-- PENDING — show QR -->
+  {% if link and link.is_test %}
+  <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#92400e;border-radius:10px;padding:.75rem 1rem;font-size:.85rem;margin-bottom:1rem;">
+    <strong>Sandbox top-up.</strong> MTN runs in sandbox until production launch —
+    this tests the full flow and credits your <strong>sandbox</strong> balance, not real money.
+  </div>
+  {% endif %}
   <div class="qr-box">
     <div class="qr-amount">UGX {{ "{:,}".format(topup.amount) }}</div>
     <div class="qr-label">to {{ current_user.name }}</div>
