@@ -138,6 +138,30 @@
     Tests: `tests/test_giftcard_checkout.py` (11 checks, including the exact
     money case: a rejected remainder leaves the gift card completely untouched).
 
+18. **A bill flips to "paid" only when the rail CONFIRMS, never at initiation**
+    (`orchestrator._maybe_mark_bill_paid`, called from complete_transaction's success
+    path — same never-raises pattern as the vending dispense hook). It used to be set
+    the moment `create_charge` returned, i.e. when the MoMo prompt was merely SENT: a
+    cancelled/ignored prompt left the bill permanently "paid" with no money and no
+    retry, because the public pay routes 404 any non-active bill. Found by the
+    10-agent design sweep (PR #25), not by a money review — status lifecycle bugs
+    hide in "UI" code.
+
+19. **Every customer-facing payment surface must use the live-channel gate** —
+    checkout's `_channel_options()`, bills' `_bill_channels()`, subscriptions'
+    `_live_channels()` all filter through `orchestrator._simulated_rail_forbidden`.
+    Never hardcode a channel list on a page that takes live money: pay_bill and
+    subscriptions both hardcoded Airtel/card, so bill payers failed only AFTER
+    filling the whole form, and every Airtel/card subscription plan silently failed
+    each billing cycle. When a real Airtel rail lands, all three open up on their own.
+
+20. **QRs on payment-adjacent pages are rendered IN-HOUSE (segno), never by a
+    third-party service.** api.qrserver.com was hot-linked on the topup page, the
+    crypto deposit address, gift-card codes (a live bearer code shipped to a third
+    party!), the profile page and the account page. All now use our own endpoints
+    (`checkout.order_qr_png`, `crypto_qr_png`, `profile_qr_png`). A payment QR must
+    not depend on someone else's uptime nor leak its content to them.
+
 ---
 
 ## Who is Sam
@@ -320,6 +344,19 @@ an order's outcome is settled — via the shared `webhooks.enqueue()`:
   Documented on the docs page. Tests: `tests/test_balance_endpoint.py` (7 checks).
   KarlPOS already calls this from its `samsoftpay-balance-sync` edge function (retro-pos-cart
   PR #334) — it shipped before this endpoint existed, so keep the response shape stable.
+
+### Aug 17-18, 2026 session — PRs #15-#25 (all merged + deployed)
+#15 XY 2.2.3 dispense-result callback · #16 simulated-rail guard + vending webhooks ·
+#17 healthz commit marker (deploy confirmation = one curl) · #18 payment-link QR fields ·
+#19 PaymentLink.is_test mode scoping (migration a3b4c5d6e7f8) · #20 voucher form nesting fix ·
+#21 deterministic sandbox (magic test numbers, guardrail 16) · #22 gift-card atomicity
+(guardrail 17) + README rewrite · #23 checkout conversion polish · #24 landing/dashboard
+honesty+polish · #25 the 10-agent design sweep (94 findings; guardrails 18-20; bills paid-at-
+initiation money bug, live-channel gate on bills/subscriptions, docs samples fixed, secret-key
+masking, real dashboard aggregates). TK Vending's Android app (C:\Users\DELL\Desktop\tk\
+TKVendingApp) rebuilt for the QR flow and verified end-to-end on the physical machine with
+real sandbox payments. **Deferred engineering items live in the memory file
+`engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
 1. `flask db current` → expect `a3b4c5d6e7f8`
