@@ -10,14 +10,9 @@
 {% endblock %}
 
 {% block content %}
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-  <div class="alert alert-{{ 'success' if cat == 'success' else 'warning' }}" style="margin-bottom:1rem;">
-    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
-    <div>{{ msg }}</div>
-  </div>
-  {% endfor %}
-{% endwith %}
+{# Local flash block removed: base.html now renders flashes for every page
+   (with correct success/error/info styling) — keeping this one would show
+   each message twice. #}
 
 <div class="page-header">
   <h1 class="page-title">Withdrawal Management</h1>
@@ -35,9 +30,8 @@
       <thead><tr><th>Merchant</th><th>Type</th><th>Account</th><th>Name</th><th>Added</th><th></th></tr></thead>
       <tbody>
         {% for a in unverified %}
-        {% set m = a.merchant_id %}
         <tr>
-          <td><strong>{{ a.merchant_id }}</strong></td>
+          <td><strong>{{ merchant_names.get(a.merchant_id, '#' ~ a.merchant_id) }}</strong></td>
           <td><span class="badge pending">{{ a.account_type.replace('_',' ').title() }}</span></td>
           <td><code>{{ a.account_number }}</code></td>
           <td>{{ a.account_name }}</td>
@@ -69,7 +63,7 @@
       <tbody>
         {% for w in pending_wrs %}
         <tr>
-          <td><strong>#{{ w.merchant_id }}</strong></td>
+          <td><strong>{{ merchant_names.get(w.merchant_id, '#' ~ w.merchant_id) }}</strong></td>
           <td>
             <strong>UGX {{ "{:,}".format(w.amount) }}</strong>
             <br><small class="text-muted">Fee: UGX {{ "{:,}".format(w.fee_amount) }}</small>
@@ -91,9 +85,12 @@
                   <i data-feather="check-circle"></i> Approve
                 </button>
               </form>
+              {# The route stores this reason in admin_notes and the merchant
+                 sees it — a hardcoded "Rejected by admin" told them nothing. #}
               <form method="POST" action="{{ url_for('wallet.admin_reject_withdrawal', wr_id=w.id) }}"
-                    onsubmit="return confirm('Reject this withdrawal?')">
-                <input type="hidden" name="reason" value="Rejected by admin">
+                    onsubmit="return confirm('Reject this withdrawal?')" style="display:flex;gap:.375rem;">
+                <input type="text" name="reason" required placeholder="Reason (shown to merchant)"
+                       style="width:170px;padding:.375rem .5rem;font-size:.8125rem;border:1px solid var(--gray-200);border-radius:8px;">
                 <button type="submit" class="btn btn-outline" style="padding:.375rem .75rem;font-size:.8125rem;color:var(--danger);border-color:var(--danger);">
                   <i data-feather="x-circle"></i> Reject
                 </button>
@@ -124,7 +121,7 @@
         {% for w in all_wrs %}
         <tr>
           <td><code style="font-size:.8rem;">{{ w.public_id[:12] }}…</code></td>
-          <td>#{{ w.merchant_id }}</td>
+          <td>{{ merchant_names.get(w.merchant_id, '#' ~ w.merchant_id) }}</td>
           <td>UGX {{ "{:,}".format(w.amount) }}</td>
           <td>
             <span class="badge {{ 'succeeded' if w.status == 'completed' else 'pending' if w.status in ('pending','processing') else 'failed' if w.status in ('rejected','cancelled') else 'pending' }}">

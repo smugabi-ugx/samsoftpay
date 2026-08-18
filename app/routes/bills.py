@@ -11,6 +11,28 @@ from ..utils import verified_required
 
 bp = Blueprint("bills", __name__)
 
+def _bill_channels():
+    """Same live-channel gate as the checkout page (guardrail 14): offering
+    Airtel/card on a live bill-payment page failed the customer only AFTER
+    they had filled in the whole form."""
+    from ..models import Channel
+    from ..services.orchestrator import _simulated_rail_forbidden
+    options = [
+        ("mtn_momo",     "MTN Mobile Money", "phone"),
+        ("airtel_money", "Airtel Money",     "phone"),
+        ("card",         "Visa / Mastercard", "card"),
+    ]
+    out = []
+    for value, label, kind in options:
+        try:
+            if _simulated_rail_forbidden(Channel(value)):
+                continue
+        except Exception:
+            pass
+        out.append((value, label, kind))
+    return out
+
+
 _CATEGORIES = [
     ("school_fees",  "School Fees"),
     ("utility",      "Utility Bill (Water/Electricity)"),
@@ -151,7 +173,7 @@ def pay_bill_page(handle: str, bill_public_id: str):
             levy_rate_bps=tax_cfg.levy_rate_bps,
             show_levy=tax_cfg.show_levy,
         )
-    return render_template("pay_bill.html",
+    return render_template("pay_bill.html", channels=_bill_channels(),
                            merchant=merchant, bill=bill,
                            tax_cfg=tax_cfg, breakdown=breakdown)
 
@@ -186,7 +208,7 @@ def pay_bill_submit(handle: str, bill_public_id: str):
             entered = 0
         if entered < 500:
             breakdown = None
-            return render_template("pay_bill.html", merchant=merchant, bill=bill,
+            return render_template("pay_bill.html", channels=_bill_channels(), merchant=merchant, bill=bill,
                                    tax_cfg=tax_cfg, breakdown=breakdown,
                                    error="Please enter a valid amount (minimum UGX 500).")
         charge_amount = entered
@@ -203,7 +225,7 @@ def pay_bill_submit(handle: str, bill_public_id: str):
     if not phone:
         breakdown = calculate(amount=bill.amount, vat_rate_bps=bill.tax_rate_bps,
                               tax_inclusive=bill.tax_inclusive) if bill.amount else None
-        return render_template("pay_bill.html", merchant=merchant, bill=bill,
+        return render_template("pay_bill.html", channels=_bill_channels(), merchant=merchant, bill=bill,
                                tax_cfg=tax_cfg, breakdown=breakdown,
                                error="Phone number is required.")
 
@@ -219,15 +241,19 @@ def pay_bill_submit(handle: str, bill_public_id: str):
             merchant_reference=f"{bill.public_id}|{bill.account_ref or ''}",
         )
         bill.transaction_id = txn.id
-        bill.status = "paid"
+        # NOT marked "paid" here — create_charge returning only means the MoMo
+        # prompt was SENT. Marking paid at initiation locked the bill out
+        # (pay routes 404 non-active bills) the moment a customer cancelled or
+        # ignored the prompt: permanently "paid" with no money and no retry.
+        # complete_transaction flips it to paid when the rail confirms.
         db.session.commit()
-        return render_template("pay_bill.html", merchant=merchant, bill=bill,
+        return render_template("pay_bill.html", channels=_bill_channels(), merchant=merchant, bill=bill,
                                tax_cfg=tax_cfg, breakdown=None,
                                success=True, txn=txn)
     except OrchestratorError as exc:
         breakdown = calculate(amount=bill.amount, vat_rate_bps=bill.tax_rate_bps,
                               tax_inclusive=bill.tax_inclusive) if bill.amount else None
-        return render_template("pay_bill.html", merchant=merchant, bill=bill,
+        return render_template("pay_bill.html", channels=_bill_channels(), merchant=merchant, bill=bill,
                                tax_cfg=tax_cfg, breakdown=breakdown,
                                error=str(exc))
 

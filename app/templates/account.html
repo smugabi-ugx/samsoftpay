@@ -95,7 +95,7 @@
     <!-- Mode Toggle -->
     <div class="mode-toggle">
       <button class="mode-btn active test" id="btn-test" onclick="setMode('test')">
-        <i data-feather="flask" style="width:14px;height:14px;"></i> Test
+        <i data-feather="code" style="width:14px;height:14px;"></i> Test
       </button>
       <button class="mode-btn live" id="btn-live" onclick="setMode('live')">
         <i data-feather="zap" style="width:14px;height:14px;"></i> Live
@@ -118,11 +118,15 @@
     </div>
     <div class="form-group" style="margin-bottom:0;">
       <label class="form-label">Test Secret Key</label>
+      {# Secret keys masked by default — both key blocks are always in the DOM
+         regardless of tab, so a screen-share or view-source exposed sk_live_.
+         Copy still copies the real key (data-real). #}
       <div class="api-key-display">
-        <code id="test-sec-key">{{ current_user.test_secret_key or 'Not generated' }}</code>
+        <code id="test-sec-key" class="secret-maskable" data-real="{{ current_user.test_secret_key or 'Not generated' }}">••••••••••••••••••••</code>
+        <button class="copy-btn" onclick="toggleKey('test-sec-key', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
         <button class="copy-btn" onclick="copyKey('test-sec-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
       </div>
-      <div class="form-hint">Use <code>Authorization: Bearer {{ current_user.test_secret_key or 'sk_test_...' }}</code></div>
+      <div class="form-hint">Use <code>Authorization: Bearer sk_test_…</code> (copy the full key above)</div>
     </div>
   </div>
 
@@ -146,7 +150,8 @@
     <div class="form-group" style="margin-bottom:0;">
       <label class="form-label">Live Secret Key</label>
       <div class="api-key-display">
-        <code id="live-sec-key">{{ current_user.secret_key }}</code>
+        <code id="live-sec-key" class="secret-maskable" data-real="{{ current_user.secret_key }}">••••••••••••••••••••</code>
+        <button class="copy-btn" onclick="toggleKey('live-sec-key', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
         <button class="copy-btn" onclick="copyKey('live-sec-key', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
       </div>
     </div>
@@ -322,9 +327,8 @@ print(resp.json())
 
   // QR modal for payment page
   function showProfileQR() {
-    const url = document.getElementById('profile-url').textContent.trim();
-    const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&qzone=2&data=' + encodeURIComponent(url);
-    document.getElementById('acct-qr-img').src = qrSrc;
+    // In-house segno QR (checkout.profile_qr_png) — no third-party dependency.
+    document.getElementById('acct-qr-img').src = '{{ url_for("checkout.profile_qr_png", handle=current_user.handle) if current_user.handle else "" }}';
     const modal = document.getElementById('qr-modal');
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';

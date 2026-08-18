@@ -235,6 +235,22 @@ def merchant_detail(merchant_id: int):
         .limit(20)
         .all()
     )
+    # Real aggregates for the headline stat cards. Computing them from `txns`
+    # in the template silently capped every number at the 50 most recent rows —
+    # a merchant's "Total Volume" stopped growing at their 50th transaction.
+    from sqlalchemy import func as safunc
+    from ..models import TxnStatus
+    succeeded_count, succeeded_volume = (
+        db.session.query(safunc.count(Transaction.id),
+                         safunc.coalesce(safunc.sum(Transaction.amount), 0))
+        .filter(Transaction.merchant_id == merchant_id,
+                Transaction.status == TxnStatus.SUCCEEDED)
+        .one()
+    )
+    payout_count = Payout.query.filter_by(merchant_id=merchant_id).count()
+    active_link_count = PaymentLink.query.filter_by(
+        merchant_id=merchant_id, is_active=True).count()
+
     return render_template(
         "merchant_detail.html",
         merchant=merchant,
@@ -244,6 +260,10 @@ def merchant_detail(merchant_id: int):
         pending_balance=-pending.cached_balance if pending else 0,
         available_balance=-available.cached_balance if available else 0,
         webhooks=webhooks,
+        succeeded_count=succeeded_count,
+        succeeded_volume=succeeded_volume,
+        payout_count=payout_count,
+        active_link_count=active_link_count,
     )
 
 

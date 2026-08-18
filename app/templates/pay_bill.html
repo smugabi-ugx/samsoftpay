@@ -139,7 +139,10 @@
   </div>
   {% endif %}
 
-  <form method="POST" action="{{ url_for('bills.pay_bill_submit', handle=merchant.handle, bill_public_id=bill.public_id) }}">
+  {# onsubmit guard: a double-tap on a synchronous MTN charge sent TWO MoMo
+     prompts to the customer's phone. #}
+  <form method="POST" action="{{ url_for('bills.pay_bill_submit', handle=merchant.handle, bill_public_id=bill.public_id) }}"
+        onsubmit="var b=this.querySelector('[type=submit]'); if(b){b.disabled=true;b.style.opacity='.6';b.textContent='Sending prompt…';}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     {% if bill.is_variable %}
@@ -155,7 +158,9 @@
     <div class="field" style="margin-bottom:.75rem;">
       <label>Payment method</label>
     </div>
-    {% for ch_key, ch_label, ch_kind in [('mtn_momo','MTN Mobile Money','phone'),('airtel_money','Airtel Money','phone'),('card','Visa / Mastercard','card')] %}
+    {# Same live-channel gate as the checkout page — offering Airtel/card here
+       failed the customer AFTER they had filled in the whole form. #}
+    {% for ch_key, ch_label, ch_kind in channels %}
     <label class="channel-label{% if ch_key == 'mtn_momo' %} selected{% endif %}" data-kind="{{ ch_kind }}" data-key="{{ ch_key }}">
       <input type="radio" name="channel" value="{{ ch_key }}" {% if ch_key == 'mtn_momo' %}checked{% endif %}>
       <div class="ch-dot"><div class="ch-dot-inner"></div></div>

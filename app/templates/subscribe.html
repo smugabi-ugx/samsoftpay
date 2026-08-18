@@ -105,7 +105,8 @@
     <div class="what-step"><div class="step-dot">3</div><span>Every {{ plan.interval }}, you'll automatically receive another prompt for <strong>{{ plan.currency }} {{ "{:,}".format(plan.amount) }}</strong>.</span></div>
   </div>
 
-  <form method="POST" action="{{ url_for('subscriptions.subscribe_submit', handle=merchant.handle, plan_public_id=plan.public_id) }}">
+  <form method="POST" action="{{ url_for('subscriptions.subscribe_submit', handle=merchant.handle, plan_public_id=plan.public_id) }}"
+        onsubmit="var b=this.querySelector('[type=submit]'); if(b){b.disabled=true;b.style.opacity='.6';}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field">
       <label>Phone Number *</label>

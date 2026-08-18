@@ -210,8 +210,13 @@ def admin_withdrawals():
     unverified = (SettlementAccount.query
                   .filter_by(is_verified=False)
                   .order_by(SettlementAccount.created_at.asc()).all())
+    # Name lookup for the tables — the template used to show raw merchant ids,
+    # which forced the admin to cross-reference by hand before approving money.
+    ids = {w.merchant_id for w in pending_wrs} | {w.merchant_id for w in all_wrs} | {a.merchant_id for a in unverified}
+    merchant_names = {m.id: m.name for m in Merchant.query.filter(Merchant.id.in_(ids)).all()} if ids else {}
     return render_template("admin_withdrawals.html",
-        pending_wrs=pending_wrs, all_wrs=all_wrs, unverified=unverified)
+        pending_wrs=pending_wrs, all_wrs=all_wrs, unverified=unverified,
+        merchant_names=merchant_names)
 
 
 @bp.post("/admin/settlement-accounts/<int:acct_id>/verify")

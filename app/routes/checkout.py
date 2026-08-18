@@ -37,6 +37,21 @@ def merchant_profile(handle: str):
     return render_template("merchant_profile.html", merchant=merchant, links=links)
 
 
+@bp.get("/pay/@<handle>/qr.png")
+def profile_qr_png(handle: str):
+    """QR of a merchant's public profile URL, rendered in-house with segno —
+    the profile page's QR modal used a third-party QR service before."""
+    from flask import Response
+    from ..services.vending import qr_image
+    merchant = Merchant.query.filter_by(handle=handle).one_or_none()
+    if merchant is None:
+        abort(404)
+    target = url_for("checkout.merchant_profile", handle=handle, _external=True)
+    data = qr_image(target, kind="png", scale=6)
+    return Response(data, mimetype="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @bp.get("/pay/@<handle>/pay")
 def profile_pay(handle: str):
     """Create a one-shot payment link from the profile page custom-amount form."""
@@ -124,7 +139,7 @@ def checkout_submit(public_id: str):
     except ValueError:
         return render_template(
             "checkout.html", link=link, merchant=merchant,
-            channels=_channel_options(),
+            channels=_channel_options(include_crypto=True),
             error="Please choose a payment method.",
         )
 
@@ -135,7 +150,7 @@ def checkout_submit(public_id: str):
     if channel in (Channel.MTN_MOMO, Channel.AIRTEL_MONEY) and not customer_phone:
         return render_template(
             "checkout.html", link=link, merchant=merchant,
-            channels=_channel_options(),
+            channels=_channel_options(include_crypto=True),
             error="Phone number is required for mobile money.",
             selected_channel=channel.value,
         )
@@ -178,7 +193,7 @@ def checkout_submit(public_id: str):
             session.pop(f"voucher_{public_id}", None)
             return render_template(
                 "checkout.html", link=link, merchant=merchant,
-                channels=_channel_options(), voucher_error=msg,
+                channels=_channel_options(include_crypto=True), voucher_error=msg,
             )
         session.pop(f"voucher_{public_id}", None)
 
@@ -237,7 +252,7 @@ def checkout_submit(public_id: str):
         # redeemed — so there is nothing to roll back here.
         return render_template(
             "checkout.html", link=link, merchant=merchant,
-            channels=_channel_options(),
+            channels=_channel_options(include_crypto=True),
             error=f"Could not start payment: {exc}",
             selected_channel=channel.value,
         )
@@ -431,7 +446,7 @@ def apply_voucher(public_id: str):
     # than trying to give gift cards their own sandbox split.
     if link.is_test:
         return render_template("checkout.html", link=link, merchant=merchant,
-                               channels=_channel_options(),
+                               channels=_channel_options(include_crypto=True),
                                voucher_error="Gift cards can't be used on a sandbox (test-mode) checkout.")
 
     from datetime import datetime, timezone
@@ -445,7 +460,7 @@ def apply_voucher(public_id: str):
 
     if error:
         return render_template("checkout.html", link=link, merchant=merchant,
-                               channels=_channel_options(),
+                               channels=_channel_options(include_crypto=True),
                                crypto_url=url_for("checkout.crypto_checkout", public_id=public_id),
                                voucher_error=error)
     discount = min(card.balance, link.amount)
@@ -462,6 +477,12 @@ def crypto_checkout(public_id: str):
     merchant = db.session.get(Merchant, link.merchant_id)
     # Check if an exchange is already in progress (stored in session)
     from flask import session
+    if request.args.get("restart"):
+        # The rate-lock expiry escape hatch. Without this, "start over" simply
+        # re-served the SAME expired session order — an infinite loop.
+        session.pop(f"cn_order_{public_id}", None)
+        session.pop(f"cn_status_{public_id}", None)
+        return redirect(url_for("checkout.crypto_checkout", public_id=public_id))
     order_data = session.get(f"cn_order_{public_id}")
     order = type("O", (), order_data)() if order_data else None
     return render_template(
@@ -469,7 +490,30 @@ def crypto_checkout(public_id: str):
         link=link, merchant=merchant,
         coins=SUPPORTED_COINS,
         order=order,
+        # Set when crypto_initiate bounced back after ChangeNow rejected the
+        # exchange — without it the failure was completely silent.
+        error="Could not start the exchange. Please try again in a moment." if request.args.get("err") else None,
     )
+
+
+@bp.get("/pay/<public_id>/crypto/qr.png")
+def crypto_qr_png(public_id: str):
+    """QR of THIS session's deposit address, rendered in-house with segno.
+
+    Replaces a third-party QR service: a payment QR must not depend on
+    someone else's uptime, and the deposit address should not be shipped to
+    an external host. Session-scoped, so it can only render the address that
+    was already shown to this same browser.
+    """
+    from flask import Response, session
+    from ..services.vending import qr_image
+
+    order_data = session.get(f"cn_order_{public_id}")
+    if not order_data or not order_data.get("deposit_address"):
+        abort(404)
+    data = qr_image(order_data["deposit_address"], kind="png", scale=6)
+    return Response(data, mimetype="image/png",
+                    headers={"Cache-Control": "private, max-age=1200"})
 
 
 @bp.post("/pay/<public_id>/crypto/initiate")
@@ -486,7 +530,9 @@ def crypto_initiate(public_id: str):
         public_id=public_id,
     )
     if not result.accepted:
-        return redirect(url_for("checkout.checkout_page", public_id=public_id))
+        # Back to the CRYPTO page with an error flag — bouncing silently to the
+        # main checkout left the customer with no idea anything went wrong.
+        return redirect(url_for("checkout.crypto_checkout", public_id=public_id, err=1))
 
     session[f"cn_order_{public_id}"] = {
         "exchange_id": result.exchange_id,

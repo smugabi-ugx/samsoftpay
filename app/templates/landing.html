@@ -13,7 +13,7 @@
   <meta property="og:url" content="{{ request.host_url }}">
   <meta property="og:image" content="{{ url_for('static', filename='img/logo.png', _external=True) }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","description":"Payment gateway for East Africa — MTN MoMo, Airtel Money, Visa/Mastercard and crypto.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG","KE","TZ","RW"]}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","description":"Payment gateway for Uganda — MTN Mobile Money, crypto and bill collection, powering shops and scan-to-pay vending machines.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG"]}}</script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +23,7 @@
     :root {
       --ink:   #1a1b2e;
       --ink2:  #4a4e6e;
-      --ink3:  #8b8faa;
+      --ink3:  #676c8a;   /* darkened from #8b8faa: body copy at weight 300 was ~3.2:1 on white, below the 4.5:1 readable floor */
       --line:  #e8e9f0;
       --bg:    #ffffff;
       --soft:  #f7f7fb;
@@ -192,9 +192,7 @@
       opacity:0;transform:translateY(14px);transition:all .5s var(--ease);
     }
     .testi.in{opacity:1;transform:translateY(0);}
-    .stars{display:flex;gap:2px;margin-bottom:12px;}
-    .star{color:#f59e0b;font-size:.875rem;}
-    .testi-q{font-size:.9rem;color:var(--ink2);line-height:1.7;font-weight:300;font-style:italic;margin-bottom:16px;}
+    .testi-q{font-size:.9rem;color:var(--ink2);line-height:1.7;font-weight:300;margin-bottom:16px;}
     .testi-who{display:flex;align-items:center;gap:10px;}
     .testi-av{
       width:36px;height:36px;border-radius:50%;flex-shrink:0;
@@ -380,7 +378,7 @@
         <div class="price-tag">Collections</div>
         <div class="price-num">1.5%</div>
         <div class="price-lbl">per transaction</div>
-        <div class="price-note">Min UGX 200 · cap UGX 5,000. Applies to MoMo, Airtel, Visa, Mastercard and Crypto.</div>
+        <div class="price-note">Min UGX 200 · cap UGX 5,000. Applies to every live channel, and to Airtel/cards when they launch.</div>
       </div>
       <div class="price hi anim">
         <div class="price-tag">Platform fee</div>
@@ -452,7 +450,7 @@
           <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
           <span>Samsoftpay</span>
         </div>
-        <p class="foot-desc">East Africa's developer-first payment gateway. Accept MoMo, Airtel, Visa, Mastercard and crypto via one clean API.</p>
+        <p class="foot-desc">Uganda's developer-first payment gateway. MTN Mobile Money and crypto live today via one clean API — Airtel and cards next.</p>
       </div>
       <div>
         <h4>Product</h4>
@@ -483,7 +481,7 @@
     </div>
     <div class="foot-bottom">
       <span>© 2026 Samsoftpay</span>
-      <span>Uganda · Kenya · Tanzania · Rwanda</span>
+      <span>Live in Uganda · East Africa next</span>
     </div>
   </div>
 </footer>

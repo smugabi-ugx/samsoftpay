@@ -204,8 +204,33 @@ def complete_transaction(
     if success:
         from .vending import maybe_dispense_on_success
         maybe_dispense_on_success(txn)
+        _maybe_mark_bill_paid(txn)
 
     _queue_webhook(txn)
+
+
+def _maybe_mark_bill_paid(txn: Transaction) -> None:
+    """Flip a bill to paid when its charge actually SUCCEEDS. Never raises.
+
+    Bills used to be marked paid the moment the MoMo prompt was SENT — a
+    cancelled/ignored prompt left the bill permanently "paid" with no money
+    and no way to retry (the pay routes 404 any non-active bill). The bill's
+    merchant_reference is "<bill_public_id>|<account_ref>".
+    """
+    try:
+        ref = txn.merchant_reference or ""
+        if not ref.startswith("bill_"):
+            return
+        bill_public_id = ref.split("|", 1)[0]
+        from ..models import Bill
+        bill = Bill.query.filter_by(public_id=bill_public_id,
+                                    merchant_id=txn.merchant_id).one_or_none()
+        if bill is not None and bill.status == "active":
+            bill.status = "paid"
+            bill.transaction_id = txn.id
+            db.session.commit()
+    except Exception:  # pragma: no cover - a bill bookkeeping failure must
+        pass           # never disturb the committed money above
 
 
 def _queue_webhook(txn: Transaction) -> None:

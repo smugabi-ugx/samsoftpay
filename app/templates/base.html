@@ -168,11 +168,6 @@
       transition:all .18s var(--ease);
       position:relative;overflow:hidden;
     }
-    .nav-link::before{
-      content:'';position:absolute;inset:0;border-radius:10px;
-      background:var(--gradient-primary);opacity:0;
-      transition:opacity .2s var(--ease);z-index:-1;
-    }
     .nav-link svg{width:17px;height:17px;flex-shrink:0;transition:transform .2s var(--ease);}
     .nav-link:hover{color:var(--primary);background:rgba(99,102,241,.06);}
     .nav-link:hover svg{transform:scale(1.1);}
@@ -583,7 +578,10 @@
        SCROLL-TO-TOP
     ───────────────────────────────────────────── */
     #scroll-top{
-      position:fixed;bottom:calc(var(--bottom-nav-h) + 16px);right:16px;
+      /* Desktop: 16px from the bottom. The bottom-nav offset applies only
+         below 768px where the 64px bottom nav actually exists — on desktop
+         it was floating 80px up over empty space. */
+      position:fixed;bottom:16px;right:16px;
       width:42px;height:42px;border-radius:12px;
       background:var(--gradient-primary);color:white;
       border:none;cursor:pointer;z-index:199;
@@ -707,12 +705,14 @@
           {% endif %}
         </div>
 
+        {# Whole section gated, not just its links — a logged-out visitor was
+           seeing an "Accept Money" heading with nothing under it. And no
+           "Transactions" item here: it pointed at the same endpoint as Home
+           with the same active check, so two items highlighted at once for
+           one page. #}
+        {% if current_user.is_authenticated %}
         <div class="nav-section">
           <div class="nav-section-title">Accept Money</div>
-          {% if current_user.is_authenticated %}
-          <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="nav-link {% if request.endpoint == 'dashboard.merchant_detail' %}active{% endif %}" onclick="closeSidebar()">
-            <i data-feather="trending-up"></i><span>Transactions</span>
-          </a>
           <a href="{{ url_for('bills.list_bills') }}" class="nav-link {% if 'bills.' in request.endpoint and 'tax' not in request.endpoint %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="file-text"></i><span>Bill Collection</span>
           </a>
@@ -722,8 +722,8 @@
           <a href="{{ url_for('subscriptions.list_plans') }}" class="nav-link {% if 'subscriptions.' in request.endpoint %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="rotate-cw"></i><span>Subscriptions</span>
           </a>
-          {% endif %}
         </div>
+        {% endif %}
 
         <div class="nav-section">
           <div class="nav-section-title">Tools</div>
@@ -816,6 +816,26 @@
       </div>
       {% endif %}
 
+      {# Flash messages — routes flash ~38 of these (success/error/info) and
+         the shell never rendered them, so "Machines synced", "Dispensed.",
+         "Logo updated" etc. were silently dropped: the user acted and saw
+         nothing. Every child template inherits this block. #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem;">
+          {% for category, message in messages %}
+          <div role="status" style="display:flex;align-items:center;gap:.625rem;border-radius:10px;padding:.8125rem 1rem;font-size:.9rem;font-weight:500;
+            {% if category == 'error' %}background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#b91c1c;
+            {% elif category == 'success' %}background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#047857;
+            {% else %}background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2);color:#4338ca;{% endif %}">
+            <span aria-hidden="true">{% if category == 'error' %}✕{% elif category == 'success' %}✓{% else %}ℹ{% endif %}</span>
+            {{ message }}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      {% endwith %}
+
       {% block breadcrumb %}{% endblock %}
       {% block content %}{% endblock %}
     </main>
@@ -895,7 +915,11 @@
 
   <script>
     // ── FEATHER ICONS ──
-    feather.replace({ 'stroke-width': 2 });
+    // Guarded: this is the first statement of the shell's only script. If the
+    // CDN serving feather fails, an unguarded call would throw and abort
+    // EVERYTHING after it — CSRF injection, sidebar wiring, toasts. Icons
+    // missing is cosmetic; forms silently failing CSRF is not.
+    if (window.feather) feather.replace({ 'stroke-width': 2 });
 
     // Navigation: logo always links to merchant dashboard (or landing for guests)
     // Breadcrumbs show current position — no browser back button dependency
@@ -1047,14 +1071,25 @@
 
     // ── COPY KEY HELPER ──
     window.copyKey = function(id, btn) {
-      const text = document.getElementById(id)?.textContent || '';
-      navigator.clipboard.writeText(text.trim()).then(() => {
+      const el = document.getElementById(id);
+      // data-real wins over textContent: masked secret keys display dots but
+      // must copy the actual key.
+      const text = (el?.dataset.real || el?.textContent || '').trim();
+      navigator.clipboard.writeText(text).then(() => {
         btn.classList.add('copied');
         const prev = btn.innerHTML;
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>';
         showToast('Copied to clipboard', 'success', 2000);
-        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = prev; feather.replace({'stroke-width':2}); }, 2000);
+        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = prev; if (window.feather) feather.replace({'stroke-width':2}); }, 2000);
       });
+    };
+
+    // Show/hide a masked secret key (see account.html's .secret-maskable).
+    window.toggleKey = function(id, btn) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const masked = el.textContent.indexOf('•') !== -1;
+      el.textContent = masked ? el.dataset.real : '••••••••••••••••••••';
     };
 
     // ── MODE TOGGLE ──
@@ -1065,7 +1100,7 @@
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
       const btn = document.getElementById(`btn-${mode}`);
       if (btn) btn.classList.add('active');
-      feather.replace({'stroke-width':2});
+      if (window.feather) feather.replace({'stroke-width':2});
     };
   </script>
 
