@@ -159,7 +159,15 @@
       <label>Payment method</label>
     </div>
     {# Same live-channel gate as the checkout page — offering Airtel/card here
-       failed the customer AFTER they had filled in the whole form. #}
+       failed the customer AFTER they had filled in the whole form. If NO live
+       channel exists yet (pre-MTN-production), say so instead of rendering a
+       broken form with zero options. #}
+    {% if not channels %}
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#92400e;border-radius:10px;padding:.875rem 1rem;font-size:.9rem;">
+      Online payment for this bill is launching soon. Please contact
+      <strong>{{ merchant.name }}</strong> to pay directly for now.
+    </div>
+    {% endif %}
     {% for ch_key, ch_label, ch_kind in channels %}
     <label class="channel-label{% if ch_key == 'mtn_momo' %} selected{% endif %}" data-kind="{{ ch_kind }}" data-key="{{ ch_key }}">
       <input type="radio" name="channel" value="{{ ch_key }}" {% if ch_key == 'mtn_momo' %}checked{% endif %}>
@@ -184,8 +192,10 @@
     </div>
 
     <div class="pay-footer">
-      <button type="submit" class="pay-btn">
-        Pay {{ bill.currency }} {% if bill.is_variable %}Bill{% else %}{{ "{:,}".format(breakdown.total if breakdown else bill.amount) }}{% endif %}
+      {# No submit when there is nothing to submit with. Also: "Pay UGX Bill"
+         read like a bug for variable bills — say what actually happens. #}
+      <button type="submit" class="pay-btn" {% if not channels %}disabled style="opacity:.5;cursor:not-allowed;"{% endif %}>
+        {% if bill.is_variable %}Pay this bill{% else %}Pay {{ bill.currency }} {{ "{:,}".format(breakdown.total if breakdown else bill.amount) }}{% endif %}
       </button>
     </div>
   </form>

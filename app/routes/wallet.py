@@ -316,6 +316,21 @@ def topup_momo():
         return redirect(url_for("wallet.wallet_home"))
 
     merchant = db.session.get(Merchant, current_user.id)
+
+    # Until a REAL MTN rail is active in production, a live top-up link has no
+    # mobile-money option at all (guardrail 14 hides mock rails on live links)
+    # — the page showed only Crypto. The fix is NOT to unhide the mock on a
+    # live link: a fake "payment" would then credit real withdrawable balance.
+    # Instead the link is created in SANDBOX mode, the flow is fully testable,
+    # and the credit lands on the sandbox ledger (see _settle_topup). The
+    # moment MOMO_USE_REAL goes live, top-ups become live automatically.
+    from ..services.rails import is_simulated
+    from ..models import Channel as _Ch
+    mtn_is_mock = is_simulated(_Ch.MTN_MOMO)   # g.api_mode unset here = live view
+    if mtn_is_mock:
+        flash("MTN is running in sandbox until production launch — this top-up "
+              "tests the flow and credits your SANDBOX balance, not real money.", "info")
+
     link = PaymentLink(
         public_id           = f"lnk_{uuid.uuid4().hex[:16]}",
         merchant_id         = merchant.id,
@@ -325,6 +340,7 @@ def topup_momo():
         reference           = f"TOPUP-{merchant.id}",
         allow_multiple_uses = False,
         is_active           = True,
+        is_test             = mtn_is_mock,
     )
     db.session.add(link)
     db.session.flush()
@@ -395,12 +411,17 @@ def _settle_topup(merchant_id: int, txn, ref: str) -> None:
     net_amount = txn.amount - txn.fee_amount   # e.g. 1000 - 200 = 800
     currency   = txn.currency
 
+    # Scoped to the TRANSACTION's mode, never hardcoded live: a sandbox top-up
+    # (mock MTN pre-production) must credit the sandbox ledger only. Hardcoding
+    # is_test=False here would let a fake payment mint real withdrawable
+    # balance — the exact hole guardrails 12/14 exist to close.
+    mode = bool(txn.is_test)
     pending = ledger.get_or_create_account(
         type=AccountType.MERCHANT_PENDING,  merchant_id=merchant_id, currency=currency,
-        is_test=False)   # wallet top-ups are always real money
+        is_test=mode)
     avail   = ledger.get_or_create_account(
         type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant_id, currency=currency,
-        is_test=False)
+        is_test=mode)
 
     # Move net from pending → available. Fee stays in psp_revenue.
     ledger.post(
