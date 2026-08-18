@@ -59,6 +59,14 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.reconciliation.reconcile_mtn",
                 "schedule": 3600.0,   # match our ledger against MTN's own records every hour
             },
+            "worker-heartbeat": {
+                "task": "app.tasks.monitoring.heartbeat",
+                "schedule": 60.0,     # liveness ping — /ops/status reads this
+            },
+            "check-money-stuck": {
+                "task": "app.tasks.monitoring.check_money_stuck",
+                "schedule": 3600.0,   # hourly — alert on stranded payouts / stuck AUTHORIZED charges
+            },
         },
         # Worker settings
         worker_prefetch_multiplier=1,       # one task at a time per worker slot
