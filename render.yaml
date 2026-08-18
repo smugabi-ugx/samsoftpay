@@ -44,6 +44,9 @@ services:
       # FLUTTERWAVE_SECRET_KEY
       # CHANGENOW_API_KEY, CHANGENOW_RECEIVING_ADDRESS
       # MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD
+      # Alerting (optional): SLACK_WEBHOOK_URL (Slack Incoming Webhook), ALERT_EMAIL
+      #   (defaults to ADMIN_EMAIL), ADMIN_EMAIL. HEARTBEAT_STALE_SECONDS (default 300).
+      #   Point an external uptime monitor at /ops/status (503 = worker/beat dead).
 
   # ── Celery Worker (processes tasks from Redis queue) ──────────────────────
   - type: worker
@@ -75,7 +78,10 @@ services:
           name: samsoftpay
           type: web
           envVarKey: WEBHOOK_SIGNING_SECRET
-      # Same MOMO_* vars as web service — set manually in dashboard
+      # Same MOMO_* vars as web service — set manually in dashboard.
+      # Alerts fire from beat tasks that run HERE, so the worker also needs the
+      # alerting + mail vars to actually deliver: SLACK_WEBHOOK_URL, ALERT_EMAIL
+      # (or ADMIN_EMAIL), MAIL_HOST/MAIL_PORT/MAIL_USERNAME/MAIL_PASSWORD/MAIL_FROM.
 
   # ── Celery Beat (periodic task scheduler) ─────────────────────────────────
   - type: worker

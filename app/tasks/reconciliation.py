@@ -41,6 +41,10 @@ def reconcile_ledger() -> dict:
         current_app.logger.error(
             "LEDGER RECONCILIATION FAILED: %s", "; ".join(problems)
         )
+        from ..services.alerts import send_alert
+        send_alert("Ledger reconciliation failed", "; ".join(problems),
+                   severity="critical", key="ledger-recon",
+                   dedupe_seconds=6 * 3600)   # nightly task; don't re-alert same night
     else:
         current_app.logger.info("ledger reconciliation OK")
     return {"ok": not problems, "problems": problems, "report": report}
@@ -66,6 +70,13 @@ def reconcile_mtn() -> dict:
             "MTN RECONCILIATION: %d open CRITICAL exception(s) — our ledger "
             "disagrees with MTN. Summary: %s", open_critical, summary,
         )
+        from ..services.alerts import send_alert
+        send_alert(
+            "MTN reconciliation critical",
+            f"{open_critical} open CRITICAL exception(s) — our ledger disagrees "
+            f"with MTN about whether money moved (lost callback or booked money "
+            f"MTN never took). Open /admin/reconciliation. Summary: {summary}",
+            severity="critical", key="mtn-recon-critical", dedupe_seconds=3600)
     else:
         current_app.logger.info("MTN reconciliation OK: %s", summary)
     return {"ok": open_critical == 0, "open_critical": open_critical, "summary": summary}

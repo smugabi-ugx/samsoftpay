@@ -163,7 +163,7 @@
     MTN FAILED = booked money MTN never took. A network-unknown answer is NEVER an exception
     (same principle as the sweep). A later run that finds agreement AUTO-RESOLVES the row
     (backdated reconciliation). Surfaced on /admin/reconciliation with a resolve action;
-    hourly `reconcile_mtn` beat task logs open criticals loudly (wire to alerting next).
+    hourly `reconcile_mtn` beat task logs open criticals loudly AND now alerts (guardrail 25).
     `flask reconcile-mtn` runs it on demand. Testable against MTN sandbox now. This is the
     artifact a partner's compliance review asks for first. Tests: `tests/test_mtn_reconciliation.py`.
 
@@ -218,6 +218,23 @@
     party!), the profile page and the account page. All now use our own endpoints
     (`checkout.order_qr_png`, `crypto_qr_png`, `profile_qr_png`). A payment QR must
     not depend on someone else's uptime nor leak its content to them.
+
+25. **A logged error nobody reads is not an alert; a dead worker cannot report its own
+    death.** `app/services/alerts.py` `send_alert()` routes a critical condition to Slack
+    (`SLACK_WEBHOOK_URL`), email (`ALERT_EMAIL`/`ADMIN_EMAIL`, reusing MAIL_*) and Sentry
+    (`capture_message` — the Celery integration only catches RAISES, but our money tasks LOG
+    problems, they don't raise). Two hard rules: it NEVER raises (it runs inside the failing
+    task) and it DEDUPES via a short-TTL Redis key (the hourly beats would otherwise re-alert
+    every hour) — Redis-down FAILS OPEN (double-alert beats silence). Wired into
+    `reconcile_mtn`, `reconcile_ledger`, and a new hourly `check_money_stuck` (stranded payouts
+    + charges stuck AUTHORIZED > 6h — exactly the states the auto-resolvers deliberately avoid
+    touching, so they pile up silently). **Heartbeat:** `monitoring.heartbeat` beat task writes
+    a liveness timestamp to Redis every 60s; the WEB process exposes `GET /ops/status` (503 if
+    stale, tunable `HEARTBEAT_STALE_SECONDS`, default 300) — point an external uptime monitor
+    there, because the worker can't alert on its own death. `/ops/status` is deliberately NOT
+    folded into `/healthz` (a dead worker must not make Render restart the healthy web dyno).
+    Tests: `tests/test_alerts.py` (15 checks). Alerts fire from the WORKER — set the mail/Slack
+    vars there too (see render.yaml).
 
 ---
 

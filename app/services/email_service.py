@@ -13,6 +13,43 @@ from email.mime.text import MIMEText
 from flask import current_app
 
 
+def send_email(to_email: str, subject: str, html: str, plain: str | None = None) -> None:
+    """Send a general HTML email over the same SMTP config the OTP mailer uses.
+
+    Raises on SMTP failure (callers that must not be disrupted — e.g. alerts —
+    wrap this). No-op with a console print when MAIL_HOST is unset (dev/local),
+    matching send_otp's fallback behaviour.
+    """
+    host = current_app.config.get("MAIL_HOST", "")
+    if not host:
+        print(f"\n[DEV EMAIL] To: {to_email} | Subject: {subject}\n{plain or ''}\n", flush=True)
+        return
+
+    port      = int(current_app.config.get("MAIL_PORT", 587))
+    username  = current_app.config.get("MAIL_USERNAME", "")
+    password  = current_app.config.get("MAIL_PASSWORD", "").replace(" ", "")
+    from_addr = current_app.config.get("MAIL_FROM", username)
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = f"Samsoftpay <{from_addr}>"
+    msg["To"]      = to_email
+    msg.attach(MIMEText(plain or "", "plain"))
+    msg.attach(MIMEText(html, "html"))
+
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, timeout=15)
+    else:
+        server = smtplib.SMTP(host, port, timeout=15)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+    if username and password:
+        server.login(username, password)
+    server.sendmail(from_addr, to_email, msg.as_string())
+    server.quit()
+
+
 def generate_otp() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 

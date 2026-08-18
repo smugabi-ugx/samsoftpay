@@ -153,6 +153,15 @@ def create_app(config: dict | None = None) -> Flask:
         CHANGENOW_API_KEY=os.environ.get("CHANGENOW_API_KEY", ""),
         CHANGENOW_RECEIVING_ADDRESS=os.environ.get("CHANGENOW_RECEIVING_ADDRESS", ""),
         CHANGENOW_RECEIVING_NETWORK=os.environ.get("CHANGENOW_RECEIVING_NETWORK", "bsc"),
+        # ---- Operational alerting (see services/alerts.py) ----
+        # Where critical conditions (reconciliation drift, stuck money, dead
+        # worker) get routed. All optional — unset channels are simply skipped.
+        ALERTS_ENABLED=os.environ.get("ALERTS_ENABLED", "1"),
+        SLACK_WEBHOOK_URL=os.environ.get("SLACK_WEBHOOK_URL", ""),
+        ALERT_EMAIL=os.environ.get("ALERT_EMAIL", os.environ.get("ADMIN_EMAIL", "")),
+        # Worker/beat is considered dead if its heartbeat is older than this many
+        # seconds (the heartbeat task runs every 60s). /ops/status returns 503 then.
+        HEARTBEAT_STALE_SECONDS=int(os.environ.get("HEARTBEAT_STALE_SECONDS", "300")),
         # ---- Celery / Redis ----
         REDIS_URL=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
         # Rate-limit storage: shared Redis in production so limits hold ACROSS
@@ -319,5 +328,35 @@ def create_app(config: dict | None = None) -> Flask:
         """Pure liveness — process is up. No external dependencies checked."""
         from flask import jsonify
         return jsonify(status="ok"), 200
+
+    @app.get("/ops/status")
+    def ops_status():
+        """Worker/beat liveness, read from the Redis heartbeat.
+
+        Served by the WEB process on purpose: a dead worker can't report its own
+        death, so the freshness of the heartbeat it writes has to be checked from
+        the outside. Point an external uptime monitor (UptimeRobot, Render) at
+        this URL — a 503 means the Celery worker/beat pipeline has stopped even
+        though the web app is fine. NOT wired into /healthz, so a dead worker
+        never makes Render restart the healthy web service.
+        """
+        from flask import jsonify
+        from .services.alerts import heartbeat_age_seconds
+        threshold = app.config.get("HEARTBEAT_STALE_SECONDS", 300)
+        age = heartbeat_age_seconds()
+        if age is None:
+            # Unknown: no Redis, or no heartbeat written yet (e.g. just deployed).
+            # Report degraded-but-200 so a monitor doesn't page on a cold start;
+            # a genuinely dead pipeline will flip to stale (503) once the key ages
+            # out or, if it never wrote, stays here — surfaced in the body.
+            return jsonify(status="unknown", worker="unknown",
+                           heartbeat_age_seconds=None), 200
+        fresh = age <= threshold
+        return jsonify(
+            status="ok" if fresh else "stale",
+            worker="up" if fresh else "down",
+            heartbeat_age_seconds=age,
+            threshold_seconds=threshold,
+        ), (200 if fresh else 503)
 
     return app

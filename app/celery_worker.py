@@ -27,6 +27,7 @@ flask_app = create_app()
 # Without these imports the worker starts with no tasks and beat schedules nothing.
 from .tasks import (  # noqa: E402,F401
     billing,
+    monitoring,
     polling,
     reconciliation,
     sweep,
