@@ -20,6 +20,21 @@ def sign_payload(payload: str, secret: str) -> str:
     return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
+def merchant_signing_secret(merchant) -> str:
+    """The merchant's own whsec_ secret, generated lazily if missing.
+
+    Outbound deliveries are signed PER MERCHANT so each merchant can verify
+    them (shown in Account settings). The global WEBHOOK_SIGNING_SECRET is
+    inbound-only — it authenticates rail callbacks that mark money succeeded,
+    so it must never be handed to merchants.
+    """
+    if not getattr(merchant, "webhook_secret", None):
+        import secrets as _secrets
+        merchant.webhook_secret = "whsec_" + _secrets.token_urlsafe(32)
+        db.session.commit()
+    return merchant.webhook_secret
+
+
 def verify_signature(payload: str, signature: str, secret: str) -> bool:
     expected = sign_payload(payload, secret)
     return hmac.compare_digest(expected, signature)
@@ -44,7 +59,7 @@ def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = No
         return False
 
     payload = json.dumps({"event": event, "data": data}, separators=(",", ":"))
-    secret = current_app.config["WEBHOOK_SIGNING_SECRET"]
+    secret = merchant_signing_secret(merchant)
     delivery = WebhookDelivery(
         merchant_id=merchant.id,
         transaction_id=transaction_id,

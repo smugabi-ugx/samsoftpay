@@ -19,6 +19,36 @@ def auto_settlement_sweep() -> None:
         raise
 
 
+@celery.task(name="app.tasks.sweep.prune_old_rows")
+def prune_old_rows() -> None:
+    """Daily: delete delivered webhook rows and aged idempotency keys.
+
+    Both tables grew unbounded (no retention anywhere). 30 days keeps plenty
+    of debugging/replay history; the created_at / (status, next_attempt_at)
+    indexes shipped in b5c6d7e8f9a0 make these deletes cheap.
+    """
+    from datetime import timedelta
+    from ..extensions import db
+    from ..models import IdempotencyKey, WebhookDelivery, utcnow
+
+    cutoff = utcnow() - timedelta(days=30)
+    try:
+        sent = (db.session.query(WebhookDelivery)
+                .filter(WebhookDelivery.status == "sent",
+                        WebhookDelivery.created_at <= cutoff)
+                .delete(synchronize_session=False))
+        keys = (db.session.query(IdempotencyKey)
+                .filter(IdempotencyKey.created_at <= cutoff)
+                .delete(synchronize_session=False))
+        db.session.commit()
+        if sent or keys:
+            print(f"prune: {sent} sent webhooks, {keys} idempotency keys")
+    except Exception as exc:
+        db.session.rollback()
+        print(f"prune error: {exc}")
+        raise
+
+
 @celery.task(name="app.tasks.sweep.resolve_stale_transactions")
 def resolve_stale_transactions() -> None:
     """Hourly: resolve PENDING/AUTHORIZED charges older than an hour from

@@ -2,7 +2,7 @@
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import Channel, Subscription, SubscriptionPlan
 from ..services.subscriptions_service import (
     cancel_subscription,
@@ -162,6 +162,7 @@ def subscribe_page(handle: str, plan_public_id: str):
 
 
 @bp.post("/pay/@<handle>/subscribe/<plan_public_id>")
+@limiter.limit("10 per minute;60 per hour")   # unauthenticated, enrolls recurring MoMo billing
 def subscribe_submit(handle: str, plan_public_id: str):
     from ..models import Merchant
     merchant = Merchant.query.filter_by(handle=handle).one_or_none()

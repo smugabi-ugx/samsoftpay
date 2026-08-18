@@ -303,7 +303,10 @@ def _queue_webhook(txn: Transaction) -> None:
         },
         separators=(",", ":"),  # canonical JSON for signing
     )
-    secret = current_app.config["WEBHOOK_SIGNING_SECRET"]
+    # Per-merchant signing (see webhooks.merchant_signing_secret): the global
+    # secret is inbound-only now.
+    from .webhooks import merchant_signing_secret
+    secret = merchant_signing_secret(merchant)
     sig = sign_payload(payload, secret)
     db.session.add(
         WebhookDelivery(

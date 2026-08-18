@@ -274,6 +274,33 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"disabled 2FA for {n} of {len(merchants)} merchant(s)")
 
+    @app.cli.command("reset-password")
+    @click.argument("email")
+    @click.option("--password", default=None, help="New password (generated if omitted)")
+    def reset_password(email, password):
+        """Set a NEW password for a merchant by EMAIL.
+
+        The no-email recovery path until the self-service email reset flow
+        ships: a locked-out merchant on a live money dashboard otherwise has
+        no way back in. Also clears the failed-login lockout counter.
+        """
+        import secrets as _secrets
+        from werkzeug.security import generate_password_hash
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            new_pw = password or _secrets.token_urlsafe(12)
+            m.password_hash = generate_password_hash(new_pw)
+            for attr in ("failed_login_attempts", "locked_until", "otp_code", "otp_expires_at"):
+                if hasattr(m, attr):
+                    setattr(m, attr, None if "until" in attr or "code" in attr or "expires" in attr else 0)
+            db.session.commit()
+            print(f"password reset for {email}")
+            if not password:
+                print(f"new password: {new_pw}")
+
     @app.cli.command("reconcile")
     def reconcile():
         """Run ledger reconciliation now and print the result."""
