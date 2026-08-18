@@ -44,3 +44,28 @@ def reconcile_ledger() -> dict:
     else:
         current_app.logger.info("ledger reconciliation OK")
     return {"ok": not problems, "problems": problems, "report": report}
+
+
+@celery.task(name="app.tasks.reconciliation.reconcile_mtn")
+def reconcile_mtn() -> dict:
+    """Hourly: reconcile live MTN charges against MTN's own status.
+
+    Any NEW critical exception (MTN and us disagree about whether money moved)
+    is logged loudly — this is the drift the internal check cannot see. When
+    alerting is wired, this is a channel to route.
+    """
+    from flask import current_app
+    from ..services.reconciliation import reconcile_against_mtn
+    from ..models import ReconException
+
+    summary = reconcile_against_mtn()
+    open_critical = ReconException.query.filter_by(
+        status="open", severity="critical").count()
+    if open_critical:
+        current_app.logger.error(
+            "MTN RECONCILIATION: %d open CRITICAL exception(s) — our ledger "
+            "disagrees with MTN. Summary: %s", open_critical, summary,
+        )
+    else:
+        current_app.logger.info("MTN reconciliation OK: %s", summary)
+    return {"ok": open_critical == 0, "open_critical": open_critical, "summary": summary}

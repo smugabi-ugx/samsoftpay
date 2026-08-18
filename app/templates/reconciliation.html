@@ -244,6 +244,51 @@
   </div>
 </div>
 
+<!-- ── MTN external reconciliation ── -->
+<div class="card" style="margin-top:1.5rem;">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="shuffle"></i> MTN Reconciliation (external)</h3>
+    <form method="post" action="{{ url_for('dashboard.run_mtn_reconciliation') }}">
+      <button type="submit" class="btn btn-outline" style="padding:.375rem .75rem;font-size:.8125rem;">
+        <i data-feather="refresh-cw"></i> Run now
+      </button>
+    </form>
+  </div>
+  <p class="text-muted" style="font-size:.8125rem;margin:0 0 1rem;">
+    Matches our live MTN charges against MTN's own status. An open exception means our ledger and
+    MTN disagree about whether money moved — resolve each after investigating (or it auto-resolves
+    if a later run finds them agreeing).
+  </p>
+
+  {% if recon_exceptions %}
+  <div style="padding:0 .25rem;">
+    {% for e in recon_exceptions %}
+    <div class="activity-row">
+      <div class="activity-icon" style="background:{% if e.severity == 'critical' %}rgba(239,68,68,.1){% else %}rgba(245,158,11,.1){% endif %};">
+        {% if e.severity == 'critical' %}⛔{% else %}⚠️{% endif %}
+      </div>
+      <div class="activity-info">
+        <div class="activity-title">{{ e.kind.replace('_',' ') }}</div>
+        <div class="activity-sub">
+          {{ e.txn_public_id or e.rail_reference }} · ours: <strong>{{ e.our_status or '—' }}</strong> ·
+          MTN: <strong>{{ e.mtn_status or '—' }}</strong>{% if e.detail %} · {{ e.detail }}{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('dashboard.resolve_recon_exception', exc_id=e.id) }}"
+            onsubmit="return confirm('Mark this exception resolved? Do this only after investigating.')">
+        <button type="submit" class="btn btn-outline" style="padding:.3rem .7rem;font-size:.8125rem;">Resolve</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="display:flex;align-items:center;gap:.5rem;color:var(--success);font-size:.9rem;padding:.5rem 0;">
+    <i data-feather="check-circle" style="width:18px;height:18px;"></i>
+    No open exceptions — our books agree with MTN.
+  </div>
+  {% endif %}
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}

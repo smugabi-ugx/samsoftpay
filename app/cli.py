@@ -301,6 +301,22 @@ def register(app: Flask) -> None:
             if not password:
                 print(f"new password: {new_pw}")
 
+    @app.cli.command("reconcile-mtn")
+    def reconcile_mtn():
+        """Reconcile live MTN charges against MTN's OWN status, and list open exceptions."""
+        with app.app_context():
+            from .services.reconciliation import reconcile_against_mtn
+            from .models import ReconException
+            summary = reconcile_against_mtn()
+            print("MTN reconciliation:", summary)
+            open_rows = ReconException.query.filter_by(status="open").order_by(
+                ReconException.severity, ReconException.created_at).all()
+            if not open_rows:
+                print("No open exceptions — books agree with MTN.")
+            for r in open_rows:
+                print(f"  [{r.severity}] {r.kind} ref={r.rail_reference} "
+                      f"txn={r.txn_public_id} ours={r.our_status} mtn={r.mtn_status}")
+
     @app.cli.command("reconcile")
     def reconcile():
         """Run ledger reconciliation now and print the result."""

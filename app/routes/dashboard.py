@@ -694,8 +694,44 @@ def bulk_payout_submit(merchant_id: int):
 @login_required
 @admin_required
 def reconciliation():
+    from ..models import ReconException
     report = run_reconciliation()
-    return render_template("reconciliation.html", report=report)
+    recon_exceptions = (ReconException.query.filter_by(status="open")
+                        .order_by(ReconException.severity, ReconException.created_at.desc())
+                        .limit(200).all())
+    return render_template("reconciliation.html", report=report,
+                           recon_exceptions=recon_exceptions)
+
+
+@bp.post("/admin/reconciliation/run-mtn")
+@login_required
+@admin_required
+def run_mtn_reconciliation():
+    """Run the MTN reconciliation on demand from the dashboard."""
+    from flask import flash
+    from ..services.reconciliation import reconcile_against_mtn
+    summary = reconcile_against_mtn()
+    flash(f"MTN reconciliation: checked {summary['checked']}, "
+          f"{summary['open_exceptions']} open exception(s).",
+          "error" if summary["open_exceptions"] else "success")
+    return redirect(url_for("dashboard.reconciliation"))
+
+
+@bp.post("/admin/reconciliation/exceptions/<int:exc_id>/resolve")
+@login_required
+@admin_required
+def resolve_recon_exception(exc_id: int):
+    from datetime import datetime, timezone
+    from flask import flash
+    from flask_login import current_user
+    from ..models import ReconException
+    exc = db.session.get(ReconException, exc_id) or abort(404)
+    exc.status = "resolved"
+    exc.resolved_at = datetime.now(timezone.utc)
+    exc.resolved_by = current_user.email
+    db.session.commit()
+    flash(f"Exception {exc.rail_reference} marked resolved.", "success")
+    return redirect(url_for("dashboard.reconciliation"))
 
 
 @bp.post("/admin/sweep-pending")
