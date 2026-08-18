@@ -45,17 +45,24 @@ def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = No
 
     payload = json.dumps({"event": event, "data": data}, separators=(",", ":"))
     secret = current_app.config["WEBHOOK_SIGNING_SECRET"]
-    db.session.add(
-        WebhookDelivery(
-            merchant_id=merchant.id,
-            transaction_id=transaction_id,
-            url=merchant.webhook_url,
-            payload=payload,
-            signature=sign_payload(payload, secret),
-            next_attempt_at=utcnow(),
-        )
+    delivery = WebhookDelivery(
+        merchant_id=merchant.id,
+        transaction_id=transaction_id,
+        url=merchant.webhook_url,
+        payload=payload,
+        signature=sign_payload(payload, secret),
+        next_attempt_at=utcnow(),
     )
+    db.session.add(delivery)
     db.session.commit()
+    # Fire the first attempt NOW instead of waiting up to 30s for the beat
+    # sweep. Best-effort: a broker outage must never fail the money operation
+    # that produced this event — the sweep remains the guaranteed path.
+    try:
+        from ..tasks.webhooks_task import deliver_webhook
+        deliver_webhook.delay(delivery.id)
+    except Exception:
+        pass
     return True
 
 

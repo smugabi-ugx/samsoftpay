@@ -214,7 +214,10 @@
 
 <!-- Overall Status -->
 {% set balance_values = report.internal.journal_sum_by_currency.values()|list %}
-{% set all_balanced = balance_values|length > 0 and balance_values|sum == 0 %}
+{# EVERY currency must individually sum to zero — summing ACROSS currencies
+   let a +5,000 UGX imbalance and a -5,000 KES imbalance show a green
+   all-clear. #}
+{% set all_balanced = balance_values|length > 0 and balance_values|select("ne", 0)|list|length == 0 %}
 {% set all_matched = report.external.values()|selectattr('match')|list|length == report.external|length %}
 
 <div class="card" style="{% if all_balanced and all_matched and not report.internal.balance_mismatches %}background: var(--gradient-success);{% else %}background: var(--gradient-primary);{% endif %} color: white; border: none;">

@@ -70,9 +70,13 @@ def poll_mtn_collection(self, txn_id: int, reference_id: str) -> None:
         raise self.retry(countdown=5)
 
     except self.MaxRetriesExceededError:
-        complete_transaction(txn_id, success=False,
-                             rail_reference=reference_id,
-                             reason="timeout_waiting_for_momo")
+        # MTN still says PENDING after 90s. The customer may approve at 91s —
+        # terminally failing here while the requesttopay is live meant "money
+        # taken, no credit": MTN's later success callback hit a FAILED txn and
+        # the terminal-status guard (correctly) ignored it. Leave the txn
+        # AUTHORIZED; the inbound webhook or the hourly stale sweep resolves
+        # it from MTN's own answer.
+        print(f"poll timeout for txn {txn_id} — leaving AUTHORIZED for webhook/sweep")
 
     except requests.RequestException as exc:
         raise self.retry(exc=exc, countdown=5)
@@ -121,9 +125,13 @@ def poll_mtn_disbursement(self, payout_id: int, reference_id: str) -> None:
         raise self.retry(countdown=5)
 
     except self.MaxRetriesExceededError:
-        complete_payout(payout_id, success=False,
-                        rail_reference=reference_id,
-                        reason="timeout_waiting_for_momo")
+        # CRITICAL not to fail-and-refund here: complete_payout(success=False)
+        # returns amount+fee to the merchant, but MTN still says PENDING — the
+        # disbursement can DELIVER at 91s. That would be money delivered AND
+        # refunded (paid twice). Leave the payout AUTHORIZED; `flask
+        # stranded-payouts` lists it and reconciliation resolves it against
+        # MTN's own final answer.
+        print(f"disbursement poll timeout for payout {payout_id} — leaving for reconciliation")
 
     except requests.RequestException as exc:
         raise self.retry(exc=exc, countdown=5)

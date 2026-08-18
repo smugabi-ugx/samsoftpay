@@ -66,7 +66,11 @@ def redeem_gift_card(
     query = GiftCard.query.filter_by(code=code.upper().strip())
     if merchant_id is not None:
         query = query.filter_by(merchant_id=merchant_id)
-    card = query.with_for_update().first() if not dry_run else query.first()
+    # populate_existing: with_for_update alone acquires the lock but serves a
+    # STALE object if the card is already in the session identity map — the
+    # balance check would then run against pre-lock data, defeating the lock.
+    card = (query.with_for_update().populate_existing().first()
+            if not dry_run else query.first())
     if not card:
         return False, "Gift card code not found.", None
     if not card.is_active:

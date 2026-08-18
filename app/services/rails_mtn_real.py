@@ -33,6 +33,7 @@ from flask import current_app
 from ..extensions import db
 from ..models import Channel, RailEvent, Transaction
 from .rails import InitiateResult, RailAdapter
+from .rails_mtn_disbursement import AmbiguousRailError
 
 
 # ---------- Token cache (process-local) ----------
@@ -135,12 +136,25 @@ class RealMTNMoMoAdapter(RailAdapter):
             "payeeNote": txn.merchant_reference or txn.public_id,
         }
 
-        resp = requests.post(
-            f"{self.base_url}/collection/v1_0/requesttopay",
-            headers=self._headers(token, reference_id),
-            json=body,
-            timeout=20,
-        )
+        # DURABLE BEFORE THE WIRE: commit the reference onto the transaction
+        # BEFORE the outbound call. A timeout after MTN accepts requesttopay
+        # used to roll back the flushed txn — the customer still got the
+        # prompt, approved, MTN collected, and the callback found no
+        # transaction: money in our float invisible to the ledger. With the
+        # reference committed first, an ambiguous failure is ordinary
+        # reconciliation work for the sweep instead of silent money loss.
+        txn.rail_reference = reference_id
+        db.session.commit()
+
+        try:
+            resp = requests.post(
+                f"{self.base_url}/collection/v1_0/requesttopay",
+                headers=self._headers(token, reference_id),
+                json=body,
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            raise AmbiguousRailError(reference_id, str(exc)) from exc
 
         db.session.add(
             RailEvent(

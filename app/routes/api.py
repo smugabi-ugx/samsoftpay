@@ -110,7 +110,13 @@ def create_charge_route():
     if existing is not None:
         if existing.request_hash != request_hash:
             abort(409, description="idempotency key reused with different request body")
+        if existing.response_status == idempotency.IN_FLIGHT:
+            abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
         return jsonify(json.loads(existing.response_body)), existing.response_status
+    # Reserve the key BEFORE executing: concurrent duplicates used to both
+    # find nothing and both execute (double prompt / double disbursement).
+    if not idempotency.reserve(merchant.id, idem_key, request_hash):
+        abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
 
     try:
         amount = int(body["amount"])
@@ -118,6 +124,7 @@ def create_charge_route():
         channel = Channel(body["channel"])
         customer = body.get("customer") or {}
     except (KeyError, ValueError, TypeError) as exc:
+        idempotency.release(merchant.id, idem_key)
         abort(400, description=f"invalid request: {exc}")
 
     try:
@@ -135,6 +142,17 @@ def create_charge_route():
         idempotency.store(merchant.id, idem_key, request_hash, 400, body_out)
         log_event("charge.rejected", merchant_id=merchant.id, detail={"reason": str(exc)})
         return jsonify(body_out), 400
+    except Exception as exc:
+        # A rail network error used to propagate as a raw 500 with the session
+        # rolled back mid-flight. Return a clean 502 the integrator can retry.
+        # Deliberately NOT stored under the idempotency key: a transient rail
+        # outage must not poison this key with a permanent error (retrying
+        # with the same key should attempt the charge again).
+        db.session.rollback()
+        idempotency.release(merchant.id, idem_key)
+        from flask import current_app
+        current_app.logger.exception("charge creation crashed (rail error?)")
+        return jsonify(error="payment rail temporarily unavailable — retry with the same Idempotency-Key"), 502
 
     out = {
         "id": txn.public_id,
@@ -181,8 +199,17 @@ def get_charge(public_id: str):
 @bp.post("/charges/<public_id>/refund")
 @limiter.limit("10 per minute")
 def refund_charge_route(public_id: str):
+    """Refund a succeeded charge.
+
+    Now carries the same replay guard as every other money POST — it was the
+    one exception to the module's own "Idempotency-Key required on all POSTs"
+    contract, on the endpoint where a replayed request pays out real money.
+    The refund itself is additionally guarded by the REFUNDED claim inside
+    refund_charge, so this is defense in depth, not the only gate.
+    """
     from ..services.refunds import RefundError, refund_charge
 
+    _check_timestamp()
     merchant = _auth()
     txn = Transaction.query.filter_by(
         public_id=public_id, merchant_id=merchant.id
@@ -236,7 +263,13 @@ def create_payout_route():
     if existing is not None:
         if existing.request_hash != request_hash:
             abort(409, description="idempotency key reused with different request body")
+        if existing.response_status == idempotency.IN_FLIGHT:
+            abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
         return jsonify(json.loads(existing.response_body)), existing.response_status
+    # Reserve the key BEFORE executing: concurrent duplicates used to both
+    # find nothing and both execute (double prompt / double disbursement).
+    if not idempotency.reserve(merchant.id, idem_key, request_hash):
+        abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
 
     try:
         amount = int(body["amount"])
@@ -245,6 +278,7 @@ def create_payout_route():
         recipient_phone = recipient["phone"]
         channel = Channel(body.get("channel", "mtn_momo"))
     except (KeyError, ValueError, TypeError) as exc:
+        idempotency.release(merchant.id, idem_key)
         abort(400, description=f"invalid request: {exc}")
 
     try:
@@ -585,13 +619,17 @@ def create_bulk_payout():
         abort(400, description="batch too large (max 1000 items per call)")
 
     batch_id = "batch_" + _uuid.uuid4().hex[:16]
+    # The caller's Idempotency-Key anchors per-item dedupe for rows WITHOUT
+    # their own reference. The old fallback used the fresh random batch_id —
+    # so a retried CSV upload with no references paid every row AGAIN.
+    client_key = request.headers.get("Idempotency-Key") or batch_id
     results = []
     for i, item in enumerate(items):
         try:
             amount = int(item["amount"])
             phone = str(item["phone"]).strip()
             name = item.get("name")
-            ref = str(item.get("reference") or f"{batch_id}-{i}")
+            ref = str(item.get("reference") or f"{client_key}-{i}")
             channel = Channel(item.get("channel", "mtn_momo"))
         except (KeyError, ValueError, TypeError) as exc:
             results.append({"index": i, "ok": False, "error": f"invalid item: {exc}"})

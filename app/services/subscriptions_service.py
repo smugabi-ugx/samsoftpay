@@ -126,10 +126,23 @@ def bill_due(app=None) -> dict:
             continue
 
         attempted += 1
-        # Advance period before firing so we don't double-bill on retries
-        sub.current_period_start = now
-        sub.next_billing_at = _next_billing(now, plan.interval)
+        # ATOMIC per-row claim: beat fires every 60s onto a 2-worker pool and
+        # real MTN charges take seconds each, so overlapping runs both read
+        # the same due list — the plain advance-then-commit let both charge
+        # the subscriber. The UPDATE's WHERE re-checks next_billing_at, so
+        # exactly one run wins each row; the loser skips it.
+        claimed = (
+            db.session.query(Subscription)
+            .filter(Subscription.id == sub.id,
+                    Subscription.next_billing_at <= now)
+            .update({"current_period_start": now,
+                     "next_billing_at": _next_billing(now, plan.interval)},
+                    synchronize_session=False)
+        )
         db.session.commit()
+        if not claimed:
+            attempted -= 1
+            continue   # a concurrent run already owns this subscription's cycle
 
         # Set api_mode to live for the charge (subscriptions are always live)
         try:
@@ -158,6 +171,15 @@ def bill_due(app=None) -> dict:
             sub.failure_reason = str(exc)
             sub.status = "failed"
             db.session.commit()
+            failed += 1
+        except Exception as exc:
+            # A non-Orchestrator crash (network timeout, DB blip) used to
+            # abort the WHOLE batch mid-run — every subscription after this
+            # one silently skipped its cycle. Period was already advanced
+            # above, so continuing is safe (no double-bill); this one just
+            # misses a cycle and stays active for the next.
+            db.session.rollback()
+            print(f"subscription {sub.public_id} billing crashed: {exc}")
             failed += 1
 
     return {"attempted": attempted, "succeeded": succeeded, "failed": failed}

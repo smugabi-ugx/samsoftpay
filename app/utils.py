@@ -18,10 +18,24 @@ def admin_required(f):
 
 
 def verified_required(f):
-    """Email verification wall — disabled while email service is being configured."""
+    """KYC verification wall for money features.
+
+    Was a NO-OP ("disabled while email service is being configured") — every
+    route wearing it, including withdrawals and payouts, was open to
+    unverified merchants. Found by the engineering audit's auth agent. It now
+    enforces what the dashboard banner already tells merchants: complete
+    verification to unlock money movement. Gated on kyc_status, not email —
+    signup deliberately bypasses email verification until SMTP exists.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
-        return f(*args, **kwargs)
+        from flask import flash, redirect, url_for
+        if not current_user.is_authenticated:
+            abort(401)
+        if current_user.role == "admin" or current_user.kyc_status == "verified":
+            return f(*args, **kwargs)
+        flash("Complete business verification to unlock this feature.", "info")
+        return redirect(url_for("kyc.kyc_home"))
     return decorated
 
 

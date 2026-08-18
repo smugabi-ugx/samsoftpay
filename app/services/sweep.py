@@ -74,7 +74,14 @@ def sweep_stale_transactions(*, stale_minutes: int = 10) -> dict:
                 )
                 results.append({"id": txn.public_id, "result": "failed"})
                 continue
-            # else: PENDING at MTN or network error — expire it
+            elif mtn_status is None:
+                # Network error — we DON'T KNOW the outcome. Expiring here
+                # marked charges failed that MTN had actually completed
+                # ("money taken, no credit"). Skip; the next sweep retries.
+                results.append({"id": txn.public_id, "result": "skipped_network_error"})
+                continue
+            # else: MTN definitively says PENDING and the txn is past the
+            # cutoff — the customer never approved; safe to expire.
 
         # Mock rail orphan or MTN still pending — expire as failed
         ref = txn.rail_reference or f"sweep_{txn.public_id}"
@@ -87,7 +94,8 @@ def sweep_stale_transactions(*, stale_minutes: int = 10) -> dict:
         results.append({"id": txn.public_id, "result": "expired"})
 
     succeeded = sum(1 for r in results if r["result"] == "succeeded")
-    failed_count = len(results) - succeeded
+    skipped = sum(1 for r in results if r["result"] == "skipped_network_error")
+    failed_count = len(results) - succeeded - skipped
 
     return {
         "swept": len(results),

@@ -14,3 +14,5 @@ def process_due_subscriptions() -> None:
             )
     except Exception as exc:
         print(f"subscription billing error: {exc}")
+        raise   # re-raise so the failure is VISIBLE (Sentry/Celery events),
+                # not a silently-"successful" task — matches tasks/sweep.py

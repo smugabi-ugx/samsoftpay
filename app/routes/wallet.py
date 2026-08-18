@@ -185,14 +185,24 @@ def cancel_withdrawal(wr_id: int):
 @login_required
 @verified_required
 def manual_sweep():
-    """Move eligible pending transactions to available balance."""
-    from ..services.sweep import sweep_stale_transactions
-    result = sweep_stale_transactions(stale_minutes=0)   # sweep all settled
-    succeeded = result.get("succeeded", 0)
-    if succeeded:
-        flash(f"Swept {succeeded} transaction(s) from pending to available.", "success")
+    """Settle any due (past-hold) pending funds to available, now.
+
+    This used to call sweep_stale_transactions(stale_minutes=0) — the stale
+    charge EXPIRER, with no merchant filter — so one merchant tapping their
+    own "sweep" button terminally FAILED every in-flight transaction on the
+    whole platform (and made serial MTN HTTP calls inside the request).
+    Found independently by three agents of the engineering audit.
+
+    sweep_to_available is the real settlement operation: idempotent
+    (settled_at guard), respects the 24h hold, commits per merchant.
+    """
+    from ..services.settlement import sweep_to_available
+    moved = sweep_to_available(hold_hours=24)
+    my_moved = moved.get(current_user.id, 0) if isinstance(moved, dict) else 0
+    if my_moved:
+        flash(f"Settled UGX {my_moved:,} from pending to available.", "success")
     else:
-        flash("No transactions ready to settle yet. Transactions settle after confirmation.", "info")
+        flash("Nothing due yet — funds settle automatically 24h after a payment succeeds.", "info")
     return redirect(url_for("wallet.wallet_home"))
 
 
@@ -245,9 +255,17 @@ def admin_approve_withdrawal(wr_id: int):
     from ..services.payouts import PayoutError, create_payout
 
     wr = db.session.get(WithdrawalRequest, wr_id) or abort(404)
+    # Lock + re-check: two concurrent approvals (double-click, two admin tabs)
+    # both saw "pending" and both created a real payout — money out twice.
+    db.session.refresh(wr, with_for_update=True)
     if wr.status != "pending":
+        db.session.commit()
         flash("This withdrawal is no longer pending.", "error")
         return redirect(url_for("wallet.admin_withdrawals"))
+    # Claim it before touching the rail (create_payout commits internally,
+    # which releases our lock — the claim must be visible first).
+    wr.status = "processing"
+    db.session.commit()
 
     sa = db.session.get(SettlementAccount, wr.settlement_account_id)
     merchant = db.session.get(Merchant, wr.merchant_id)
@@ -382,6 +400,15 @@ def topup_status_json(topup_public_id: str):
     ).first_or_404()
 
     if topup.status == "pending" and topup.payment_link_id:
+        # Row-lock the topup and RE-CHECK under the lock: this settles money
+        # from a GET polling endpoint, and two concurrent polls both saw
+        # status=='pending' and both posted the pending->available move.
+        # FOR UPDATE serialises them (no-op on SQLite, same as the ledger's
+        # lock_account_for_update precedent).
+        db.session.refresh(topup, with_for_update=True)
+        if topup.status != "pending":
+            db.session.commit()   # release the lock
+            return jsonify(status=topup.status, amount=topup.amount, currency=topup.currency)
         link = db.session.get(PaymentLink, topup.payment_link_id)
         if link and link.transaction_id:
             txn = db.session.get(Transaction, link.transaction_id)
@@ -429,6 +456,11 @@ def _settle_topup(merchant_id: int, txn, ref: str) -> None:
         currency=currency,
         memo=f"top-up settle {ref}",
     )
+    # CRITICAL: mark the transaction settled. Without this the hourly
+    # settlement sweep (which selects settled_at IS NULL) moved the SAME
+    # pending->available amount AGAIN 24h later — every top-up double-credited.
+    from ..models import utcnow as _utcnow
+    txn.settled_at = _utcnow()
 
 
 def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:
@@ -491,7 +523,11 @@ def admin_approve_topup(req_id: int):
     from datetime import datetime, timezone
     from ..models import TopUpRequest
     topup = db.session.get(TopUpRequest, req_id) or abort(404)
+    # Lock + re-check: two concurrent approvals both saw "pending" and both
+    # credited the wallet — real balance minted twice.
+    db.session.refresh(topup, with_for_update=True)
     if topup.status != "pending":
+        db.session.commit()
         flash("Already processed.", "error")
         return redirect(url_for("wallet.admin_topups"))
     _credit_wallet(topup.merchant_id, topup.amount, topup.public_id)

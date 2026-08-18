@@ -107,11 +107,41 @@ def create_charge(
         customer_email=customer_email,
     )
     db.session.add(txn)
-    db.session.flush()  # so txn.id is available
+    # COMMIT, not flush: the record must be durable BEFORE any outbound rail
+    # call. A crash or timeout mid-call used to roll back the only record of
+    # a charge MTN may have accepted (the customer still gets the prompt).
+    db.session.commit()
 
     # Initiate at the rail. The rail will (asynchronously) call back with success/fail.
     adapter = get_adapter(channel)
-    result = adapter.initiate(txn)
+    try:
+        result = adapter.initiate(txn)
+    except Exception as exc:
+        from .rails_mtn_disbursement import AmbiguousRailError
+        if isinstance(exc, AmbiguousRailError):
+            # Network failed DURING requesttopay — MTN may have accepted it.
+            # The reference is already committed on the txn (the adapter does
+            # that before the wire call); park as AUTHORIZED and let the
+            # inbound callback or the hourly stale sweep resolve it from
+            # MTN's own answer.
+            txn.status = TxnStatus.AUTHORIZED
+            db.session.commit()
+            from flask import current_app
+            current_app.logger.error(
+                "AMBIGUOUS charge %s (ref %s): network failed mid-requesttopay — "
+                "parked AUTHORIZED for callback/sweep",
+                txn.public_id, txn.rail_reference,
+            )
+            return txn
+        # Clean pre-send failure (token fetch etc.) — the txn record survives
+        # (already committed) but nothing was sent: mark failed.
+        db.session.rollback()
+        txn = db.session.get(Transaction, txn.id)
+        txn.status = TxnStatus.FAILED
+        txn.failure_reason = f"rail_error: {exc}"
+        db.session.commit()
+        return txn
+
     if not result.accepted:
         txn.status = TxnStatus.FAILED
         txn.failure_reason = result.reason or "rail_rejected"
@@ -131,8 +161,17 @@ def complete_transaction(
     txn = db.session.get(Transaction, txn_id)
     if txn is None:
         return
+    # Row-lock BEFORE the terminal check. Two drivers race for the same
+    # transaction (the inbound rail webhook and the Celery poller, plus the
+    # stale sweep) — an unlocked read-then-act let both see AUTHORIZED and
+    # both post the full collection credit. FOR UPDATE serialises them; the
+    # loser re-reads a terminal status and returns. No-op on SQLite (local
+    # dev is effectively single-writer), same precedent as
+    # ledger.lock_account_for_update.
+    db.session.refresh(txn, with_for_update=True)
     if txn.status in (TxnStatus.SUCCEEDED, TxnStatus.FAILED):
-        # Idempotent — callback was already processed.
+        # Idempotent — another driver already processed the callback.
+        db.session.commit()   # release the lock
         return
 
     # Persist the rail event for reconciliation.
@@ -229,8 +268,18 @@ def _maybe_mark_bill_paid(txn: Transaction) -> None:
             bill.status = "paid"
             bill.transaction_id = txn.id
             db.session.commit()
-    except Exception:  # pragma: no cover - a bill bookkeeping failure must
-        pass           # never disturb the committed money above
+    except Exception:  # a bill bookkeeping failure must never disturb the
+        # committed money above — but it must ROLL BACK (a dirty session
+        # poisons everything after us in this request) and be VISIBLE.
+        db.session.rollback()
+        try:
+            from flask import current_app
+            current_app.logger.exception(
+                "failed to mark bill paid for txn %s — bill remains active",
+                txn.public_id,
+            )
+        except Exception:
+            pass
 
 
 def _queue_webhook(txn: Transaction) -> None:
@@ -267,3 +316,14 @@ def _queue_webhook(txn: Transaction) -> None:
         )
     )
     db.session.commit()
+    # Deliver NOW (best-effort) instead of waiting up to 30s for the beat
+    # sweep — the task module always claimed this happened; it never did.
+    try:
+        row = db.session.query(WebhookDelivery).filter_by(
+            merchant_id=merchant.id, transaction_id=txn.id
+        ).order_by(WebhookDelivery.id.desc()).first()
+        if row is not None:
+            from ..tasks.webhooks_task import deliver_webhook
+            deliver_webhook.delay(row.id)
+    except Exception:
+        pass   # broker down must never fail the payment that produced the event

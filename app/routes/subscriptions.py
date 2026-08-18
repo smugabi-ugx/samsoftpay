@@ -180,6 +180,17 @@ def subscribe_submit(handle: str, plan_public_id: str):
         return render_template("subscribe.html", merchant=merchant, plan=plan,
                                error="Phone number is required.")
 
+    # Dedupe: a double-submit (or resubmitted form) created a SECOND active
+    # subscription for the same phone+plan, each billing independently every
+    # cycle — the customer was charged twice forever.
+    from ..models import Subscription
+    existing = Subscription.query.filter_by(
+        plan_id=plan.id, customer_phone=phone, status="active"
+    ).first()
+    if existing:
+        return render_template("subscribe.html", merchant=merchant, plan=plan,
+                               success=True, sub=existing)
+
     sub = subscribe(plan=plan, customer_phone=phone, customer_email=email)
     return render_template("subscribe.html", merchant=merchant, plan=plan,
                            success=True, sub=sub)

@@ -125,7 +125,11 @@ def post(
                 memo=memo,
             )
         )
-        acct.cached_balance += amt
+        # Relative SQL update, not a Python read-modify-write: `+=` emits an
+        # absolute-value UPDATE from a possibly-stale in-memory read, so any
+        # posting path that didn't hold the row lock could silently lose a
+        # concurrent increment. The DB applies this atomically.
+        acct.cached_balance = Account.cached_balance + amt
     return journal_id
 
 
