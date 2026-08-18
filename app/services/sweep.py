@@ -23,7 +23,7 @@ import requests
 from flask import current_app
 
 from ..extensions import db
-from ..models import Transaction, TxnStatus, utcnow
+from ..models import Channel, Transaction, TxnStatus, utcnow
 from .orchestrator import complete_transaction
 
 
@@ -55,7 +55,22 @@ def sweep_stale_transactions(*, stale_minutes: int = 10) -> dict:
     use_real = current_app.config.get("MOMO_USE_REAL", False)
 
     for txn in stale:
-        if use_real and txn.rail_reference:
+        # Passthrough channels (Visa via Flutterwave, crypto via ChangeNow)
+        # are settled EXTERNALLY before create_charge is ever called — a
+        # stuck PENDING one means the in-process completion timer was lost,
+        # not that the payment failed. Expiring it marked already-received
+        # money as failed; and the MTN branch below would have queried MTN's
+        # status API with a ChangeNow reference forever.
+        if txn.channel in (Channel.VISA, Channel.CRYPTO):
+            complete_transaction(
+                txn.id,
+                success=True,
+                rail_reference=txn.rail_reference or f"sweep_{txn.public_id}",
+            )
+            results.append({"id": txn.public_id, "result": "succeeded"})
+            continue
+
+        if use_real and txn.rail_reference and txn.channel == Channel.MTN_MOMO:
             mtn_status = _query_mtn_status(txn.rail_reference)
             if mtn_status == "SUCCESSFUL":
                 complete_transaction(

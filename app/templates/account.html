@@ -158,6 +158,37 @@
   </div>
 </div>
 
+<!-- Webhooks -->
+<div class="card" id="webhooks">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="zap"></i> Webhooks</h3>
+    <span class="badge {% if current_user.webhook_url %}succeeded{% else %}pending{% endif %}">
+      {% if current_user.webhook_url %}Configured{% else %}Not set{% endif %}
+    </span>
+  </div>
+  <p class="text-muted mb-3" style="font-size:.875rem;">
+    We POST signed events (<code>charge.succeeded</code>, <code>vending.dispensed</code>…)
+    to your endpoint and retry with backoff. Verify every request:
+    <code>X-Samsoftpay-Signature</code> is an HMAC-SHA256 of the raw body using
+    <strong>your signing secret below</strong>.
+  </p>
+  {% if current_user.webhook_url %}
+  <div class="form-group">
+    <label class="form-label">Endpoint</label>
+    <div class="api-key-display"><code>{{ current_user.webhook_url }}</code></div>
+  </div>
+  {% endif %}
+  <div class="form-group" style="margin-bottom:0;">
+    <label class="form-label">Webhook Signing Secret</label>
+    <div class="api-key-display">
+      <code id="whsec" class="secret-maskable" data-real="{{ current_user.webhook_secret or 'generated on first delivery' }}">••••••••••••••••••••</code>
+      <button class="copy-btn" onclick="toggleKey('whsec', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
+      <button class="copy-btn" onclick="copyKey('whsec', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div class="form-hint">Yours alone — never shared across merchants, and safe to put in your server's env.</div>
+  </div>
+</div>
+
 <!-- Business Logo Upload -->
 <div class="card" id="logo-upload">
   <div class="card-header">

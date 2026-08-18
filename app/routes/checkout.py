@@ -105,6 +105,7 @@ def checkout_page(public_id: str):
     # checkout_submit would then refuse — see orchestrator._simulated_rail_forbidden.
     g.api_mode = "test" if link.is_test else "live"
     voucher_data = session.get(f"voucher_{public_id}", {})
+    prefill = session.pop(f"checkout_prefill_{public_id}", {})
     return render_template(
         "checkout.html",
         link=link,
@@ -113,6 +114,7 @@ def checkout_page(public_id: str):
         crypto_url=url_for("checkout.crypto_checkout", public_id=link.public_id),
         voucher_applied=bool(voucher_data),
         voucher_discount=voucher_data.get("discount", 0),
+        prefill=prefill,
     )
 
 
@@ -472,6 +474,13 @@ def apply_voucher(public_id: str):
                                voucher_error=error)
     discount = min(card.balance, link.amount)
     session[f"voucher_{public_id}"] = {"code": code, "discount": discount}
+    # Carry the customer's already-typed phone/email through the voucher round
+    # trip (the voucher form posts them as hidden fields) so they aren't wiped
+    # when we redirect back to the checkout page.
+    session[f"checkout_prefill_{public_id}"] = {
+        "phone": request.form.get("phone", "").strip(),
+        "email": request.form.get("email", "").strip(),
+    }
     return redirect(url_for("checkout.checkout_page", public_id=public_id))
 
 

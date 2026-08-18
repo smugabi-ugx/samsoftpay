@@ -365,7 +365,7 @@
             <input class="input-inner" type="tel" id="phone" name="phone"
                    placeholder="700 123 456"
                    inputmode="tel"
-                   value="{{ request.form.phone or '' }}"
+                   value="{{ request.form.phone or (prefill.phone if prefill else '') }}"
                    autocomplete="tel">
           </div>
         </div>
@@ -420,7 +420,7 @@
         <label for="email">Email <span style="font-weight:400;text-transform:none;">(optional, for receipt)</span></label>
         <input type="email" id="email" name="email"
                placeholder="you@example.com"
-               value="{{ request.form.email or '' }}"
+               value="{{ request.form.email or (prefill.email if prefill else '') }}"
                autocomplete="email">
       </div>
 
@@ -456,7 +456,12 @@
        it. Its own controls live above via form="voucher-form"; this element
        just needs to exist with the right id/action/method. -->
   <form method="POST" id="voucher-form"
-        action="{{ url_for('checkout.apply_voucher', public_id=link.public_id) }}"></form>
+        action="{{ url_for('checkout.apply_voucher', public_id=link.public_id) }}">
+    {# Carry whatever the customer has already typed so applying a voucher
+       doesn't wipe it — kept in sync by the script below. #}
+    <input type="hidden" name="phone" id="voucher-phone">
+    <input type="hidden" name="email" id="voucher-email">
+  </form>
 
   <script>
     const labels = document.querySelectorAll('.channel-label');
@@ -464,6 +469,19 @@
     const cardFields = document.querySelector('.card-fields');
     const form = document.getElementById('checkout-form');
     const payBtn = document.getElementById('pay-btn');
+
+    // Mirror the typed phone/email into the voucher form so applying a code
+    // preserves them (the voucher form posts to a different endpoint).
+    (function () {
+      const vf = document.getElementById('voucher-form');
+      if (!vf) return;
+      vf.addEventListener('submit', function () {
+        const p = document.getElementById('phone'), e = document.getElementById('email');
+        const vp = document.getElementById('voucher-phone'), ve = document.getElementById('voucher-email');
+        if (p && vp) vp.value = p.value;
+        if (e && ve) ve.value = e.value;
+      });
+    })();
 
     function updateChannel() {
       const checked = document.querySelector('input[name="channel"]:checked');

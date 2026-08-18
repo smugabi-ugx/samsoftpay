@@ -107,6 +107,12 @@ class Merchant(UserMixin, db.Model):
     handle = Column(String(40), nullable=True, unique=True, index=True)
     logo_filename = Column(String(255), nullable=True)   # uploaded business logo
     webhook_url = Column(String(500), nullable=True)
+    # Per-merchant outbound webhook signing secret (whsec_...). The global
+    # WEBHOOK_SIGNING_SECRET is now INBOUND-ONLY (rail callbacks) — signing
+    # merchant deliveries with it meant merchants could never verify (the
+    # secret was never exposed) and exposing it would have let anyone forge
+    # inbound "payment succeeded" callbacks. Key separation.
+    webhook_secret = Column(String(80), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
     is_active = Column(Boolean, default=True, nullable=False)
     # When True, succeeded charges skip the 24h settlement hold and land directly
@@ -232,6 +238,9 @@ class Transaction(db.Model):
     # merchant_available. NULL = not yet settled. Lets the sweep settle each
     # transaction exactly once, only after its own hold period.
     settled_at = Column(DateTime, nullable=True, index=True)
+    # Direct-dispense consumption claim (POST /v1/vending/dispense): NULL =
+    # this charge has not yet paid for a dispense. Set atomically, once.
+    vending_consumed_at = Column(DateTime, nullable=True)
 
     merchant = relationship("Merchant", back_populates="transactions")
 

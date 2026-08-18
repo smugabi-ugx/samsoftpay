@@ -530,15 +530,28 @@ def vending_dispense():
     if not machine or not order_id or not goods:
         abort(400, description="machine, order_id and goods are required")
 
-    # Enforce: only dispense against a real SUCCEEDED charge for THIS merchant.
+    # Enforce: only dispense against a real SUCCEEDED charge for THIS merchant,
+    # and CONSUME it atomically — one charge pays for ONE dispense. Without
+    # the claim, the same SUCCEEDED charge_id authorized unlimited dispenses
+    # under fresh order_ids (guardrail 11's "once" only held inside the order
+    # flow, and this endpoint bypasses that flow by design).
     third_party_txn = charge_id or order_id
     if charge_id:
         txn = Transaction.query.filter_by(public_id=charge_id, merchant_id=merchant.id).one_or_none()
         if txn is None:
             abort(404, description="charge not found")
-        from ..models import TxnStatus
+        from ..models import TxnStatus, utcnow
         if txn.status != TxnStatus.SUCCEEDED:
             abort(400, description=f"cannot dispense: charge status is {txn.status.value}, not succeeded")
+        claimed = (
+            db.session.query(Transaction)
+            .filter(Transaction.id == txn.id,
+                    Transaction.vending_consumed_at.is_(None))
+            .update({"vending_consumed_at": utcnow()}, synchronize_session=False)
+        )
+        db.session.commit()
+        if not claimed:
+            abort(409, description="this charge has already paid for a dispense")
 
     from ..services import vending as _vending
     if not _vending.owns_machine(merchant, str(machine)):
@@ -554,6 +567,14 @@ def vending_dispense():
             creds=xy_vending.for_merchant(merchant),
         )
     except xy_vending.XYVendingError as exc:
+        # Supplier failed — no product came out, so RELEASE the consumption
+        # claim: the customer's paid charge must remain usable for a retry.
+        if charge_id:
+            db.session.query(Transaction).filter(
+                Transaction.public_id == charge_id,
+                Transaction.merchant_id == merchant.id,
+            ).update({"vending_consumed_at": None}, synchronize_session=False)
+            db.session.commit()
         log_event("vending.dispense_failed", merchant_id=merchant.id,
                   resource_id=str(order_id), detail={"error": str(exc)})
         return jsonify(ok=False, error=str(exc)), 502

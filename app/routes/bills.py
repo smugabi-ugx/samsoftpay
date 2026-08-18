@@ -4,7 +4,10 @@ import uuid
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from ..extensions import db
+# limiter: pay_bill_submit is UNAUTHENTICATED and fires real MoMo prompts at
+# arbitrary phone numbers — without a rate limit it was a free prompt-spam
+# cannon (and a cost sink against MTN).
+from ..extensions import db, limiter
 from ..models import Bill, BillCategory, TaxConfiguration
 from ..services.tax import calculate, get_merchant_tax
 from ..utils import verified_required
@@ -179,6 +182,7 @@ def pay_bill_page(handle: str, bill_public_id: str):
 
 
 @bp.post("/pay/@<handle>/bill/<bill_public_id>")
+@limiter.limit("10 per minute;60 per hour")
 def pay_bill_submit(handle: str, bill_public_id: str):
     from flask import g
     from ..models import Channel, Merchant
