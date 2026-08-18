@@ -155,6 +155,18 @@
     filling the whole form, and every Airtel/card subscription plan silently failed
     each billing cycle. When a real Airtel rail lands, all three open up on their own.
 
+23. **External reconciliation against MTN is the third leg — never reconcile only against
+    ourselves.** `reconciliation.reconcile_against_mtn()` queries MTN's own status per
+    `rail_reference` for live MTN charges and records disagreements in `recon_exceptions`
+    (migration e9f0a1b2c3d4): MTN SUCCESSFUL but we're not = lost callback (money in our
+    float, unbooked — the invisible failure the internal check CANNOT see); we SUCCEEDED but
+    MTN FAILED = booked money MTN never took. A network-unknown answer is NEVER an exception
+    (same principle as the sweep). A later run that finds agreement AUTO-RESOLVES the row
+    (backdated reconciliation). Surfaced on /admin/reconciliation with a resolve action;
+    hourly `reconcile_mtn` beat task logs open criticals loudly (wire to alerting next).
+    `flask reconcile-mtn` runs it on demand. Testable against MTN sandbox now. This is the
+    artifact a partner's compliance review asks for first. Tests: `tests/test_mtn_reconciliation.py`.
+
 22. **Per-merchant webhook secrets; the global WEBHOOK_SIGNING_SECRET is INBOUND-ONLY.**
     Outbound merchant deliveries are signed with `merchant.webhook_secret` (whsec_…, shown
     masked on Account → Webhooks); the global secret only authenticates inbound rail
@@ -242,9 +254,9 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **d8e9f0a1b2c3**
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **e9f0a1b2c3d4**
   (chain: … → a3b4c5d6e7f8 → b5c6d7e8f9a0 enum+indexes → c6d7e8f9a0b1 PSP account
-  unique → d8e9f0a1b2c3 merchant webhook_secret + txn vending_consumed_at).
+  unique → d8e9f0a1b2c3 merchant webhook_secret + txn vending_consumed_at -> e9f0a1b2c3d4 recon_exceptions).
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -404,7 +416,7 @@ real sandbox payments. **Deferred engineering items live in the memory file
 `engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `d8e9f0a1b2c3`
+1. `flask db current` → expect `e9f0a1b2c3d4`
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to

@@ -294,6 +294,37 @@ class RailEvent(db.Model):
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
 
 
+class ReconException(db.Model):
+    """A mismatch between OUR record and MTN's own answer for one reference.
+
+    This is the third leg of reconciliation the internal check can't provide:
+    it proves (or disproves) that our ledger agrees with MTN. One open row per
+    rail_reference; a later run that finds them agreeing auto-resolves it
+    (backdated reconciliation). The `kind` drives severity.
+    """
+    __tablename__ = "recon_exceptions"
+    id = Column(Integer, primary_key=True)
+    rail_reference = Column(String(120), nullable=False, index=True)
+    txn_public_id = Column(String(40), nullable=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
+    kind = Column(String(60), nullable=False)   # mtn_succeeded_local_not | local_succeeded_mtn_failed | amount_mismatch | succeeded_no_reference
+    severity = Column(String(20), nullable=False, default="critical")  # critical | warning
+    our_status = Column(String(30), nullable=True)
+    mtn_status = Column(String(30), nullable=True)
+    our_amount = Column(BigInteger, nullable=True)
+    mtn_amount = Column(BigInteger, nullable=True)
+    detail = Column(String(500), nullable=True)
+    status = Column(String(20), nullable=False, default="open", index=True)  # open | resolved
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(120), nullable=True)   # "auto" or an admin email
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+    last_seen_at = Column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("rail_reference", name="uq_recon_exception_ref"),
+    )
+
+
 class Payout(db.Model):
     """A disbursement from the PSP to a merchant (or other recipient).
 

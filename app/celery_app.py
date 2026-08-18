@@ -55,6 +55,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.reconciliation.reconcile_ledger",
                 "schedule": crontab(hour=2, minute=30),   # 02:30 Africa/Kampala
             },
+            "hourly-mtn-reconciliation": {
+                "task": "app.tasks.reconciliation.reconcile_mtn",
+                "schedule": 3600.0,   # match our ledger against MTN's own records every hour
+            },
         },
         # Worker settings
         worker_prefetch_multiplier=1,       # one task at a time per worker slot
