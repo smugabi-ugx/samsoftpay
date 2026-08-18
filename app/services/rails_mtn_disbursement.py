@@ -22,6 +22,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+
+class AmbiguousRailError(Exception):
+    """The transfer request MAY have reached MTN before the network failed.
+
+    Carries the client-generated reference id so the payout record can be
+    preserved and later reconciled against MTN's own answer.
+    """
+    def __init__(self, rail_reference: str, detail: str):
+        self.rail_reference = rail_reference
+        super().__init__(detail)
+
 import requests
 from flask import current_app
 
@@ -131,12 +142,30 @@ class RealMTNMoMoDisbursementAdapter:
             "payeeNote": payout.recipient_name or payout.public_id,
         }
 
-        resp = requests.post(
-            f"{self.base_url}/disbursement/v1_0/transfer",
-            headers=self._headers(token, reference_id),
-            json=body,
-            timeout=20,
-        )
+        # DURABLE BEFORE THE WIRE: commit the payout row + earmark + reference
+        # BEFORE the transfer call. Everything staged so far (payout, ledger
+        # earmark) becomes permanent here — a crash or timeout after MTN
+        # receives the transfer can no longer erase the only record of money
+        # that may have moved. MTN is idempotent on X-Reference-Id, so a
+        # retry after a pre-send crash is also safe.
+        payout.rail_reference = reference_id
+        db.session.commit()
+
+        try:
+            resp = requests.post(
+                f"{self.base_url}/disbursement/v1_0/transfer",
+                headers=self._headers(token, reference_id),
+                json=body,
+                timeout=20,
+            )
+        except requests.RequestException as exc:
+            # AMBIGUOUS outcome: the request may have reached MTN before the
+            # timeout/reset — MTN can still process it under reference_id.
+            # This must NOT be treated as clean non-delivery (rolling back
+            # erased the payout AND the reference: money possibly delivered
+            # with no record). Surface a typed error carrying the reference
+            # so create_payout preserves the earmark for reconciliation.
+            raise AmbiguousRailError(reference_id, str(exc)) from exc
 
         db.session.add(
             RailEvent(

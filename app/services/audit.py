@@ -31,6 +31,13 @@ def log_event(
         db.session.commit()
     except Exception:
         db.session.rollback()
+        # An audit write failing must not break the money action — but a
+        # money action vanishing from the audit trail must not be silent.
+        try:
+            from flask import current_app
+            current_app.logger.warning("audit write failed for event %s", event)
+        except Exception:
+            pass
 
 
 def _client_ip() -> str:

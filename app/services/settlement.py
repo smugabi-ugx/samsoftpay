@@ -83,6 +83,13 @@ def _settle_one_merchant(*, merchant_id, currency, is_test, cutoff, batch_size) 
         )
         .order_by(Transaction.completed_at)
         .limit(batch_size)
+        # Two sweeps can now run concurrently (hourly beat in the worker +
+        # the wallet's manual button in the web process). FOR UPDATE SKIP
+        # LOCKED makes each due txn settle exactly once; without it both runs
+        # read the same due set and both posted pending->available — a
+        # double-credit that still summed to zero, so reconciliation passed.
+        # (SQLite ignores FOR UPDATE — dev is single-writer.)
+        .with_for_update(skip_locked=True)
         .all()
     )
     if not due:

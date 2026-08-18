@@ -155,6 +155,36 @@
     filling the whole form, and every Airtel/card subscription plan silently failed
     each billing cycle. When a real Airtel rail lands, all three open up on their own.
 
+21. **THE RECORD IS DURABLE BEFORE EVERY OUTBOUND RAIL CALL, and an ambiguous
+    network failure is NEVER treated as definite non-delivery.** Both MTN adapters
+    commit the txn/payout row WITH its client-generated rail reference BEFORE the
+    requesttopay/transfer POST, and a requests exception during the POST raises
+    `AmbiguousRailError` (the request may have reached MTN). create_charge parks
+    such a charge AUTHORIZED; create_payout parks the payout AUTHORIZED with the
+    earmark preserved — reconciliation/`flask stranded-payouts` resolve them from
+    MTN's own answer. The old rollback-on-any-exception erased the ONLY record of
+    money that may have moved: customer charged with no ledger entry, or recipient
+    paid twice after a refund. Corollaries, all shipped in the same audit round
+    (engineering sweep, PRs of Aug 18): complete_transaction/complete_payout
+    row-lock before their terminal checks (webhook + poller race = double post);
+    the pollers leave AUTHORIZED at their 90s timeout instead of failing/refunding
+    (MTN can complete at 91s) and the hourly `resolve_stale_transactions` beat task
+    is the safety net (skips on network error — an unknown outcome is not a
+    failure); Idempotency-Keys are RESERVED before execution (concurrent duplicates
+    used to both run: double prompt / double disbursement) and released on
+    non-cacheable outcomes; the settlement due-query uses FOR UPDATE SKIP LOCKED
+    (manual sweep button + hourly beat ran concurrently and double-credited);
+    subscription billing claims each row atomically; `verified_required` actually
+    verifies (it was a no-op — withdrawals were open to unverified merchants); the
+    merchant sweep button runs the real settlement, not the stale-charge expirer it
+    was mis-wired to (which expired every in-flight txn PLATFORM-WIDE); wallet
+    top-ups mark settled_at (the hourly sweep re-settled the same money — every
+    top-up double-credited); Postgres enum gained VISA/CRYPTO (migration
+    b5c6d7e8f9a0 — the first production crypto settle would have crashed AFTER the
+    customer sent real crypto); PSP accounts got a partial unique index
+    (c6d7e8f9a0b1). Tests cover the originals; the sweep report lives in the
+    workflow transcript.
+
 20. **QRs on payment-adjacent pages are rendered IN-HOUSE (segno), never by a
     third-party service.** api.qrserver.com was hot-linked on the topup page, the
     crypto deposit address, gift-card codes (a live bearer code shipped to a third
@@ -197,9 +227,10 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **a3b4c5d6e7f8**
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **c6d7e8f9a0b1**
   (chain: b2f1a9c4d5e6 → … → d7e8f9a0b1c2 vending → e8f9a0b1c2d3 per-merchant XY →
-  f9a0b1c2d3e4 test/live ledger split → a3b4c5d6e7f8 payment_links.is_test).
+  f9a0b1c2d3e4 test/live ledger split → a3b4c5d6e7f8 payment_links.is_test →
+  b5c6d7e8f9a0 enum+indexes → c6d7e8f9a0b1 PSP account unique).
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -359,7 +390,7 @@ real sandbox payments. **Deferred engineering items live in the memory file
 `engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `a3b4c5d6e7f8`
+1. `flask db current` → expect `c6d7e8f9a0b1`
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to

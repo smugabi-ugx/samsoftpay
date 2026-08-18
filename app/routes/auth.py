@@ -387,6 +387,16 @@ def account():
 @verified_required
 def toggle_2fa():
     m = db.session.get(Merchant, current_user.id)
+    if not m.two_fa_enabled:
+        # ENABLING requires working email. With MAIL_HOST unset, send_otp
+        # prints codes to server logs and reports success — a merchant who
+        # enabled 2FA was permanently locked out of a money dashboard while
+        # their codes sat in the log stream.
+        import os
+        if not os.environ.get("MAIL_HOST"):
+            flash("Two-factor login needs the email service, which isn't configured yet. "
+                  "It will be available once email is live.", "error")
+            return redirect(url_for("auth.account"))
     m.two_fa_enabled = not m.two_fa_enabled
     db.session.commit()
     return redirect(url_for("auth.account"))

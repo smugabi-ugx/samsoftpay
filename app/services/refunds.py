@@ -40,6 +40,12 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     if txn.merchant_id != merchant.id:
         raise RefundError("transaction does not belong to this merchant")
 
+    # Row-lock before the status checks: two concurrent refund requests for
+    # the same charge both read SUCCEEDED and both created a refund payout —
+    # double money out. FOR UPDATE serialises them; the loser re-reads
+    # REFUNDED below. (No-op on SQLite, same as every other money lock here.)
+    db.session.refresh(txn, with_for_update=True)
+
     if txn.status == TxnStatus.REFUNDED:
         return {"ok": False, "error": "already_refunded"}
 
@@ -57,6 +63,16 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     if net_amount <= 0:
         return {"ok": False, "error": "net_refund_amount_is_zero"}
 
+    # CLAIM the refund inside the locked window, BEFORE creating the payout.
+    # create_payout commits internally (releasing our row lock), so marking
+    # REFUNDED only afterwards left a gap where a second request could slip
+    # through and pay out twice. Claim first, commit (this is what the loser
+    # of the race sees), then attempt the payout — and revert the claim if
+    # the payout is refused so the merchant can retry.
+    txn.status = TxnStatus.REFUNDED
+    txn.refunded_at = datetime.now(timezone.utc)
+    db.session.commit()
+
     try:
         from .payouts import PayoutError, create_payout
 
@@ -69,14 +85,21 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
             recipient_name="Customer",
         )
     except PayoutError as exc:
+        # Payout refused with zero writes (guardrail 13) — release the claim.
+        txn.status = TxnStatus.SUCCEEDED
+        txn.refunded_at = None
+        db.session.commit()
         return {"ok": False, "error": str(exc)}
 
-    # Mark the original transaction as refunded only if payout was accepted.
     from ..models import PayoutStatus
     if payout.status in (PayoutStatus.PENDING, PayoutStatus.AUTHORIZED):
-        txn.status = TxnStatus.REFUNDED
-        txn.refunded_at = datetime.now(timezone.utc)
         txn.refund_payout_id = payout.id
         db.session.commit()
+    else:
+        # Rail rejected synchronously — release the claim.
+        txn.status = TxnStatus.SUCCEEDED
+        txn.refunded_at = None
+        db.session.commit()
+        return {"ok": False, "error": "refund_payout_rejected"}
 
     return {"ok": True, "payout": payout}

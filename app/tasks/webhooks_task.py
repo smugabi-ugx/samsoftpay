@@ -13,18 +13,36 @@ from ..celery_app import celery
 from ..extensions import db
 
 
-@celery.task(bind=True, max_retries=8, name="app.tasks.webhooks_task.deliver_webhook")
+@celery.task(bind=True, name="app.tasks.webhooks_task.deliver_webhook")
 def deliver_webhook(self, delivery_id: int) -> None:
-    """Attempt delivery of a single WebhookDelivery record."""
+    """Attempt delivery of a single WebhookDelivery record — exactly one driver.
+
+    Two schedulers used to race for the same row: the task scheduled its own
+    Celery retry AND left next_attempt_at set, so the 30s sweep re-enqueued
+    the same delivery when the backoff elapsed — merchants received
+    duplicates. Now: an atomic CLAIM on next_attempt_at decides the single
+    winner (the loser's UPDATE matches 0 rows and it walks away), and ALL
+    retries flow through the sweep — no task self-retry.
+    """
     import requests
+    from datetime import timedelta
     from ..models import WebhookDelivery, utcnow
     from ..services.webhooks import _backoff
 
-    delivery = db.session.get(WebhookDelivery, delivery_id)
-    if not delivery or delivery.status == "sent":
-        return
-
     now = utcnow()
+    claimed = (
+        db.session.query(WebhookDelivery)
+        .filter(WebhookDelivery.id == delivery_id,
+                WebhookDelivery.status.in_(["pending", "failed"]),
+                WebhookDelivery.next_attempt_at <= now + timedelta(seconds=5))
+        .update({"next_attempt_at": now + timedelta(minutes=6)},
+                synchronize_session=False)
+    )
+    db.session.commit()
+    if not claimed:
+        return   # another driver owns this attempt (or it's already sent)
+
+    delivery = db.session.get(WebhookDelivery, delivery_id)
     delivery.attempts += 1
     try:
         resp = requests.post(
@@ -47,13 +65,12 @@ def deliver_webhook(self, delivery_id: int) -> None:
     except Exception as exc:
         delivery.last_response_body = str(exc)[:200]
         if delivery.attempts < 8:
-            delay = _backoff(delivery.attempts)
             delivery.status = "pending"
-            delivery.next_attempt_at = now + delay
+            delivery.next_attempt_at = now + _backoff(delivery.attempts)
+            db.session.commit()   # the sweep picks it up when the backoff elapses
+        else:
+            delivery.status = "failed"
             db.session.commit()
-            raise self.retry(exc=exc, countdown=int(delay.total_seconds()))
-        delivery.status = "failed"
-        db.session.commit()
 
 
 @celery.task(name="app.tasks.webhooks_task.sweep_pending_webhooks")

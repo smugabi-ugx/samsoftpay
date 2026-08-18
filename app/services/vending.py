@@ -381,6 +381,11 @@ def retry_dispense(link: PaymentLink) -> bool:
         raise VendingError("cannot dispense: charge has not succeeded")
     if link.vending_status == DISPENSED:
         return True
+    if link.vending_status == DISPENSING:
+        # A supplier call is in flight RIGHT NOW. Resetting to PENDING here
+        # would bypass the _claim compare-and-set and allow a second
+        # concurrent dispense of the same paid order.
+        raise VendingError("a dispense attempt is already in progress — wait for it to finish")
     link.vending_status = PENDING
     db.session.commit()
     return dispense_for_link(link, txn)

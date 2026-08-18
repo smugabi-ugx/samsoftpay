@@ -257,9 +257,16 @@ def checkout_submit(public_id: str):
             selected_channel=channel.value,
         )
 
-    # Attach the transaction to the link (so we can show status on revisit)
+    # Attach the transaction to the link ATOMICALLY (WHERE transaction_id IS
+    # NULL) — the plain read-then-set let two concurrent submits on a
+    # single-use link both attach, with the loser's payment invisible on the
+    # status page. The loser's charge still exists as a Transaction record
+    # for support/reconciliation; exactly one owns the link.
     if not link.transaction_id:
-        link.transaction_id = txn.id
+        db.session.query(PaymentLink).filter(
+            PaymentLink.id == link.id,
+            PaymentLink.transaction_id.is_(None),
+        ).update({"transaction_id": txn.id}, synchronize_session=False)
         db.session.commit()
 
     # Only now — after create_charge has NOT raised — actually redeem the
@@ -554,10 +561,22 @@ def crypto_status_json(public_id: str):
     exchange_id = order_data.get("exchange_id", "")
     status = get_status(exchange_id)
     session[f"cn_status_{public_id}"] = status
-    # If finished, create the transaction record
+    # If finished, create the transaction record.
+    # The settle-once guard is SERVER-SIDE: link.transaction_id under a row
+    # lock. The old guard was a client-held session cookie (cn_settled_*) —
+    # replaying an older cookie, or two concurrent polls, re-ran create_charge
+    # and credited the ledger again for the same exchange.
     if status == "finished" and not session.get(f"cn_settled_{public_id}"):
-        link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
-        if link and link.is_active:
+        link = (PaymentLink.query.filter_by(public_id=public_id)
+                .with_for_update().one_or_none())
+        if link and link.transaction_id:
+            # Already settled (by this session or any other) — just mirror it.
+            session[f"cn_settled_{public_id}"] = True
+            db.session.commit()
+        elif link:
+            # Deliberately NOT gated on link.is_active: the exchange is
+            # FINISHED — real crypto arrived. A merchant deactivating the
+            # link must not make received money vanish unrecorded.
             merchant = db.session.get(Merchant, link.merchant_id)
             from flask import g
             g.api_mode = "test" if link.is_test else "live"
@@ -575,5 +594,16 @@ def crypto_status_json(public_id: str):
                 db.session.commit()
                 session[f"cn_settled_{public_id}"] = True
             except Exception:
-                pass
+                # The customer has sent REAL crypto by this point. Swallowing
+                # this silently left link.transaction_id None and the status
+                # page 404ing after payment. Log loudly, roll back cleanly,
+                # and report "exchanging" so the page keeps polling — the next
+                # poll retries charge creation instead of dead-ending.
+                db.session.rollback()
+                from flask import current_app
+                current_app.logger.exception(
+                    "crypto settle failed for link %s exchange %s — will retry on next poll",
+                    public_id, exchange_id,
+                )
+                return jsonify(status="exchanging")
     return jsonify(status=status)

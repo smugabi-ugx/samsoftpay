@@ -150,6 +150,26 @@ def create_payout(
         db.session.rollback()
         raise
     except Exception as exc:
+        # AMBIGUOUS network failure DURING the transfer call: MTN may have
+        # received it and may still deliver. Rolling back here erased the
+        # payout, the earmark AND the rail reference — money possibly
+        # delivered with no record of it. Preserve everything and park the
+        # payout as AUTHORIZED for `flask stranded-payouts`/reconciliation
+        # to resolve against MTN's own answer. Clean pre-send failures
+        # (token fetch etc.) still take the rollback path below.
+        from .rails_mtn_disbursement import AmbiguousRailError
+        if isinstance(exc, AmbiguousRailError):
+            payout.rail_reference = exc.rail_reference
+            payout.status = PayoutStatus.AUTHORIZED
+            payout.failure_reason = "ambiguous_network_error_pending_reconciliation"
+            db.session.commit()
+            from flask import current_app
+            current_app.logger.error(
+                "AMBIGUOUS payout %s (ref %s): network failed mid-transfer — "
+                "parked for reconciliation, merchant earmark preserved",
+                payout.public_id, exc.rail_reference,
+            )
+            return payout
         db.session.rollback()
         raise PayoutError(f"disbursement rail unavailable: {exc}") from exc
 
@@ -180,7 +200,12 @@ def complete_payout(
     payout = db.session.get(Payout, payout_id)
     if payout is None:
         return
+    # Row-lock before the terminal check — same race as complete_transaction:
+    # the inbound webhook and a queued poller can both see AUTHORIZED and both
+    # post the completion (double release or double refund).
+    db.session.refresh(payout, with_for_update=True)
     if payout.status in (PayoutStatus.SUCCEEDED, PayoutStatus.FAILED):
+        db.session.commit()   # release the lock
         return  # idempotent
 
     db.session.add(
