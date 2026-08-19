@@ -161,3 +161,105 @@ def _query_mtn_status(rail_reference: str) -> str | None:
     except requests.RequestException:
         pass
     return None
+
+
+def _get_mtn_disbursement_token() -> str | None:
+    """Cached OAuth token for MTN Disbursements (SEPARATE product/creds from
+    Collections). Returns None on error."""
+    cfg = current_app.config
+    try:
+        from .rails_mtn_disbursement import _get_token
+        return _get_token(
+            subscription_key=cfg["MOMO_DISBURSEMENT_SUBSCRIPTION_KEY"],
+            api_user=cfg["MOMO_DISBURSEMENT_API_USER"],
+            api_key=cfg["MOMO_DISBURSEMENT_API_KEY"],
+            base_url=cfg["MOMO_BASE_URL"],
+        )
+    except Exception:
+        return None
+
+
+def _query_mtn_disbursement_status(rail_reference: str) -> str | None:
+    """Query the MTN Disbursement transfer status for a single reference.
+
+    Returns "SUCCESSFUL", "FAILED", "PENDING", or None (on error). Uses the
+    disbursement token + subscription key and the /transfer/{ref} endpoint —
+    the inverse of _query_mtn_status. None means "we don't know" and MUST NOT be
+    treated as a failure (the same rule as charges: an unknown outcome for a
+    payout could mean the recipient WAS paid — refunding on unknown pays twice).
+    """
+    token = _get_mtn_disbursement_token()
+    if not token:
+        return None
+    cfg = current_app.config
+    try:
+        r = requests.get(
+            f"{cfg['MOMO_BASE_URL']}/disbursement/v1_0/transfer/{rail_reference}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Ocp-Apim-Subscription-Key": cfg["MOMO_DISBURSEMENT_SUBSCRIPTION_KEY"],
+                "X-Target-Environment": cfg["MOMO_TARGET_ENV"],
+            },
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return (r.json().get("status") or "").upper()
+    except requests.RequestException:
+        pass
+    return None
+
+
+def sweep_stale_payouts(*, stale_minutes: int = 60) -> dict:
+    """Resolve payouts stuck AUTHORIZED past *stale_minutes* from MTN's answer.
+
+    The safety net the payout pollers rely on, mirroring sweep_stale_transactions
+    for the OUTBOUND leg — until now only charges had one. A payout is parked
+    AUTHORIZED whenever the poller times out (MTN can complete at 91s) or a
+    network failure was ambiguous; something must eventually finish it from MTN's
+    own final answer, or the money strands until a human runs `flask
+    stranded-payouts`.
+
+    Only AUTHORIZED payouts WITH a rail_reference are queried — a PENDING payout
+    with no reference never reached a rail (that is a stranded-earmark case for
+    `flask reverse-payout`, deliberately NOT auto-completed here). Unknown
+    (network) answers are skipped, never treated as failure. Runs only with a
+    real disbursement rail; mock payouts complete in-process and never park.
+    """
+    from ..models import Payout, PayoutStatus
+    from .payouts import complete_payout
+
+    if not current_app.config.get("MOMO_USE_REAL", False):
+        return {"swept": 0, "succeeded": 0, "failed": 0, "skipped": 0, "items": []}
+
+    cutoff = utcnow() - timedelta(minutes=stale_minutes)
+    stale = (
+        Payout.query.filter(
+            Payout.status == PayoutStatus.AUTHORIZED,
+            Payout.channel == Channel.MTN_MOMO,
+            Payout.is_test.is_(False),
+            Payout.rail_reference.isnot(None),
+            Payout.created_at <= cutoff,
+        ).all()
+    )
+
+    results = []
+    for p in stale:
+        status = _query_mtn_disbursement_status(p.rail_reference)
+        if status == "SUCCESSFUL":
+            complete_payout(p.id, success=True, rail_reference=p.rail_reference)
+            results.append({"id": p.public_id, "result": "succeeded"})
+        elif status == "FAILED":
+            complete_payout(p.id, success=False, rail_reference=p.rail_reference,
+                            reason="momo_failed")
+            results.append({"id": p.public_id, "result": "failed"})
+        else:
+            # PENDING (MTN still working) or None (network unknown): leave it
+            # AUTHORIZED for the next sweep. NEVER refund on unknown — the
+            # recipient may already have the money.
+            results.append({"id": p.public_id, "result": "skipped"})
+
+    succeeded = sum(1 for r in results if r["result"] == "succeeded")
+    failed = sum(1 for r in results if r["result"] == "failed")
+    skipped = sum(1 for r in results if r["result"] == "skipped")
+    return {"swept": len(results), "succeeded": succeeded, "failed": failed,
+            "skipped": skipped, "items": results}

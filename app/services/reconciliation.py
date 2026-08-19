@@ -75,8 +75,8 @@ def reconcile_against_mtn(*, min_age_minutes: int = 10, window_days: int = 7,
     """
     from datetime import timedelta
 
-    from ..models import ReconException, utcnow
-    from .sweep import _query_mtn_status
+    from ..models import Payout, PayoutStatus, ReconException, utcnow
+    from .sweep import _query_mtn_disbursement_status, _query_mtn_status
 
     now = utcnow()
     checked = matched = new_exc = resolved = skipped_unknown = 0
@@ -123,6 +123,53 @@ def reconcile_against_mtn(*, min_age_minutes: int = 10, window_days: int = 7,
 
         new_exc += _upsert_exception(
             rail_reference=txn.rail_reference, txn=txn, kind=kind, severity=severity,
+            our_status=our, mtn_status=mtn_status, detail=detail,
+        )
+
+    # ── Payouts: the OUTBOUND leg — reconcile our transfers against MTN too ──
+    # Money leaving is the higher-stakes direction: "we think it went, MTN says
+    # it didn't" means a recipient we believe was paid but wasn't (or vice
+    # versa). Reuses the same exception table; a payout's rail_reference is a
+    # distinct uuid so it never collides with a charge's.
+    payouts = (
+        Payout.query.filter(
+            Payout.channel == Channel.MTN_MOMO,
+            Payout.is_test.is_(False),
+            Payout.rail_reference.isnot(None),
+            Payout.created_at <= now - timedelta(minutes=min_age_minutes),
+            Payout.created_at >= now - timedelta(days=window_days),
+        )
+        .order_by(Payout.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    for p in payouts:
+        checked += 1
+        mtn_status = _query_mtn_disbursement_status(p.rail_reference)
+        if mtn_status is None:
+            skipped_unknown += 1
+            continue
+
+        our = p.status.value  # succeeded|failed|pending|authorized
+        kind = severity = detail = None
+
+        if mtn_status == "SUCCESSFUL" and our != "succeeded":
+            kind, severity = "mtn_payout_succeeded_local_not", "critical"
+            detail = (f"MTN transfer SUCCESSFUL; our payout is '{our}' — money left "
+                      f"our float but is unbooked as delivered (or was wrongly refunded).")
+        elif mtn_status == "FAILED" and our == "succeeded":
+            kind, severity = "local_payout_succeeded_mtn_failed", "critical"
+            detail = ("We marked this payout delivered but MTN says FAILED — the "
+                      "recipient was not paid; the merchant should have been refunded.")
+        # (MTN PENDING, or agreement, is not an exception.)
+
+        if kind is None:
+            resolved += _auto_resolve(p.rail_reference)
+            matched += 1
+            continue
+
+        new_exc += _upsert_exception(
+            rail_reference=p.rail_reference, txn=p, kind=kind, severity=severity,
             our_status=our, mtn_status=mtn_status, detail=detail,
         )
 

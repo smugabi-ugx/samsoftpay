@@ -47,6 +47,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.sweep.resolve_stale_transactions",
                 "schedule": 3600.0,        # every hour — resolves poller stragglers from MTN's own answer
             },
+            "resolve-stale-payouts": {
+                "task": "app.tasks.sweep.resolve_stale_payouts",
+                "schedule": 3600.0,        # every hour — OUTBOUND straggler net (payouts stuck AUTHORIZED)
+            },
             "prune-old-rows": {
                 "task": "app.tasks.sweep.prune_old_rows",
                 "schedule": 86400.0,       # daily — sent webhooks + aged idempotency keys (30d retention)

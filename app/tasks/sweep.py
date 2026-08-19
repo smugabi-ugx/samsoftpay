@@ -68,3 +68,23 @@ def resolve_stale_transactions() -> None:
     except Exception as exc:
         print(f"stale sweep error: {exc}")
         raise
+
+
+@celery.task(name="app.tasks.sweep.resolve_stale_payouts")
+def resolve_stale_payouts() -> None:
+    """Hourly: resolve payouts stuck AUTHORIZED from MTN's own transfer status.
+
+    The OUTBOUND mirror of resolve_stale_transactions. Payouts previously had NO
+    automated straggler net — if the 90s poller was lost, the payout sat
+    AUTHORIZED until a human ran `flask stranded-payouts`. For the one flow where
+    "money may have left but we don't know" is the worst case, that asymmetry was
+    the gap. Skips on network-unknown (never refunds on an unknown outcome).
+    """
+    from ..services.sweep import sweep_stale_payouts
+    try:
+        result = sweep_stale_payouts(stale_minutes=60)
+        if result.get("swept"):
+            print(f"stale payout sweep: {result}")
+    except Exception as exc:
+        print(f"stale payout sweep error: {exc}")
+        raise

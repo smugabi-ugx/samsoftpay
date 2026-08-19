@@ -166,6 +166,13 @@
     hourly `reconcile_mtn` beat task logs open criticals loudly AND now alerts (guardrail 25).
     `flask reconcile-mtn` runs it on demand. Testable against MTN sandbox now. This is the
     artifact a partner's compliance review asks for first. Tests: `tests/test_mtn_reconciliation.py`.
+    **Both legs now covered:** `reconcile_against_mtn` also reconciles live MTN PAYOUTS against
+    MTN's own transfer status (`mtn_payout_succeeded_local_not` / `local_payout_succeeded_mtn_failed`),
+    and a new hourly `resolve_stale_payouts` beat task (`sweep.sweep_stale_payouts`) is the
+    OUTBOUND straggler net mirroring `resolve_stale_transactions` — it finishes payouts stuck
+    AUTHORIZED from MTN's answer (skip on unknown; NEVER refund on unknown — the recipient may
+    already be paid). Payouts previously had NO automated resolver, only `flask stranded-payouts`.
+    Tests: `tests/test_payout_reliability.py` (11 checks).
 
 24. **Collections-only (scoped) keys must NEVER move money out.** A full `sk_*` secret key on a
     public kiosk/vending machine can be decompiled off the device and used to drain the merchant
