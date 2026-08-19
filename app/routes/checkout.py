@@ -14,7 +14,7 @@ import uuid
 
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import Channel, Merchant, PaymentLink, Transaction, TxnStatus, utcnow
 from ..services.orchestrator import OrchestratorError, create_charge
 
@@ -119,6 +119,9 @@ def checkout_page(public_id: str):
 
 
 @bp.post("/pay/<public_id>/submit")
+# UNAUTHENTICATED and fires a real MoMo prompt at an attacker-supplied phone —
+# throttle to stop prompt/SMS-bombing, matching bills/subscribe (guardrail 22).
+@limiter.limit("10 per minute;60 per hour")
 def checkout_submit(public_id: str):
     link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
     if link is None:
@@ -450,6 +453,9 @@ def _channel_options(include_crypto: bool = False):
 # ── Crypto checkout (ChangeNow) ────────────────────────────────────────
 
 @bp.post("/pay/<public_id>/apply-voucher")
+# Unauthenticated + returns distinct valid/invalid messages: throttle to stop
+# brute-force gift-card code guessing.
+@limiter.limit("10 per minute;60 per hour")
 def apply_voucher(public_id: str):
     """Validate a gift card code and store the discount in the session."""
     from flask import session
@@ -543,6 +549,8 @@ def crypto_qr_png(public_id: str):
 
 
 @bp.post("/pay/<public_id>/crypto/initiate")
+# Unauthenticated + calls an external exchange API: throttle to prevent abuse.
+@limiter.limit("10 per minute;60 per hour")
 def crypto_initiate(public_id: str):
     from flask import session
     from ..services.changenow import create_exchange
