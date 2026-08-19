@@ -65,6 +65,12 @@ def create_payout(
 ) -> Payout:
     if amount <= 0:
         raise PayoutError("amount must be positive")
+    # Same overflow guard as create_charge: a value above the signed 64-bit
+    # BigInteger ceiling would crash at INSERT (OverflowError / NumericValueOutOfRange)
+    # instead of failing cleanly. Reject it BEFORE any money moves.
+    max_amount = current_app.config.get("MAX_TXN_AMOUNT", (1 << 63) - 1)
+    if amount > max_amount:
+        raise PayoutError(f"amount exceeds the maximum of {max_amount}")
     if currency != "UGX":
         raise PayoutError("demo only supports UGX")
     if not merchant.is_active:
@@ -163,7 +169,6 @@ def create_payout(
             payout.status = PayoutStatus.AUTHORIZED
             payout.failure_reason = "ambiguous_network_error_pending_reconciliation"
             db.session.commit()
-            from flask import current_app
             current_app.logger.error(
                 "AMBIGUOUS payout %s (ref %s): network failed mid-transfer — "
                 "parked for reconciliation, merchant earmark preserved",
