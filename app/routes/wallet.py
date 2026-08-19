@@ -197,10 +197,29 @@ def manual_sweep():
     (settled_at guard), respects the 24h hold, commits per merchant.
     """
     from ..services.settlement import sweep_to_available
+    from ..models import Account, AccountType
+
+    def _live_available():
+        row = Account.query.filter_by(merchant_id=current_user.id,
+                                      type=AccountType.MERCHANT_AVAILABLE,
+                                      is_test=False).first()
+        return -row.cached_balance if row else 0
+
+    # The flash used to report sandbox settlements as if real money settled
+    # ("Settled UGX 29,550" while live available stayed 0). Measure the LIVE
+    # delta directly; mention test-mode movement separately.
+    live_before = _live_available()
     moved = sweep_to_available(hold_hours=24)
     my_moved = moved.get(current_user.id, 0) if isinstance(moved, dict) else 0
-    if my_moved:
-        flash(f"Settled UGX {my_moved:,} from pending to available.", "success")
+    live_delta = _live_available() - live_before
+    test_delta = max(0, my_moved - live_delta)
+    if live_delta:
+        msg = f"Settled UGX {live_delta:,} from pending to available."
+        if test_delta:
+            msg += f" (+UGX {test_delta:,} in test mode)"
+        flash(msg, "success")
+    elif test_delta:
+        flash(f"Settled UGX {test_delta:,} in TEST mode only — no live funds were due.", "info")
     else:
         flash("Nothing due yet — funds settle automatically 24h after a payment succeeds.", "info")
     return redirect(url_for("wallet.wallet_home"))
@@ -309,6 +328,14 @@ def admin_approve_withdrawal(wr_id: int):
 def admin_reject_withdrawal(wr_id: int):
     from datetime import datetime, timezone
     wr = db.session.get(WithdrawalRequest, wr_id) or abort(404)
+    # Row-lock + only-if-pending (mirrors the approve guard): an approved
+    # request whose payout may already have DELIVERED must never flip to
+    # 'rejected' — the record would deny money that actually left.
+    db.session.refresh(wr, with_for_update=True)
+    if wr.status != "pending":
+        db.session.commit()   # release the lock
+        flash(f"Request is already '{wr.status}' — nothing to reject.", "warning")
+        return redirect(url_for("wallet.admin_withdrawals"))
     wr.status      = "rejected"
     wr.admin_notes = request.form.get("reason", "Rejected by admin").strip()
     wr.processed_at = datetime.now(timezone.utc)
@@ -546,6 +573,13 @@ def admin_reject_topup(req_id: int):
     from datetime import datetime, timezone
     from ..models import TopUpRequest
     topup = db.session.get(TopUpRequest, req_id) or abort(404)
+    # Same only-if-pending guard: a completed top-up already credited the
+    # wallet — flipping it to 'rejected' left the money with a lying record.
+    db.session.refresh(topup, with_for_update=True)
+    if topup.status != "pending":
+        db.session.commit()
+        flash(f"Top-up is already '{topup.status}' — nothing to reject.", "warning")
+        return redirect(url_for("wallet.admin_topups"))
     topup.status       = "rejected"
     topup.admin_notes  = request.form.get("reason", "Rejected").strip()
     topup.processed_at = datetime.now(timezone.utc)

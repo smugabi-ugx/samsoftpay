@@ -227,8 +227,8 @@ def merchant_detail(merchant_id: int):
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
     txns = (
         Transaction.query.filter_by(merchant_id=merchant_id)
-        .order_by(Transaction.created_at.desc())
-        .limit(50)
+        .order_by(Transaction.id.desc())   # id-desc = stable load-more cursor
+        .limit(25)
         .all()
     )
     payouts = (
@@ -285,6 +285,35 @@ def merchant_detail(merchant_id: int):
         payout_count=payout_count,
         active_link_count=active_link_count,
     )
+
+
+@bp.get("/dashboard/<int:merchant_id>/activity.json")
+@login_required
+@verified_required
+def activity_page(merchant_id: int):
+    """Next page of activity rows for the load-more/infinite scroll.
+
+    Returns the SAME server-rendered partial the page uses (no client-side
+    markup duplication), 25 rows per page, cursor = before_id (id-desc).
+    Owner-or-admin gated like every dashboard surface.
+    """
+    from flask import jsonify
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    try:
+        before_id = int(request.args.get("before_id", 0))
+    except ValueError:
+        abort(400)
+    q = Transaction.query.filter_by(merchant_id=merchant_id)
+    if before_id:
+        q = q.filter(Transaction.id < before_id)
+    rows = q.order_by(Transaction.id.desc()).limit(26).all()
+    has_more = len(rows) > 25
+    rows = rows[:25]
+    html = render_template("_activity_rows.html", txns=rows, merchant=merchant)
+    return jsonify(html=html, has_more=has_more,
+                   next_before=(rows[-1].id if rows else None))
 
 
 @bp.post("/dashboard/<int:merchant_id>/charge/<public_id>/refund")

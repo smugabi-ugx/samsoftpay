@@ -311,54 +311,74 @@
 
   {% if txns %}
   <div style="padding:0 .25rem;">
-    {% for t in txns[:15] %}
-    <div class="activity-row">
-      <div class="activity-icon" style="background:{% if t.status.value == 'succeeded' %}rgba(16,185,129,.1){% elif t.status.value == 'failed' %}rgba(239,68,68,.1){% else %}rgba(245,158,11,.1){% endif %};">
-        {% if t.channel.value == 'mtn_momo' %}📱
-        {% elif t.channel.value == 'airtel_money' %}📲
-        {% elif t.channel.value == 'card' or t.channel.value == 'visa' %}💳
-        {% elif t.channel.value == 'crypto' %}₿
-        {% else %}💰{% endif %}
+    {% include "_activity_rows.html" %}
+  </div>
+  <div id="activity-more-rows"></div>
+  {# skeleton shimmer shown while the next page is in flight #}
+  <div id="activity-skeleton" style="display:none;">
+    {% for _ in range(3) %}
+    <div class="activity-row" aria-hidden="true">
+      <div class="skel" style="width:40px;height:40px;border-radius:10px;"></div>
+      <div style="flex:1;">
+        <div class="skel" style="width:38%;height:12px;border-radius:4px;margin-bottom:7px;"></div>
+        <div class="skel" style="width:64%;height:10px;border-radius:4px;"></div>
       </div>
-      <div class="activity-info">
-        <div class="activity-title">
-          {{ t.channel.value.replace('_',' ').title() }}
-          {% if t.is_test %}<span style="font-size:.7rem;background:rgba(245,158,11,.1);color:#d97706;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">TEST</span>{% endif %}
-        </div>
-        {# The rail's own confirmation code resolves customer disputes on the
-           first phone call — Pesapal gives it its own column for a reason. #}
-        <div class="activity-sub">{{ t.public_id }} · {{ t.created_at.strftime('%d %b %Y %H:%M') }}{% if t.merchant_reference %} · {{ t.merchant_reference }}{% endif %}{% if t.rail_reference %} · conf: {{ t.rail_reference }}{% endif %}</div>
-      </div>
-      <div>
-        <span class="badge {{ t.status.value }}">{{ t.status.value }}</span>
-      </div>
-      {# Green "+" is EARNED money only — a failed or still-pending charge
-         painted green with a plus sign misstates what the merchant has. #}
-      {% if t.status.value == 'succeeded' %}
-      <div class="activity-amount in">+ {{ "{:,}".format(t.amount) }} UGX</div>
-      {% else %}
-      <div class="activity-amount out" style="color:var(--gray-400);">{{ "{:,}".format(t.amount) }} UGX</div>
-      {% endif %}
-      {# Self-service refund for a succeeded charge — same vetted refund_charge
-         service the API uses (REFUNDED claim guard, draws from available). #}
-      {% if t.status.value == 'succeeded' and not t.is_test %}
-      <form method="post"
-            action="{{ url_for('dashboard.dashboard_refund', merchant_id=merchant.id, public_id=t.public_id) }}"
-            onsubmit="return confirm('Refund {{ t.public_id }}? This sends the money back to the customer.');"
-            style="margin-left:.5rem;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline"
-                style="padding:.25rem .6rem;font-size:.75rem;color:var(--danger);">Refund</button>
-      </form>
-      {% endif %}
+      <div class="skel" style="width:72px;height:14px;border-radius:4px;"></div>
     </div>
     {% endfor %}
   </div>
-  {% if txns|length > 15 %}
-  <div style="text-align:center;padding:1rem;font-size:.875rem;color:var(--gray-500);">
-    Showing 15 of {{ txns|length }} transactions.
+  {% if txns|length >= 25 %}
+  <div id="activity-sentinel"></div>
+  <div style="text-align:center;padding:.75rem 0 .25rem;">
+    <button id="activity-load-more" class="btn btn-outline"
+            style="font-size:.8125rem;padding:.45rem 1.1rem;">Load more</button>
   </div>
   {% endif %}
+  <style>
+    .skel{background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-200) 37%,var(--gray-100) 63%);
+          background-size:400% 100%;animation:skel 1.2s ease infinite;flex-shrink:0;}
+    @keyframes skel{0%{background-position:100% 0}100%{background-position:0 0}}
+  </style>
+  <script>
+  (function () {
+    // Regulated infinite scroll: 25-row pages, sentinel auto-loads up to a hard
+    // cap of 8 pages (200 rows), then the explicit button takes over. No
+    // runaway fetching, no layout thrash — skeleton keeps the space honest.
+    var btn = document.getElementById('activity-load-more');
+    if (!btn) return;
+    var sentinel = document.getElementById('activity-sentinel');
+    var target = document.getElementById('activity-more-rows');
+    var skel = document.getElementById('activity-skeleton');
+    var beforeId = {{ txns[-1].id if txns else 'null' }};
+    var busy = false, autoLoads = 0, AUTO_CAP = 8;
+
+    function loadMore(auto) {
+      if (busy || beforeId === null) return;
+      if (auto && autoLoads >= AUTO_CAP) return;   // hard cap: button only
+      busy = true; if (auto) autoLoads++;
+      skel.style.display = 'block';
+      fetch('{{ url_for("dashboard.activity_page", merchant_id=merchant.id) }}?before_id=' + beforeId)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          skel.style.display = 'none';
+          if (d.html) target.insertAdjacentHTML('beforeend', d.html);
+          if (window.feather) feather.replace();
+          beforeId = d.has_more ? d.next_before : null;
+          if (!d.has_more) { btn.style.display = 'none'; if (obs) obs.disconnect(); }
+          busy = false;
+        })
+        .catch(function () { skel.style.display = 'none'; busy = false; });
+    }
+    btn.addEventListener('click', function () { loadMore(false); });
+    var obs = null;
+    if ('IntersectionObserver' in window && sentinel) {
+      obs = new IntersectionObserver(function (entries) {
+        if (entries[0].isIntersecting) loadMore(true);
+      }, { rootMargin: '200px' });
+      obs.observe(sentinel);
+    }
+  })();
+  </script>
   {% else %}
   <div class="empty-state">
     <div class="empty-state-icon">📊</div>

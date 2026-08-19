@@ -66,6 +66,24 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     if not txn.customer_phone:
         return {"ok": False, "error": "no_customer_phone_on_record_to_refund_to"}
 
+    # ── MODE SCOPING (executed-and-proven bug): the refund payout MUST live on
+    # the SAME ledger as the charge. The dashboard path sets no g.api_mode, so
+    # create_payout defaulted to LIVE — refunding a TEST charge debited REAL
+    # withdrawable money; conversely a test key could mark a LIVE charge
+    # REFUNDED while paying from sandbox. Rules (guardrail 12/15 discipline):
+    #   1. An API caller whose key mode mismatches the charge mode is refused
+    #      with zero writes.
+    #   2. The refund's funding payout is ALWAYS forced to txn.is_test.
+    from flask import g, has_request_context
+    caller_mode = g.get("api_mode") if has_request_context() else None
+    txn_mode = "test" if txn.is_test else "live"
+    if caller_mode is not None and caller_mode != txn_mode:
+        return {"ok": False,
+                "error": f"mode_mismatch: this is a {txn_mode} charge — use your "
+                         f"{'sk_test_' if txn.is_test else 'sk_live_'} key to refund it"}
+    if has_request_context():
+        g.api_mode = txn_mode   # create_payout reads this to pick the ledger
+
     # Net amount the merchant received after the charge fee was taken.
     net_amount = txn.amount - (txn.fee_amount or 0)
     if net_amount <= 0:

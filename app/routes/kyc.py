@@ -107,6 +107,8 @@ def step1_save():
 @login_required
 def step2():
     app = _get_or_create_app()
+    if app.status != "draft":
+        return redirect(url_for("kyc.kyc_home"))
     return render_template("kyc/step2.html", app=app)
 
 
@@ -155,6 +157,8 @@ def step2_next():
 @login_required
 def step3():
     app = _get_or_create_app()
+    if app.status != "draft":
+        return redirect(url_for("kyc.kyc_home"))
     return render_template("kyc/step3.html", app=app, doc_types=dict(DOC_TYPES))
 
 
@@ -186,7 +190,6 @@ def step3_delete(doc_id: int):
     app = _get_or_create_app()
     doc = KYCDocument.query.filter_by(id=doc_id, application_id=app.id).first_or_404()
     # Delete file from disk
-    path = os.path.join(_UPLOAD_FOLDER, str(current_user.id), doc.stored_filename)
     path = os.path.join(_upload_root(), str(current_user.id), doc.stored_filename)
     if os.path.exists(path):
         os.remove(path)
@@ -208,6 +211,8 @@ def step3_next():
 @login_required
 def step4():
     app = _get_or_create_app()
+    if app.status != "draft":
+        return redirect(url_for("kyc.kyc_home"))
     return render_template("kyc/step4.html", app=app)
 
 
@@ -230,6 +235,8 @@ def step4_save():
 @login_required
 def step5():
     app = _get_or_create_app()
+    if app.status != "draft":
+        return redirect(url_for("kyc.kyc_home"))
     return render_template("kyc/step5.html", app=app)
 
 
