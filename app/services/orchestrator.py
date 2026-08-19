@@ -71,6 +71,15 @@ def create_charge(
 ) -> Transaction:
     if amount <= 0:
         raise OrchestratorError("amount must be positive")
+    # Upper bound BEFORE the DB. amount is a BigInteger (signed 64-bit); a value
+    # above that ceiling used to reach the INSERT and crash — OverflowError on
+    # SQLite, NumericValueOutOfRange on Postgres — surfacing to the caller as a
+    # misleading 502 "rail unavailable, retry". Reject it cleanly as a 400. The
+    # cap is configurable (MAX_TXN_AMOUNT) so it can later be tightened to MTN's
+    # real per-transaction limit; the default is just the safe technical ceiling.
+    max_amount = current_app.config.get("MAX_TXN_AMOUNT", (1 << 63) - 1)
+    if amount > max_amount:
+        raise OrchestratorError(f"amount exceeds the maximum of {max_amount}")
     if currency != "UGX":
         raise OrchestratorError("demo only supports UGX")
     if not merchant.is_active:
@@ -126,7 +135,6 @@ def create_charge(
             # MTN's own answer.
             txn.status = TxnStatus.AUTHORIZED
             db.session.commit()
-            from flask import current_app
             current_app.logger.error(
                 "AMBIGUOUS charge %s (ref %s): network failed mid-requesttopay — "
                 "parked AUTHORIZED for callback/sweep",
@@ -273,7 +281,6 @@ def _maybe_mark_bill_paid(txn: Transaction) -> None:
         # poisons everything after us in this request) and be VISIBLE.
         db.session.rollback()
         try:
-            from flask import current_app
             current_app.logger.exception(
                 "failed to mark bill paid for txn %s — bill remains active",
                 txn.public_id,

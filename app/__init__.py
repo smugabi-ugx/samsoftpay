@@ -124,6 +124,10 @@ def create_app(config: dict | None = None) -> Flask:
         RAIL_SUCCESS_PROBABILITY=float(
             os.environ.get("RAIL_SUCCESS_PROBABILITY", "1.0")
         ),
+        # Hard upper bound on a single charge/payout amount. Default is the safe
+        # 64-bit BigInteger ceiling (prevents an INSERT overflow crash); set
+        # MAX_TXN_AMOUNT to MTN's real per-transaction limit to tighten it.
+        MAX_TXN_AMOUNT=int(os.environ.get("MAX_TXN_AMOUNT", str((1 << 63) - 1))),
         # ---- MTN MoMo real-rail config (only used when MOMO_USE_REAL=1) ----
         MOMO_USE_REAL=os.environ.get("MOMO_USE_REAL", "0") == "1",
         MOMO_BASE_URL=os.environ.get(
