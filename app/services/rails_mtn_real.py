@@ -132,9 +132,11 @@ class RealMTNMoMoAdapter(RailAdapter):
             base_url=self.base_url,
         )
 
-        # Phone must be MSISDN without "+" for MoMo.
-        # In sandbox use one of MTN's test MSISDNs (e.g. 46733123450).
-        msisdn = (txn.customer_phone or "").lstrip("+").replace(" ", "")
+        # MSISDN must carry the country code in production (a raw "0772..."
+        # fails with PAYER_NOT_FOUND) and the notes reject special characters
+        # (an apostrophe 400s the whole charge) — see services/msisdn.py.
+        from .msisdn import normalize_msisdn, sanitize_note
+        msisdn = normalize_msisdn(txn.customer_phone)
 
         body = {
             "amount": self._amount_to_string(txn.amount),
@@ -144,8 +146,8 @@ class RealMTNMoMoAdapter(RailAdapter):
                 "partyIdType": "MSISDN",
                 "partyId": msisdn,
             },
-            "payerMessage": f"Charge {txn.public_id}",
-            "payeeNote": txn.merchant_reference or txn.public_id,
+            "payerMessage": sanitize_note(f"Charge {txn.public_id}"),
+            "payeeNote": sanitize_note(txn.merchant_reference or txn.public_id),
         }
 
         # DURABLE BEFORE THE WIRE: commit the reference onto the transaction

@@ -128,7 +128,11 @@ class RealMTNMoMoDisbursementAdapter:
             base_url=self.base_url,
         )
 
-        msisdn = (payout.recipient_phone or "").lstrip("+").replace(" ", "")
+        # Same production constraints as collections: country-coded MSISDN
+        # (raw "0772..." -> PAYEE_NOT_FOUND) and sanitized notes (an apostrophe
+        # in a recipient name like "St. Peter's" 400s the transfer).
+        from .msisdn import normalize_msisdn, sanitize_note
+        msisdn = normalize_msisdn(payout.recipient_phone)
 
         body = {
             "amount": self._amount_to_string(payout.amount),
@@ -138,8 +142,8 @@ class RealMTNMoMoDisbursementAdapter:
                 "partyIdType": "MSISDN",
                 "partyId": msisdn,
             },
-            "payerMessage": f"Payout {payout.public_id}",
-            "payeeNote": payout.recipient_name or payout.public_id,
+            "payerMessage": sanitize_note(f"Payout {payout.public_id}"),
+            "payeeNote": sanitize_note(payout.recipient_name or payout.public_id),
         }
 
         # DURABLE BEFORE THE WIRE: commit the payout row + earmark + reference
