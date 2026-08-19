@@ -97,9 +97,17 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
         .limit(limit)
         .all()
     )
+    from .url_guard import is_public_http_url
     sent = 0
     for wh in pending:
         wh.attempts += 1
+        # Re-validate at delivery time too: a hostname saved as public can
+        # re-resolve to a private IP (DNS rebinding). Fail the delivery rather
+        # than let the worker hit an internal service.
+        if not is_public_http_url(wh.url):
+            wh.status = "failed"
+            wh.last_response_code = 0
+            continue
         try:
             resp = requests.post(
                 wh.url,
@@ -109,6 +117,7 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
                     "X-Samsoftpay-Signature": wh.signature,
                 },
                 timeout=5,
+                allow_redirects=False,   # a 302 to an internal URL must not be followed
             )
             wh.last_response_code = resp.status_code
             if 200 <= resp.status_code < 300:
