@@ -73,6 +73,12 @@ def buy_and_wait(client, hdr, phone, ref):
 
 def main():
     app = create_app()
+    # This test fires 13+ checkout submits from one client IP; the public
+    # checkout rate limit (10/min, an intended anti-prompt-bombing guard) would
+    # 429 the later batches. The limiter is the thing under test in
+    # test_checkout_ratelimit — here it is just in the way.
+    from app.extensions import limiter
+    limiter.enabled = False
     with app.app_context():
         db.create_all()
         db.session.add(Merchant(
