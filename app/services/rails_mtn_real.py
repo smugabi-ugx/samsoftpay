@@ -88,18 +88,30 @@ class RealMTNMoMoAdapter(RailAdapter):
         self.base_url = cfg["MOMO_BASE_URL"]
         self.target_env = cfg["MOMO_TARGET_ENV"]
         self.currency = cfg["MOMO_CURRENCY"]
+        # OPT-IN callback: set MOMO_CALLBACK_URL (e.g.
+        # https://api.samsoftpay.com/inbound/mtn/callback) ONLY once MTN has
+        # provisioned the API user with a matching providerCallbackHost — MTN
+        # rejects requesttopay when the X-Callback-Url host doesn't match the
+        # provisioned one, so defaulting it on would break charges. Unset =
+        # today's behavior (poller + hourly sweep own completion). The callback
+        # route itself never trusts the payload — it verifies via MTN's status
+        # API (see webhooks_inbound.mtn_native_callback).
+        self.callback_url = cfg.get("MOMO_CALLBACK_URL") or ""
         # Sandbox uses EUR; production uses local currency (UGX in Uganda).
         # Amounts to MTN must be in MAJOR units as a string ("100.00"), unlike
         # our internal storage (minor units as int).
 
     def _headers(self, token: str, reference_id: str) -> dict:
-        return {
+        headers = {
             "Authorization": f"Bearer {token}",
             "Ocp-Apim-Subscription-Key": self.subscription_key,
             "X-Reference-Id": reference_id,
             "X-Target-Environment": self.target_env,
             "Content-Type": "application/json",
         }
+        if self.callback_url:
+            headers["X-Callback-Url"] = self.callback_url
+        return headers
 
     def _amount_to_string(self, minor: int) -> str:
         """Convert internal minor units to MoMo's string-decimal major units.
@@ -120,9 +132,11 @@ class RealMTNMoMoAdapter(RailAdapter):
             base_url=self.base_url,
         )
 
-        # Phone must be MSISDN without "+" for MoMo.
-        # In sandbox use one of MTN's test MSISDNs (e.g. 46733123450).
-        msisdn = (txn.customer_phone or "").lstrip("+").replace(" ", "")
+        # MSISDN must carry the country code in production (a raw "0772..."
+        # fails with PAYER_NOT_FOUND) and the notes reject special characters
+        # (an apostrophe 400s the whole charge) — see services/msisdn.py.
+        from .msisdn import normalize_msisdn, sanitize_note
+        msisdn = normalize_msisdn(txn.customer_phone)
 
         body = {
             "amount": self._amount_to_string(txn.amount),
@@ -132,8 +146,8 @@ class RealMTNMoMoAdapter(RailAdapter):
                 "partyIdType": "MSISDN",
                 "partyId": msisdn,
             },
-            "payerMessage": f"Charge {txn.public_id}",
-            "payeeNote": txn.merchant_reference or txn.public_id,
+            "payerMessage": sanitize_note(f"Charge {txn.public_id}"),
+            "payeeNote": sanitize_note(txn.merchant_reference or txn.public_id),
         }
 
         # DURABLE BEFORE THE WIRE: commit the reference onto the transaction

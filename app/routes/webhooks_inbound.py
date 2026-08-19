@@ -74,3 +74,58 @@ def receive(channel: str):
     reason  = payload.get("reason")
     complete_transaction(txn.id, success=success, rail_reference=rail_ref, reason=reason)
     return jsonify(ok=True)
+
+
+@bp.route("/mtn/callback", methods=["POST", "PUT"])
+def mtn_native_callback():
+    """MTN's OWN requesttopay callback (providerCallbackHost) — hint-verify design.
+
+    MTN does not sign its callbacks with a secret we can verify, and a callback
+    marks money as moved — so this route NEVER completes a charge from the
+    payload alone. The callback is treated as a HINT: we extract the reference,
+    then ask MTN's status API for the truth and complete from THAT answer (the
+    same authority the poller and the stale sweep already use). A forged
+    callback can therefore only trigger a status check against MTN — it can
+    never invent a success. This is what turns completion from ~poller-latency
+    into instant, without weakening guardrail 9's fail-closed stance.
+
+    Always answers 200: MTN retries non-2xx, and the response must not leak
+    which references exist.
+    """
+    from ..services import sweep as sweep_svc
+
+    payload = request.get_json(silent=True) or {}
+    # MTN callbacks are inconsistently shaped across products/versions; accept
+    # the reference from the header or the common body fields. externalId is
+    # OUR public id (set at initiate), referenceId is OUR X-Reference-Id uuid.
+    ref = (request.headers.get("X-Reference-Id")
+           or payload.get("referenceId")
+           or payload.get("externalId")
+           or "").strip()
+    if not ref:
+        return jsonify(ok=True)
+
+    # Only meaningful with the real rail: in mock mode the timer completes
+    # charges and there is no MTN to verify against.
+    if not current_app.config.get("MOMO_USE_REAL"):
+        return jsonify(ok=True)
+
+    txn = Transaction.query.filter(
+        (Transaction.rail_reference == ref) | (Transaction.public_id == ref)
+    ).one_or_none()
+    if txn is None or not txn.rail_reference:
+        current_app.logger.info("mtn callback for unknown reference %s", ref[:64])
+        return jsonify(ok=True)
+    if txn.channel != Channel.MTN_MOMO:
+        return jsonify(ok=True)
+
+    # THE VERIFY: MTN's status API is the only authority. None/PENDING = do
+    # nothing (poller/sweep continue to own it) — an unknown outcome is never
+    # a failure (guardrail 21).
+    status = sweep_svc._query_mtn_status(txn.rail_reference)
+    if status == "SUCCESSFUL":
+        complete_transaction(txn.id, success=True, rail_reference=txn.rail_reference)
+    elif status == "FAILED":
+        complete_transaction(txn.id, success=False,
+                             rail_reference=txn.rail_reference, reason="momo_failed")
+    return jsonify(ok=True)
