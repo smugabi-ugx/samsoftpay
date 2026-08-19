@@ -98,6 +98,11 @@ def create_app(config: dict | None = None) -> Flask:
 
     app.config.update(
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev-only-do-not-use-in-prod"),
+        # Static assets (font, CSS, JS, logo) get a 1-day browser cache AND
+        # become edge-cacheable by Cloudflare — without this every navigation
+        # re-fetched every asset across the ocean (Kampala->Oregon ~300ms RTT
+        # each), which is what made page-to-page movement feel sticky.
+        SEND_FILE_MAX_AGE_DEFAULT=86400,
         # ── Secure session cookies ──────────────────────────────────────────
         SESSION_COOKIE_NAME="ssp_sid",
         SESSION_COOKIE_HTTPONLY=True,
@@ -245,8 +250,30 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.errorhandler(403)
     def forbidden(e):
-        from flask import render_template as _rt
+        from flask import render_template as _rt, request as _rq, jsonify as _js
+        if _rq.path.startswith("/v1"):
+            return _js(error=e.description or "forbidden"), 403
         return _rt("403.html"), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        # A customer hitting a dead payment link used to see the bare default
+        # Werkzeug page; a /v1 client must get JSON (blueprint handlers do not
+        # fire for URLs that never matched a route).
+        from flask import render_template as _rt, request as _rq, jsonify as _js
+        if _rq.path.startswith("/v1"):
+            return _js(error="not found"), 404
+        return _rt("404.html"), 404
+
+    @app.errorhandler(500)
+    def server_error(e):
+        from flask import render_template as _rt, request as _rq, jsonify as _js
+        if _rq.path.startswith("/v1"):
+            return _js(error="internal server error"), 500
+        try:
+            return _rt("500.html"), 500
+        except Exception:
+            return "Something went wrong on our side.", 500
 
     # ---- Request IDs: tag every request so logs can be traced end to end ----
     import uuid as _uuid

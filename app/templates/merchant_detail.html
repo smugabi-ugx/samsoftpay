@@ -461,6 +461,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script defer src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
 <script>
   if (window.feather) feather.replace({ 'stroke-width': 2 });
 
@@ -498,7 +499,7 @@
     const colors = colorMap
       ? labels.map((l, i) => colorMap[l] || palette[i % palette.length])
       : palette;
-    new Chart(ctx, {
+    window.Chart && new Chart(ctx, {
       type: 'doughnut',
       data: {
         labels,
@@ -514,7 +515,9 @@
     });
   }
 
-  makeChart('statusChart', Object.keys(statusCounts), Object.values(statusCounts), STATUS_COLORS);
-  makeChart('channelChart', Object.keys(channelCounts), Object.values(channelCounts), null);
+  document.addEventListener('DOMContentLoaded', function () {
+    makeChart('statusChart', Object.keys(statusCounts), Object.values(statusCounts), STATUS_COLORS);
+    makeChart('channelChart', Object.keys(channelCounts), Object.values(channelCounts), null);
+  });
 </script>
 {% endblock %}

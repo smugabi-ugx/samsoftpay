@@ -18,7 +18,7 @@
         {% for d in app.directors %}
         <tr>
           <td><strong>{{ d.full_name }}</strong><br><small class="text-muted">{{ d.nationality or '' }}</small></td>
-          <td>{{ d.id_type.replace('_',' ').title() }}</td>
+          <td>{{ (d.id_type or 'other').replace('_',' ').title() }}</td>
           <td><code>{{ d.id_number or '—' }}</code></td>
           <td>{{ d.contact_phone or '—' }}</td>
           <td>{% if d.is_primary %}<span class="badge succeeded">Primary</span>{% endif %}</td>
@@ -101,4 +101,4 @@
   <a href="{{ url_for('kyc.step1') }}" class="btn btn-outline" style="margin-left:.5rem;">← Back</a>
 </div>
 {% endblock %}
-{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
+{% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}

@@ -237,7 +237,7 @@
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  window.feather && feather.replace();
 
   function openEdit(id, name, email, kyc, role, active) {
     document.getElementById('edit-form').action = `/admin/merchants/${id}/update`;
@@ -248,7 +248,7 @@
     document.getElementById('edit-active').value = active ? '1' : '0';
     const modal = document.getElementById('edit-modal');
     modal.style.display = 'flex';
-    feather.replace();
+    window.feather && feather.replace();
   }
 
   document.getElementById('edit-modal').addEventListener('click', function(e) {

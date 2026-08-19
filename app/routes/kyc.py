@@ -71,7 +71,7 @@ def _save_file(f) -> tuple[str, str]:
 @login_required
 def kyc_home():
     app = KYCApplication.query.filter_by(merchant_id=current_user.id).first()
-    return render_template("kyc/home.html", app=app, doc_types=DOC_TYPES)
+    return render_template("kyc/home.html", app=app, doc_types=dict(DOC_TYPES))
 
 
 # ── Step 1: Business Information ──
@@ -155,7 +155,7 @@ def step2_next():
 @login_required
 def step3():
     app = _get_or_create_app()
-    return render_template("kyc/step3.html", app=app, doc_types=DOC_TYPES)
+    return render_template("kyc/step3.html", app=app, doc_types=dict(DOC_TYPES))
 
 
 @bp.post("/step/3/upload")
@@ -166,12 +166,12 @@ def step3_upload():
     f = request.files.get("document")
     doc_type = request.form.get("doc_type", "other")
     if not f or not f.filename:
-        return render_template("kyc/step3.html", app=app, doc_types=DOC_TYPES,
+        return render_template("kyc/step3.html", app=app, doc_types=dict(DOC_TYPES),
                                error="No file selected.")
     try:
         orig, stored = _save_file(f)
     except ValueError as exc:
-        return render_template("kyc/step3.html", app=app, doc_types=DOC_TYPES,
+        return render_template("kyc/step3.html", app=app, doc_types=dict(DOC_TYPES),
                                error=str(exc))
     doc = KYCDocument(application_id=app.id, doc_type=doc_type,
                       original_filename=orig, stored_filename=stored)

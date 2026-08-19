@@ -137,10 +137,14 @@ def _optional_idempotency(merchant, body):
 
 @bp.errorhandler(400)
 @bp.errorhandler(401)
+@bp.errorhandler(403)
+@bp.errorhandler(404)
 @bp.errorhandler(409)
 @bp.errorhandler(429)
 def _err(e):
-    return jsonify(error=e.description), e.code
+    # Every /v1 error is machine-readable JSON — a kiosk or server integration
+    # must never have to parse an HTML error page.
+    return jsonify(error=e.description or e.name), e.code
 
 
 # ---------- charges ----------

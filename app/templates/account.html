@@ -385,7 +385,7 @@ print(resp.json())
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  window.feather && feather.replace();
 
   // Mode toggle
   function setMode(mode) {
@@ -393,7 +393,7 @@ print(resp.json())
     document.getElementById('keys-live').classList.toggle('visible', mode === 'live');
     document.getElementById('btn-test').classList.toggle('active', mode === 'test');
     document.getElementById('btn-live').classList.toggle('active', mode === 'live');
-    feather.replace();
+    window.feather && feather.replace();
   }
 
   // QR modal for payment page

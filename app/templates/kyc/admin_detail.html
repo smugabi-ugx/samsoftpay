@@ -35,7 +35,7 @@
   {% for d in app.directors %}
   <div style="padding:.75rem;border:1px solid var(--gray-200);border-radius:8px;margin-bottom:.5rem;font-size:.875rem;">
     <strong>{{ d.full_name }}</strong> | DOB: {{ d.date_of_birth or '—' }} | {{ d.nationality or '—' }}<br>
-    {{ d.id_type.replace('_',' ').title() }}: <code>{{ d.id_number or '—' }}</code> | Phone: {{ d.contact_phone or '—' }}
+    {{ (d.id_type or 'other').replace('_',' ').title() }}: <code>{{ d.id_number or '—' }}</code> | Phone: {{ d.contact_phone or '—' }}
     {% if d.is_primary %}<span class="badge succeeded" style="margin-left:.5rem;">Primary</span>{% endif %}
   </div>
   {% endfor %}
@@ -95,4 +95,4 @@
 
 <a href="{{ url_for('kyc.admin_list') }}" class="btn btn-outline" style="margin-bottom:2rem;">← All Applications</a>
 {% endblock %}
-{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
+{% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}

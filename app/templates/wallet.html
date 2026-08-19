@@ -433,7 +433,7 @@
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  window.feather && feather.replace();
   function toggleBank(type) {
     document.getElementById('bank-name-group').style.display =
       type === 'bank' ? 'block' : 'none';
