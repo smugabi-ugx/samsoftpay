@@ -206,6 +206,16 @@ def checkout_submit(public_id: str):
             currency=link.currency, channel=channel,
             status=TxnStatus.SUCCEEDED, is_test=link.is_test,
             completed_at=utcnow(),
+            # settled_at MUST be set: a fully-gift-card-covered charge collects
+            # NO rail money and posts NOTHING to the ledger, but it is a SUCCEEDED
+            # txn with settled_at=None. The 24h settlement sweep selects exactly
+            # (SUCCEEDED, settled_at IS NULL, aged) and would then post
+            # (pending +total, available -total) for it — minting a withdrawable
+            # balance that no rail ever funded (real money out via /v1/payouts).
+            # Marking it settled at creation keeps the sweep's hands off it; the
+            # gift-card value is a merchant liability tracked on GiftCard.balance,
+            # not real collected money that belongs in the withdrawable ledger.
+            settled_at=utcnow(),
             merchant_reference=link.reference or link.public_id,
         )
         db.session.add(txn_obj)

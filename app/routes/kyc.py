@@ -14,7 +14,10 @@ from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models import KYCApplication, KYCDirector, KYCDocument
-from ..utils import verified_required
+# NOTE: KYC routes are @login_required only, NEVER @verified_required — a
+# merchant doing KYC is by definition not yet verified, and verified_required
+# redirects the unverified to kyc_home, so gating kyc_home itself created an
+# infinite redirect loop that locked every new merchant out of onboarding.
 
 bp = Blueprint("kyc", __name__, url_prefix="/kyc")
 
@@ -66,7 +69,6 @@ def _save_file(f) -> tuple[str, str]:
 
 @bp.get("")
 @login_required
-@verified_required
 def kyc_home():
     app = KYCApplication.query.filter_by(merchant_id=current_user.id).first()
     return render_template("kyc/home.html", app=app, doc_types=DOC_TYPES)
@@ -76,7 +78,6 @@ def kyc_home():
 
 @bp.get("/step/1")
 @login_required
-@verified_required
 def step1():
     app = _get_or_create_app()
     if app.status not in ("draft",):
@@ -86,7 +87,6 @@ def step1():
 
 @bp.post("/step/1")
 @login_required
-@verified_required
 def step1_save():
     app = _get_or_create_app()
     if app.status != "draft": abort(403)
@@ -105,7 +105,6 @@ def step1_save():
 
 @bp.get("/step/2")
 @login_required
-@verified_required
 def step2():
     app = _get_or_create_app()
     return render_template("kyc/step2.html", app=app)
@@ -113,7 +112,6 @@ def step2():
 
 @bp.post("/step/2/add")
 @login_required
-@verified_required
 def step2_add_director():
     app = _get_or_create_app()
     if app.status != "draft": abort(403)
@@ -136,7 +134,6 @@ def step2_add_director():
 
 @bp.post("/step/2/delete/<int:director_id>")
 @login_required
-@verified_required
 def step2_delete_director(director_id: int):
     app = _get_or_create_app()
     d = KYCDirector.query.filter_by(id=director_id, application_id=app.id).first_or_404()
@@ -147,7 +144,6 @@ def step2_delete_director(director_id: int):
 
 @bp.post("/step/2/next")
 @login_required
-@verified_required
 def step2_next():
     _touch(_get_or_create_app())
     return redirect(url_for("kyc.step3"))
@@ -157,7 +153,6 @@ def step2_next():
 
 @bp.get("/step/3")
 @login_required
-@verified_required
 def step3():
     app = _get_or_create_app()
     return render_template("kyc/step3.html", app=app, doc_types=DOC_TYPES)
@@ -165,7 +160,6 @@ def step3():
 
 @bp.post("/step/3/upload")
 @login_required
-@verified_required
 def step3_upload():
     app = _get_or_create_app()
     if app.status != "draft": abort(403)
@@ -188,7 +182,6 @@ def step3_upload():
 
 @bp.post("/step/3/delete/<int:doc_id>")
 @login_required
-@verified_required
 def step3_delete(doc_id: int):
     app = _get_or_create_app()
     doc = KYCDocument.query.filter_by(id=doc_id, application_id=app.id).first_or_404()
@@ -204,7 +197,6 @@ def step3_delete(doc_id: int):
 
 @bp.post("/step/3/next")
 @login_required
-@verified_required
 def step3_next():
     _touch(_get_or_create_app())
     return redirect(url_for("kyc.step4"))
@@ -214,7 +206,6 @@ def step3_next():
 
 @bp.get("/step/4")
 @login_required
-@verified_required
 def step4():
     app = _get_or_create_app()
     return render_template("kyc/step4.html", app=app)
@@ -222,7 +213,6 @@ def step4():
 
 @bp.post("/step/4")
 @login_required
-@verified_required
 def step4_save():
     app = _get_or_create_app()
     if app.status != "draft": abort(403)
@@ -238,7 +228,6 @@ def step4_save():
 
 @bp.get("/step/5")
 @login_required
-@verified_required
 def step5():
     app = _get_or_create_app()
     return render_template("kyc/step5.html", app=app)
@@ -246,7 +235,6 @@ def step5():
 
 @bp.post("/step/5")
 @login_required
-@verified_required
 def step5_save():
     app = _get_or_create_app()
     if app.status != "draft": abort(403)
@@ -264,7 +252,6 @@ def step5_save():
 
 @bp.get("/review")
 @login_required
-@verified_required
 def review():
     app = _get_or_create_app()
     return render_template("kyc/review.html", app=app, doc_types=dict(DOC_TYPES))
@@ -272,7 +259,6 @@ def review():
 
 @bp.post("/submit")
 @login_required
-@verified_required
 def submit():
     from datetime import datetime, timezone
     app = _get_or_create_app()
