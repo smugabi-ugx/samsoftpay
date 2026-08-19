@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}Samsoftpay{% endblock %} | Uganda Payment Gateway</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <meta name="theme-color" content="#6366f1">
 
@@ -649,7 +650,7 @@
   <header class="mobile-header">
     <a class="mobile-brand"
        href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}">
-      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+      <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
       <span>Samsoftpay</span>
     </a>
     <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -668,7 +669,7 @@
         <!-- Logo: landing if guest, merchant dashboard if logged in -->
         <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}"
            class="logo">
-          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+          <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
           <span class="logo-text-main">Samsoftpay</span>
         </a>
         <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">
@@ -800,7 +801,7 @@
         <!-- Brand = Home: tapping the logo always returns to the dashboard -->
         <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}"
            style="display:inline-flex;align-items:center;gap:.45rem;text-decoration:none;color:inherit;" title="Go to dashboard">
-          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
+          <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
           <span>Samsoftpay</span>
         </a>
         {% if request.endpoint != 'auth.account' and request.endpoint != 'dashboard.merchant_detail' %}

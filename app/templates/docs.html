@@ -76,7 +76,8 @@
   <nav class="docs-nav card" style="padding:1.25rem;">
     <div class="docs-nav-section">
       <div class="docs-nav-title">Getting Started</div>
-      <a href="#authentication" class="docs-nav-link active">Authentication</a>
+      <a href="#quickstart" class="docs-nav-link active">Quickstart</a>
+      <a href="#authentication" class="docs-nav-link">Authentication</a>
       <a href="#headers" class="docs-nav-link">Required Headers</a>
       <a href="#errors" class="docs-nav-link">Errors</a>
     </div>
@@ -98,6 +99,58 @@
 
   <!-- Content -->
   <div>
+
+    <!-- Quickstart -->
+    <div class="docs-section" id="quickstart">
+      <h2><i data-feather="zap" style="width:22px;height:22px;color:var(--primary);"></i> Quickstart</h2>
+      <p style="font-size:1.0625rem;">
+        To integrate with Samsoftpay you need exactly <strong>two things</strong>:
+      </p>
+      <ol style="margin:0 0 1.25rem 1.25rem;line-height:2;">
+        <li><strong>Base URL:</strong> <code>https://api.samsoftpay.com</code> — same for test and live.</li>
+        <li><strong>Your API key:</strong> <code>sk_test_…</code> from
+          {% if current_user.is_authenticated %}your <a href="{{ url_for('auth.account') }}">Account page</a>{% else %}<a href="{{ url_for('auth.signup_page') }}">a free account</a> (instant, no approval){% endif %}
+          — sent as <code>Authorization: Bearer &lt;key&gt;</code>.</li>
+      </ol>
+      <p style="margin-bottom:.75rem;">
+        No IPN registration, no IP whitelisting, no token exchange. This first charge works in
+        under a minute:
+      </p>
+      <pre><code>curl -X POST https://api.samsoftpay.com/v1/charges \
+  -H "Authorization: Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}" \
+  -H "Idempotency-Key: my-first-charge-001" \
+  -H "X-Timestamp: $(date +%s)" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "UGX",
+    "channel": "mtn_momo",
+    "customer": {"phone": "256700000000"},
+    "reference": "order-001"
+  }'</code></pre>
+      <p style="margin:.75rem 0 .5rem;">Response:</p>
+      <pre><code>{
+  "id": "txn_9f2c41d8a3b7e615",
+  "mode": "test",
+  "status": "authorized",
+  "amount": 5000,
+  "fee": 200,
+  "currency": "UGX",
+  "channel": "mtn_momo",
+  "reference": "order-001"
+}</code></pre>
+      <p style="margin-top:.75rem;">
+        Poll <code>GET /v1/charges/&lt;id&gt;</code> until <code>status</code> is
+        <code>succeeded</code> — the test number <code>256700000000</code> always succeeds
+        (see <a href="#testing">Testing</a> for numbers that fail on demand). Prefer push?
+        Add a webhook URL on your Account page and we deliver signed events instead —
+        it's optional, polling is fully supported.
+      </p>
+      <p style="color:var(--gray-500);font-size:.9rem;">
+        Going live later is a one-line change: swap in your <code>sk_live_</code> key.
+        Nothing else changes.
+      </p>
+    </div>
 
     <!-- Authentication -->
     <div class="docs-section" id="authentication">
