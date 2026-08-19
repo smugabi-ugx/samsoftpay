@@ -658,9 +658,25 @@ def create_bulk_payout():
 
         # Per-item idempotency keyed by the caller's reference.
         idem_key = f"bulkpayout:{ref}"
+        item_hash = idempotency.hash_body(item)
         existing = idempotency.find(merchant.id, idem_key)
         if existing is not None:
-            results.append({"index": i, "ok": True, "reference": ref, **json.loads(existing.response_body)})
+            if existing.response_status == idempotency.IN_FLIGHT:
+                results.append({"index": i, "ok": False, "reference": ref,
+                                "error": "a payout with this reference is still in flight"})
+            else:
+                results.append({"index": i, "ok": True, "reference": ref,
+                                **json.loads(existing.response_body)})
+            continue
+
+        # RESERVE the key BEFORE disbursing. Without this, two concurrent
+        # identical batches both saw existing=None above and both called
+        # create_payout — a real double-disbursement (the account row-lock only
+        # serialises the balance check, it does not dedupe). Same reserve-before-
+        # execute guard the single /payouts and /charges paths already carry.
+        if not idempotency.reserve(merchant.id, idem_key, item_hash):
+            results.append({"index": i, "ok": False, "reference": ref,
+                            "error": "a payout with this reference is still in flight"})
             continue
 
         try:
@@ -674,9 +690,13 @@ def create_bulk_payout():
                 "amount": payout.amount,
                 "recipient_phone": payout.recipient_phone,
             }
-            idempotency.store(merchant.id, idem_key, idempotency.hash_body(item), 201, out)
+            idempotency.store(merchant.id, idem_key, item_hash, 201, out)
             results.append({"index": i, "ok": True, "reference": ref, **out})
         except PayoutError as exc:
+            # No money moved on a clean rejection — release so the reference can
+            # be retried (e.g. after the merchant tops up), matching the bulk
+            # path's prior retry-on-rejection behaviour.
+            idempotency.release(merchant.id, idem_key)
             results.append({"index": i, "ok": False, "reference": ref, "error": str(exc)})
 
     accepted = sum(1 for r in results if r.get("ok"))
