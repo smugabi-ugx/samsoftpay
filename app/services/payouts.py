@@ -75,6 +75,14 @@ def create_payout(
         raise PayoutError("demo only supports UGX")
     if not merchant.is_active:
         raise PayoutError("merchant is not active")
+    # KYC gate on LIVE money creation (proven gap: a pending-KYC merchant's
+    # sk_live_ key created real payouts — the dashboard wall never applied to
+    # the API, the actual integration path). Test mode stays open: building
+    # never requires approval. Zero writes on refusal.
+    if g.get("api_mode") != "test" and merchant.kyc_status != "verified":
+        raise PayoutError(
+            "live payouts require a verified business — complete verification "
+            "on your dashboard (test keys work immediately)")
 
     # Resolve the rail BEFORE any money moves. This used to happen after the
     # earmark was staged, so an unsupported channel (e.g. airtel_money) returned
@@ -278,6 +286,65 @@ def complete_payout(
 
     payout.completed_at = datetime.now(timezone.utc)
     db.session.commit()
+
+    # Terminal side-effects, AFTER the money is committed. Never raise — a
+    # bookkeeping/notification failure must not disturb a posted completion
+    # (same pattern as the charge-side hooks).
+    _finish_withdrawal_request(payout)
+    _queue_payout_webhook(payout)
+
+
+def _finish_withdrawal_request(payout) -> None:
+    """A WithdrawalRequest used to stay 'processing' FOREVER — nothing anywhere
+    moved it to a terminal state after its payout succeeded or failed, so the
+    merchant's dashboard never confirmed their money left (and a failed payout
+    never surfaced for admin retry). Never raises."""
+    try:
+        from ..models import WithdrawalRequest
+        wr = WithdrawalRequest.query.filter_by(payout_id=payout.id).first()
+        if wr is None or wr.status not in ("pending", "processing"):
+            return
+        wr.status = ("completed" if payout.status == PayoutStatus.SUCCEEDED
+                     else "failed")
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception(
+                "failed to finalise withdrawal request for payout %s", payout.public_id)
+        except Exception:
+            pass
+
+
+def _queue_payout_webhook(payout) -> None:
+    """payout.succeeded / payout.failed events — payout outcomes were poll-only
+    (the event catalogue stopped at charge.* / vending.*), so a platform like
+    KarlPOS finalising on the 201 could lose a late rail failure. Same signed
+    envelope + per-merchant whsec as every other event. Never raises."""
+    try:
+        merchant = db.session.get(Merchant, payout.merchant_id)
+        if not merchant or not getattr(merchant, "webhook_url", None):
+            return
+        from .webhooks import enqueue
+        enqueue(merchant, f"payout.{payout.status.value}", {
+            "id": payout.public_id,
+            "mode": "test" if payout.is_test else "live",
+            "status": payout.status.value,
+            "amount": payout.amount,
+            "fee": payout.fee_amount,
+            "currency": payout.currency,
+            "recipient_phone": payout.recipient_phone,
+            "rail_reference": payout.rail_reference,
+            "failure_reason": payout.failure_reason,
+            "completed_at": payout.completed_at.isoformat() if payout.completed_at else None,
+        })
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception(
+                "failed to enqueue payout webhook for %s", payout.public_id)
+        except Exception:
+            pass
 
 
 # ---------- Adapter selection ----------

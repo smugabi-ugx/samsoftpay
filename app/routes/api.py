@@ -4,8 +4,10 @@ Auth:         Bearer secret_key in Authorization header.
 Idempotency:  Idempotency-Key header required on all POST requests.
 Replay guard: X-Timestamp header (Unix seconds) required on POST requests.
               Rejected if timestamp is more than 5 minutes old.
-Rate limits:  POST /v1/charges  — 30/min, 200/hr per API key
-              POST /v1/payouts  — 10/min, 100/hr per API key
+Rate limits:  POST /v1/charges  — CHARGE_RATE_LIMIT (default 120/min, 3000/hr) per key
+              POST /v1/payouts  — PAYOUT_RATE_LIMIT (default 30/min, 600/hr) per key
+              High-volume platforms: use /v1/payouts/bulk (one request, many
+              payouts) and honour 429 Retry-After.
 """
 import json
 import time
@@ -150,7 +152,7 @@ def _err(e):
 # ---------- charges ----------
 
 @bp.post("/charges")
-@limiter.limit("30 per minute;200 per hour")
+@limiter.limit(lambda: __import__("flask").current_app.config["CHARGE_RATE_LIMIT"])
 def create_charge_route():
     _check_timestamp()
     merchant = _auth()
@@ -399,7 +401,7 @@ def refund_charge_route(public_id: str):
 # ---------- payouts ----------
 
 @bp.post("/payouts")
-@limiter.limit("10 per minute;100 per hour")
+@limiter.limit(lambda: __import__("flask").current_app.config["PAYOUT_RATE_LIMIT"])
 def create_payout_route():
     from ..models import Payout
     from ..services.payouts import PayoutError, create_payout
@@ -831,7 +833,7 @@ def _parse_bulk_items() -> list:
 
 
 @bp.post("/payouts/bulk")
-@limiter.limit("10 per minute;100 per hour")
+@limiter.limit(lambda: __import__("flask").current_app.config["PAYOUT_RATE_LIMIT"])
 def create_bulk_payout():
     """Create many payouts in one call from a CSV (or JSON array).
 
@@ -878,6 +880,12 @@ def create_bulk_payout():
             if existing.response_status == idempotency.IN_FLIGHT:
                 results.append({"index": i, "ok": False, "reference": ref,
                                 "error": "a payout with this reference is still in flight"})
+            elif existing.request_hash != item_hash:
+                # Same reference, DIFFERENT payout details: silently returning
+                # the old payout as ok:true meant a caller's reference-reuse bug
+                # reported success while paying nobody the new amount.
+                results.append({"index": i, "ok": False, "reference": ref,
+                                "error": "reference reused with different payout details"})
             else:
                 results.append({"index": i, "ok": True, "reference": ref,
                                 **json.loads(existing.response_body)})

@@ -141,6 +141,12 @@ def create_app(config: dict | None = None) -> Flask:
         # 64-bit BigInteger ceiling (prevents an INSERT overflow crash); set
         # MAX_TXN_AMOUNT to MTN's real per-transaction limit to tighten it.
         MAX_TXN_AMOUNT=int(os.environ.get("MAX_TXN_AMOUNT", str((1 << 63) - 1))),
+        # Per-KEY API rate limits (checkout's public 10/min limits are separate).
+        # Raised from 30/200 + 10/100: a PLATFORM (KarlPOS: 61 shops on one key)
+        # pools all traffic through one key, so the old values were a
+        # platform-wide ceiling. Override per deployment via env.
+        CHARGE_RATE_LIMIT=os.environ.get("CHARGE_RATE_LIMIT", "120 per minute;3000 per hour"),
+        PAYOUT_RATE_LIMIT=os.environ.get("PAYOUT_RATE_LIMIT", "30 per minute;600 per hour"),
         # ---- MTN MoMo real-rail config (only used when MOMO_USE_REAL=1) ----
         MOMO_USE_REAL=os.environ.get("MOMO_USE_REAL", "0") == "1",
         MOMO_BASE_URL=os.environ.get(
