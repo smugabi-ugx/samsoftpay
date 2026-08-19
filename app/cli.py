@@ -301,6 +301,175 @@ def register(app: Flask) -> None:
             if not password:
                 print(f"new password: {new_pw}")
 
+    @app.cli.command("preflight")
+    @click.option("--skip-network", is_flag=True,
+                  help="Skip live network checks (MTN tokens, Redis ping).")
+    def preflight(skip_network):
+        """Go-live preflight: verify secrets, DB, Redis, MTN credentials and the
+        money guards in ONE command. Exit 0 = ready; exit 1 = at least one FAIL.
+
+        Run after every deploy and BEFORE flipping MTN production on. This is
+        also the artifact to show a partner: 'here is our go-live check.'
+        """
+        import os
+        import sys as _sys
+        from sqlalchemy import text as _text
+
+        results = []
+
+        def check(name, ok, detail="", warn=False):
+            status = "PASS" if ok else ("WARN" if warn else "FAIL")
+            results.append((status, name, detail if not ok else ""))
+
+        with app.app_context():
+            cfg = app.config
+            on_render = bool(os.environ.get("RENDER"))
+            momo_real = bool(cfg.get("MOMO_USE_REAL"))
+            base_url = str(cfg.get("MOMO_BASE_URL") or "")
+            sandbox_url = "sandbox.momodeveloper" in base_url
+
+            # ── secrets ──
+            sk = str(cfg.get("SECRET_KEY") or "")
+            check("SECRET_KEY strong",
+                  bool(sk) and sk != "dev-only-do-not-use-in-prod" and len(sk) >= 32,
+                  "set a 32+ char random value")
+            ws = str(cfg.get("WEBHOOK_SIGNING_SECRET") or "")
+            check("WEBHOOK_SIGNING_SECRET strong",
+                  bool(ws) and not ws.startswith("whsec_demo")
+                  and ws != "whsec_change_me_in_production" and len(ws) >= 24,
+                  "set a strong inbound-only secret")
+            # Key separation: the inbound secret must never be any merchant's
+            # outbound whsec_ (guardrail 22).
+            clash = Merchant.query.filter(Merchant.webhook_secret == ws).count() if ws else 0
+            check("inbound secret differs from every merchant webhook_secret",
+                  clash == 0, f"{clash} merchant(s) share the global secret — rotate")
+
+            base = str(cfg.get("BASE_URL") or "")
+            check("BASE_URL is https", base.startswith("https://"),
+                  f"BASE_URL={base or '(unset)'}", warn=not on_render)
+
+            # ── database ──
+            db_url = str(cfg.get("SQLALCHEMY_DATABASE_URI") or "")
+            check("DATABASE_URL is not SQLite (production)",
+                  not db_url.startswith("sqlite"), db_url.split("://")[0],
+                  warn=not on_render)
+            try:
+                db.session.execute(_text("SELECT 1"))
+                check("database reachable", True)
+            except Exception as exc:
+                check("database reachable", False, str(exc)[:120])
+
+            # ── migrations: db version vs script heads ──
+            try:
+                from alembic.config import Config as _ACfg
+                from alembic.script import ScriptDirectory
+                acfg = _ACfg()
+                acfg.set_main_option("script_location", "migrations")
+                heads = set(ScriptDirectory.from_config(acfg).get_heads())
+                try:
+                    db_vers = set(db.session.execute(
+                        _text("SELECT version_num FROM alembic_version")).scalars())
+                except Exception:
+                    db_vers = set()
+                check("single migration head",
+                      len(heads) == 1, f"heads={sorted(heads)} — run `flask db merge heads`",
+                      warn=True)
+                check("database is at the migration head",
+                      bool(db_vers) and db_vers <= heads,
+                      f"db={sorted(db_vers) or 'none'} vs heads={sorted(heads)} — run `flask db upgrade`")
+            except Exception as exc:
+                check("migration state readable", False, str(exc)[:120], warn=True)
+
+            # ── redis ──
+            if skip_network:
+                check("redis reachable", True, "skipped (--skip-network)", warn=True)
+            else:
+                try:
+                    import redis as _redis
+                    _redis.from_url(cfg.get("REDIS_URL"), socket_timeout=3,
+                                    socket_connect_timeout=3).ping()
+                    check("redis reachable", True)
+                except Exception as exc:
+                    check("redis reachable", False, str(exc)[:120], warn=not on_render)
+
+            # ── rails / money guards ──
+            check("MOMO_USE_REAL enabled", momo_real,
+                  "mock rails only — fine for dev, NOT for live money",
+                  warn=not on_render)
+            check("ALLOW_SIMULATED_RAILS not set in production",
+                  not (on_render and cfg.get("ALLOW_SIMULATED_RAILS")),
+                  "unset ALLOW_SIMULATED_RAILS — it lets mocks settle live money")
+            check("sandbox is deterministic (RAIL_SUCCESS_PROBABILITY=1.0)",
+                  float(cfg.get("RAIL_SUCCESS_PROBABILITY", 1.0)) == 1.0,
+                  "guardrail 16 — do not lower it", warn=True)
+
+            if momo_real:
+                currency = str(cfg.get("MOMO_CURRENCY") or "")
+                if sandbox_url:
+                    check("MTN env: SANDBOX (EUR expected)", currency == "EUR",
+                          f"MOMO_CURRENCY={currency} — sandbox uses EUR", warn=True)
+                else:
+                    check("MTN env: PRODUCTION uses UGX", currency == "UGX",
+                          f"MOMO_CURRENCY={currency} — production must be UGX")
+                    check("MOMO_TARGET_ENV is not 'sandbox' in production",
+                          str(cfg.get("MOMO_TARGET_ENV")) != "sandbox",
+                          "set the production target environment MTN assigns")
+                for label, keys in (
+                    ("collections credentials present",
+                     ("MOMO_SUBSCRIPTION_KEY", "MOMO_API_USER", "MOMO_API_KEY")),
+                    ("disbursement credentials present",
+                     ("MOMO_DISBURSEMENT_SUBSCRIPTION_KEY",
+                      "MOMO_DISBURSEMENT_API_USER", "MOMO_DISBURSEMENT_API_KEY")),
+                ):
+                    missing = [k for k in keys if not cfg.get(k)]
+                    check(label, not missing, f"missing: {', '.join(missing)}")
+
+                if not skip_network:
+                    try:
+                        from .services.rails_mtn_real import _get_token as _col_token
+                        _col_token(subscription_key=cfg["MOMO_SUBSCRIPTION_KEY"],
+                                   api_user=cfg["MOMO_API_USER"],
+                                   api_key=cfg["MOMO_API_KEY"], base_url=base_url)
+                        check("MTN collections token fetch", True)
+                    except Exception as exc:
+                        check("MTN collections token fetch", False, str(exc)[:120])
+                    try:
+                        from .services.rails_mtn_disbursement import _get_token as _dis_token
+                        _dis_token(subscription_key=cfg["MOMO_DISBURSEMENT_SUBSCRIPTION_KEY"],
+                                   api_user=cfg["MOMO_DISBURSEMENT_API_USER"],
+                                   api_key=cfg["MOMO_DISBURSEMENT_API_KEY"],
+                                   base_url=base_url)
+                        check("MTN disbursement token fetch", True)
+                    except Exception as exc:
+                        check("MTN disbursement token fetch", False, str(exc)[:120])
+
+            # ── key hygiene ──
+            unhashed = Merchant.query.filter(
+                Merchant.secret_key.isnot(None),
+                Merchant.secret_key_hash.is_(None)).count()
+            check("all live keys hashed at rest", unhashed == 0,
+                  f"{unhashed} merchant(s) unhashed — run `flask backfill-key-hashes`",
+                  warn=True)
+
+        # ── report ──
+        icons = {"PASS": "[ ok ]", "WARN": "[warn]", "FAIL": "[FAIL]"}
+        print("\nSAMSOFTPAY GO-LIVE PREFLIGHT")
+        print("=" * 60)
+        for status, name, detail in results:
+            line = f"{icons[status]} {name}"
+            if detail:
+                line += f"  -> {detail}"
+            print(line)
+        fails = sum(1 for s, _, _ in results if s == "FAIL")
+        warns = sum(1 for s, _, _ in results if s == "WARN")
+        print("=" * 60)
+        print(f"{len(results)} checks: {len(results) - fails - warns} pass, "
+              f"{warns} warn, {fails} FAIL")
+        if fails:
+            print("NOT READY — fix the FAIL items above before going live.")
+            _sys.exit(1)
+        print("READY" + (" (with warnings)" if warns else ""))
+
     @app.cli.command("reconcile-mtn")
     def reconcile_mtn():
         """Reconcile live MTN charges against MTN's OWN status, and list open exceptions."""

@@ -134,6 +134,10 @@ def create_app(config: dict | None = None) -> Flask:
         MOMO_SUBSCRIPTION_KEY=os.environ.get("MOMO_SUBSCRIPTION_KEY", ""),
         MOMO_API_USER=os.environ.get("MOMO_API_USER", ""),
         MOMO_API_KEY=os.environ.get("MOMO_API_KEY", ""),
+        # Opt-in: set ONLY once MTN provisions the API user with a matching
+        # providerCallbackHost (see rails_mtn_real). Enables instant completion
+        # via /inbound/mtn/callback instead of poller latency.
+        MOMO_CALLBACK_URL=os.environ.get("MOMO_CALLBACK_URL", ""),
         # ---- MTN MoMo Disbursement (payout) credentials ----
         MOMO_DISBURSEMENT_SUBSCRIPTION_KEY=os.environ.get(
             "MOMO_DISBURSEMENT_SUBSCRIPTION_KEY", ""
