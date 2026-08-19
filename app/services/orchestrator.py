@@ -66,6 +66,7 @@ def create_charge(
     customer_phone: str | None,
     customer_email: str | None,
     merchant_reference: str | None,
+    split: list | None = None,
 ) -> Transaction:
     if amount <= 0:
         raise OrchestratorError("amount must be positive")
@@ -100,6 +101,17 @@ def create_charge(
     if fee >= amount:
         raise OrchestratorError("fee exceeds amount")
 
+    # Split payments: validate BEFORE any write, against N = amount − fee (the
+    # only base — an over-N split would mint money). A bad split rejects the
+    # whole charge with zero rows, same discipline as the guards above.
+    if split:
+        from .splits import SplitError, validate_split
+        try:
+            validate_split(merchant=merchant, split=split, amount=amount,
+                           fee=fee, currency=currency)
+        except SplitError as exc:
+            raise OrchestratorError(f"invalid split: {exc}")
+
     txn = Transaction(
         public_id=f"txn_{uuid.uuid4().hex[:16]}",
         merchant_id=merchant.id,
@@ -112,6 +124,7 @@ def create_charge(
         merchant_reference=merchant_reference,
         customer_phone=customer_phone,
         customer_email=customer_email,
+        split_meta=json.dumps(split) if split else None,
     )
     db.session.add(txn)
     # COMMIT, not flush: the record must be durable BEFORE any outbound rail
@@ -206,36 +219,49 @@ def complete_transaction(
             currency=txn.currency,
             is_test=mode,
         )
-        # Instant-settlement merchants (e.g. our own products like KarlPOS) skip the
-        # 24h hold — funds land directly in MERCHANT_AVAILABLE and are withdrawable now.
-        dest_type = AccountType.MERCHANT_AVAILABLE if instant else AccountType.MERCHANT_PENDING
-        merch_dest = ledger.get_or_create_account(
-            type=dest_type,
-            merchant_id=txn.merchant_id,
-            currency=txn.currency,
-            is_test=mode,
-        )
         revenue = ledger.get_or_create_account(
             type=AccountType.PSP_REVENUE,
             merchant_id=None,
             currency=txn.currency,
             is_test=mode,
         )
-        ledger.post(
-            [
-                (rail_acct, +txn.amount),
-                (merch_dest, -(txn.amount - txn.fee_amount)),
-                (revenue, -txn.fee_amount),
-            ],
-            currency=txn.currency,
-            transaction_id=txn.id,
-            memo=f"charge {txn.public_id} succeeded"
-                 + (" (instant settle)" if instant else ""),
-        )
+
+        # Split charge: fan the net out to subaccounts + the platform residual
+        # (see services/splits.py — audited money model). MUTUALLY EXCLUSIVE
+        # with the single-merchant/instant path below: exactly one posts, and
+        # everything (legs, allocation rows, status, settled_at) shares the
+        # single commit at the end of this locked block.
+        split_posted = False
+        if getattr(txn, "split_meta", None):
+            from .splits import post_split_success
+            split_posted = post_split_success(
+                txn, rail_acct=rail_acct, revenue=revenue, mode=mode)
+
+        if not split_posted:
+            # Instant-settlement merchants (e.g. our own products like KarlPOS)
+            # skip the 24h hold — funds land directly in MERCHANT_AVAILABLE.
+            dest_type = AccountType.MERCHANT_AVAILABLE if instant else AccountType.MERCHANT_PENDING
+            merch_dest = ledger.get_or_create_account(
+                type=dest_type,
+                merchant_id=txn.merchant_id,
+                currency=txn.currency,
+                is_test=mode,
+            )
+            ledger.post(
+                [
+                    (rail_acct, +txn.amount),
+                    (merch_dest, -(txn.amount - txn.fee_amount)),
+                    (revenue, -txn.fee_amount),
+                ],
+                currency=txn.currency,
+                transaction_id=txn.id,
+                memo=f"charge {txn.public_id} succeeded"
+                     + (" (instant settle)" if instant else ""),
+            )
+            if instant:
+                # Already in available; mark settled so the sweep never re-moves it.
+                txn.settled_at = datetime.now(timezone.utc)
         txn.status = TxnStatus.SUCCEEDED
-        if instant:
-            # Already in available; mark settled so the sweep never re-moves it.
-            txn.settled_at = datetime.now(timezone.utc)
     else:
         txn.status = TxnStatus.FAILED
         txn.failure_reason = reason or "unknown"

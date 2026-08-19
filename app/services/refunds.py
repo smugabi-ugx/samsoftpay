@@ -40,6 +40,14 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     if txn.merchant_id != merchant.id:
         raise RefundError("transaction does not belong to this merchant")
 
+    # Split charges are NOT refundable in v1 — the adversarial money audit found
+    # three critical hazards in split refunds (clawback stranding when the
+    # customer disbursement fails, cross-mode ledger leak, in-hold funding).
+    # Reject cleanly with ZERO writes until the hardened split-refund lands;
+    # never ship a known-unsafe money path.
+    if getattr(txn, "split_meta", None):
+        return {"ok": False, "error": "split_charge_refunds_not_yet_supported"}
+
     # Row-lock before the status checks: two concurrent refund requests for
     # the same charge both read SUCCEEDED and both created a refund payout —
     # double money out. FOR UPDATE serialises them; the loser re-reads

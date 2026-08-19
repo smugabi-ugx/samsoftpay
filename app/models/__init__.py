@@ -138,6 +138,14 @@ class Merchant(UserMixin, db.Model):
     xy_secret_encrypted = Column(Text, nullable=True)
     xy_merchant_no = Column(String(60), nullable=True)   # shbh
     xy_base_url = Column(String(200), nullable=True)
+    # ── Split payments / subaccounts ──
+    # A subaccount is a MANAGED Merchant: parent_merchant_id points at the
+    # platform that owns it, is_managed=True means it can never log in or call
+    # the API (see api._auth). Because a subaccount IS a Merchant it already
+    # owns MERCHANT_PENDING/AVAILABLE ledger accounts (keyed merchant+mode),
+    # so settlement, payouts and balance reads work for it with no new plumbing.
+    parent_merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
+    is_managed = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     accounts = relationship("Account", back_populates="merchant")
@@ -251,11 +259,58 @@ class Transaction(db.Model):
     # Direct-dispense consumption claim (POST /v1/vending/dispense): NULL =
     # this charge has not yet paid for a dispense. Set atomically, once.
     vending_consumed_at = Column(DateTime, nullable=True)
+    # Immutable split SPEC (JSON list of {subaccount, amount|bps}) captured at
+    # create. NULL = ordinary single-merchant charge (unchanged path). Resolved
+    # into SplitAllocation rows only when the charge actually SUCCEEDS.
+    split_meta = Column(Text, nullable=True)
 
     merchant = relationship("Merchant", back_populates="transactions")
 
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_txn_amount_positive"),
+    )
+
+
+class Subaccount(db.Model):
+    """A platform's sub-merchant (split-payments party).
+
+    Thin metadata over a MANAGED Merchant row: the Merchant carries the ledger
+    identity (accounts, settlement, payouts); this row carries the platform
+    relationship, the API-facing sub_... id, and the payout destination.
+    """
+    __tablename__ = "subaccounts"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)   # sub_...
+    platform_merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, unique=True)
+    name = Column(String(200), nullable=False)
+    external_ref = Column(String(120), nullable=True)    # the platform's own id for this party
+    payout_phone = Column(String(20), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+
+class SplitAllocation(db.Model):
+    """One party's share of a SUCCEEDED split charge.
+
+    The settlement unit for splits: each share settles pending->available after
+    the charge's own hold (its own settled_at — guardrail 4 per share). The
+    platform's rounding-residual is stored as one of these rows too, so it
+    settles through the same path.
+    """
+    __tablename__ = "split_allocations"
+    id = Column(Integer, primary_key=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    amount = Column(BigInteger, nullable=False)
+    currency = Column(String(3), nullable=False, default="UGX")
+    is_test = Column(Boolean, default=False, nullable=False)
+    settled_at = Column(DateTime, nullable=True, index=True)
+    reversed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("transaction_id", "merchant_id", name="uq_split_alloc"),
+        CheckConstraint("amount > 0", name="ck_split_alloc_amount_positive"),
     )
 
 
