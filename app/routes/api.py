@@ -81,6 +81,32 @@ def _check_timestamp() -> None:
         abort(400, description="request timestamp is too far in the future — check your system clock")
 
 
+def _optional_idempotency(merchant, body):
+    """Optional-but-honored idempotency for money-adjacent CREATE endpoints
+    (payment links, vending orders). If the caller sends an Idempotency-Key we
+    dedupe a retried create (reserve-before-execute, like /charges); if not, we
+    proceed — so existing integrators that don't send one keep working.
+
+    Returns (idem_key, request_hash, cached). `cached` is (body, status) to
+    return directly when the key was already completed, else None. Call all
+    input validation BEFORE this so a bad request never reserves a key.
+    """
+    idem_key = request.headers.get("Idempotency-Key")
+    if not idem_key:
+        return None, None, None
+    request_hash = idempotency.hash_body(body)
+    existing = idempotency.find(merchant.id, idem_key)
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            abort(409, description="idempotency key reused with different request body")
+        if existing.response_status == idempotency.IN_FLIGHT:
+            abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
+        return idem_key, request_hash, (json.loads(existing.response_body), existing.response_status)
+    if not idempotency.reserve(merchant.id, idem_key, request_hash):
+        abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
+    return idem_key, request_hash, None
+
+
 # ---------- error handlers ----------
 
 @bp.errorhandler(400)
@@ -368,6 +394,12 @@ def create_vending_order():
     except (KeyError, ValueError, TypeError):
         abort(400, description="amount (positive integer) is required")
 
+    # Idempotency (honored when a key is sent): a retried POST /vending/orders
+    # used to create a duplicate order + QR against the same machine.
+    idem_key, request_hash, cached = _optional_idempotency(merchant, body)
+    if cached is not None:
+        return jsonify(cached[0]), cached[1]
+
     try:
         link = vending.create_order(
             merchant=merchant,
@@ -382,12 +414,14 @@ def create_vending_order():
             is_test=(g.api_mode == "test"),
         )
     except vending.VendingError as exc:
+        if idem_key:
+            idempotency.release(merchant.id, idem_key)   # nothing created — allow retry
         abort(400, description=str(exc))
 
     pay_url = url_for("checkout.checkout_page", public_id=link.public_id, _external=True)
     log_event("vending.order_created", merchant_id=merchant.id, resource_id=link.public_id,
               detail={"machine": body.get("machine"), "amount": amount})
-    return jsonify(
+    out = dict(
         order_id=link.public_id,
         amount=link.amount,
         currency=link.currency,
@@ -400,7 +434,10 @@ def create_vending_order():
         status_url=url_for("api.get_vending_order", order_id=link.public_id, _external=True),
         payment_status="unpaid",
         vending_status=link.vending_status,
-    ), 201
+    )
+    if idem_key:
+        idempotency.store(merchant.id, idem_key, request_hash, 201, out)
+    return jsonify(out), 201
 
 
 @bp.get("/vending/orders/<order_id>")
@@ -717,6 +754,16 @@ def create_payment_link():
             abort(400, description=f"success_url and cancel_url must start with https://")
         return val or None
 
+    success_url = _safe_url(body.get("success_url"))
+    cancel_url = _safe_url(body.get("cancel_url"))
+
+    # Idempotency AFTER all validation: a retried POST /payment-links used to
+    # silently create a duplicate link (+QR) the merchant found only when a
+    # customer paid the wrong one. Honored when a key is sent.
+    idem_key, request_hash, cached = _optional_idempotency(merchant, body)
+    if cached is not None:
+        return jsonify(cached[0]), cached[1]
+
     link = PaymentLink(
         public_id=f"lnk_{_uuid.uuid4().hex[:16]}",
         merchant_id=merchant.id,
@@ -724,8 +771,8 @@ def create_payment_link():
         currency=currency,
         description=str(body.get("description") or "")[:255] or None,
         reference=str(body.get("reference") or "")[:120] or None,
-        success_url=_safe_url(body.get("success_url")),
-        cancel_url=_safe_url(body.get("cancel_url")),
+        success_url=success_url,
+        cancel_url=cancel_url,
         allow_multiple_uses=bool(body.get("allow_multiple_uses", False)),
         is_test=(g.api_mode == "test"),
     )
@@ -734,7 +781,7 @@ def create_payment_link():
 
     log_event("payment_link.created", merchant_id=merchant.id, resource_id=link.public_id,
               detail={"amount": link.amount})
-    return jsonify(
+    out = dict(
         id=link.public_id,
         amount=link.amount,
         currency=link.currency,
@@ -745,7 +792,10 @@ def create_payment_link():
         # cached hard. A plain link's URL never changes once created.
         qr_png_url=url_for("checkout.order_qr_png", public_id=link.public_id, _external=True),
         qr_svg_url=url_for("checkout.order_qr_svg", public_id=link.public_id, _external=True),
-    ), 201
+    )
+    if idem_key:
+        idempotency.store(merchant.id, idem_key, request_hash, 201, out)
+    return jsonify(out), 201
 
 
 @bp.get("/payment-links/<public_id>")
