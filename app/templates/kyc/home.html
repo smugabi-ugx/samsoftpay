@@ -24,7 +24,7 @@
   <div>
     <strong>Status: {{ app.status.replace('_',' ').title() }}</strong>
     {% if app.status == 'draft' %} — Complete all steps and submit.
-    {% elif app.status == 'submitted' %} — Under review. We'll email you within 2 business days.
+    {% elif app.status == 'submitted' %} — Under review (usually within 2 business days). Check this page for your status; we don't send email yet.
     {% elif app.status == 'under_review' %} — Our compliance team is reviewing your documents.
     {% elif app.status == 'approved' %} — Your account is fully verified.
     {% elif app.status == 'rejected' %} — {{ app.reviewer_notes or 'Please contact support.' }}
