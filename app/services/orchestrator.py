@@ -83,6 +83,14 @@ def create_charge(
         raise OrchestratorError("demo only supports UGX")
     if not merchant.is_active:
         raise OrchestratorError("merchant is not active")
+    # KYC gate on LIVE money creation (proven gap: a pending-KYC merchant's
+    # sk_live_ key created real charges — the dashboard wall never applied to
+    # the API, the actual integration path). Test mode stays open: building
+    # never requires approval. Zero writes on refusal.
+    if g.get("api_mode") != "test" and merchant.kyc_status != "verified":
+        raise OrchestratorError(
+            "live charges require a verified business — complete verification "
+            "on your dashboard (test keys work immediately)")
 
     # A simulated rail must never settle live money. The mock flips a charge to
     # SUCCEEDED on a timer with nothing collected, which credits the merchant's
