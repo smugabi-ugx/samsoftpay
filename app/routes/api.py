@@ -38,6 +38,9 @@ def _auth() -> Merchant:
     from ..models import hash_api_key
     token_hash = hash_api_key(token)
 
+    # g.key_scope: "full" (charges + payouts) or "collections" (charges only).
+    # Full secret keys checked first, then collections-only keys.
+    g.key_scope = "full"
     merchant = Merchant.query.filter_by(test_secret_key_hash=token_hash).one_or_none()
     if merchant:
         g.api_mode = "test"
@@ -46,19 +49,39 @@ def _auth() -> Merchant:
         if merchant:
             g.api_mode = "live"
         else:
-            # Legacy plaintext fallback (pre-backfill).
-            merchant = Merchant.query.filter_by(test_secret_key=token).one_or_none()
+            merchant = Merchant.query.filter_by(test_collections_key_hash=token_hash).one_or_none()
             if merchant:
-                g.api_mode = "test"
+                g.api_mode, g.key_scope = "test", "collections"
             else:
-                merchant = Merchant.query.filter_by(secret_key=token).one_or_none()
+                merchant = Merchant.query.filter_by(collections_key_hash=token_hash).one_or_none()
                 if merchant:
-                    g.api_mode = "live"
+                    g.api_mode, g.key_scope = "live", "collections"
+                else:
+                    # Legacy plaintext fallback (pre-backfill) — full keys only.
+                    merchant = Merchant.query.filter_by(test_secret_key=token).one_or_none()
+                    if merchant:
+                        g.api_mode = "test"
+                    else:
+                        merchant = Merchant.query.filter_by(secret_key=token).one_or_none()
+                        if merchant:
+                            g.api_mode = "live"
 
     if merchant is None or not merchant.is_active:
         log_event("auth.failed", detail={"reason": "invalid_key"})
         abort(401, description="invalid api key")
     return merchant
+
+
+def _require_full_scope() -> None:
+    """Reject a collections-only key on a money-OUT endpoint.
+
+    This is the whole point of scoped keys: a kiosk credential (which can be
+    decompiled off a public machine) must never be able to move money out.
+    """
+    if g.get("key_scope") != "full":
+        log_event("auth.scope_denied", detail={"endpoint": request.path})
+        abort(403, description="this endpoint requires a full secret key; "
+                               "collections-only keys cannot move money out")
 
 
 def _check_timestamp() -> None:
@@ -211,6 +234,7 @@ def refund_charge_route(public_id: str):
 
     _check_timestamp()
     merchant = _auth()
+    _require_full_scope()   # refund moves money out — collections-only keys forbidden
     txn = Transaction.query.filter_by(
         public_id=public_id, merchant_id=merchant.id
     ).one_or_none()
@@ -251,6 +275,7 @@ def create_payout_route():
 
     _check_timestamp()
     merchant = _auth()
+    _require_full_scope()   # money out — collections-only keys forbidden
 
     idem_key = request.headers.get("Idempotency-Key")
     if not idem_key:
@@ -632,6 +657,7 @@ def create_bulk_payout():
 
     _check_timestamp()
     merchant = _auth()
+    _require_full_scope()   # bulk money out — collections-only keys forbidden
 
     items = _parse_bulk_items()
     if not items:

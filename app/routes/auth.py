@@ -544,3 +544,32 @@ def rotate_keys(key_type: str):
     from flask import flash
     flash(msg, "success")
     return redirect(url_for("auth.account") + "#keys-" + key_type)
+
+
+@bp.post("/account/collections-keys/<key_type>")
+@login_required
+@verified_required
+def collections_keys(key_type: str):
+    """Generate (or rotate) a collections-only key.
+
+    A collections key can create charges, vending orders and payment links but is
+    403'd on every money-OUT endpoint (payouts, bulk payouts, refunds). It is the
+    credential to put on a public kiosk/device, where a full secret key could be
+    decompiled and used to drain the merchant. Prefixed sk_*_col_ so it is obvious
+    at a glance which kind of key a leaked string is.
+    """
+    if key_type not in ("test", "live"):
+        from flask import abort
+        abort(400)
+    m = db.session.get(Merchant, current_user.id)
+    if key_type == "test":
+        m.test_collections_key = "sk_test_col_" + secrets.token_urlsafe(24)
+        msg = "Test collections key generated. Safe to embed on a kiosk/device."
+    else:
+        m.collections_key = "sk_live_col_" + secrets.token_urlsafe(24)
+        msg = ("Live collections key generated. It can take payments but can never "
+               "move money out — safe for a public machine.")
+    db.session.commit()
+    from flask import flash
+    flash(msg, "success")
+    return redirect(url_for("auth.account") + "#keys-" + key_type)
