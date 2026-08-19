@@ -172,13 +172,10 @@ def create_charge_route():
     return jsonify(out), 201
 
 
-@bp.get("/charges/<public_id>")
-def get_charge(public_id: str):
-    merchant = _auth()
-    txn = Transaction.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
-    if txn is None:
-        abort(404)
-    return jsonify(
+def _charge_public(txn) -> dict:
+    """Public charge shape — shared by the by-id and list endpoints so they
+    can never drift."""
+    return dict(
         id=txn.public_id,
         mode="test" if txn.is_test else "live",
         status=txn.status.value,
@@ -191,6 +188,81 @@ def get_charge(public_id: str):
         failure_reason=txn.failure_reason,
         created_at=txn.created_at.isoformat() if txn.created_at else None,
         completed_at=txn.completed_at.isoformat() if txn.completed_at else None,
+    )
+
+
+def _parse_list_params(default_limit=20, max_limit=100):
+    """limit (clamped) + created_after/created_before (ISO 8601). 400 on bad input."""
+    from datetime import datetime
+    try:
+        limit = int(request.args.get("limit", default_limit))
+    except ValueError:
+        abort(400, description="limit must be an integer")
+    limit = max(1, min(limit, max_limit))
+
+    def _dt(name):
+        raw = request.args.get(name)
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            abort(400, description=f"{name} must be an ISO 8601 datetime")
+    return limit, _dt("created_after"), _dt("created_before")
+
+
+@bp.get("/charges/<public_id>")
+def get_charge(public_id: str):
+    merchant = _auth()
+    txn = Transaction.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
+    if txn is None:
+        abort(404)
+    return jsonify(_charge_public(txn))
+
+
+@bp.get("/charges")
+def list_charges():
+    """List this merchant's charges, newest first. Cursor pagination
+    (limit + starting_after=<charge id>), mode-scoped to the key (a test key
+    sees only test charges), never another merchant's rows. Filters: status,
+    reference, created_after/created_before (ISO 8601)."""
+    from ..models import TxnStatus
+    merchant = _auth()
+    q = Transaction.query.filter_by(
+        merchant_id=merchant.id, is_test=(g.api_mode == "test"))
+
+    status_f = request.args.get("status")
+    if status_f:
+        try:
+            q = q.filter(Transaction.status == TxnStatus(status_f))
+        except ValueError:
+            abort(400, description=f"invalid status: {status_f}")
+    ref = request.args.get("reference")
+    if ref:
+        q = q.filter(Transaction.merchant_reference == ref)
+
+    limit, after, before = _parse_list_params()
+    if after:
+        q = q.filter(Transaction.created_at >= after)
+    if before:
+        q = q.filter(Transaction.created_at <= before)
+
+    starting_after = request.args.get("starting_after")
+    if starting_after:
+        cursor = Transaction.query.filter_by(
+            public_id=starting_after, merchant_id=merchant.id).one_or_none()
+        if cursor is None:
+            abort(400, description="invalid starting_after cursor")
+        q = q.filter(Transaction.id < cursor.id)
+
+    rows = q.order_by(Transaction.id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return jsonify(
+        object="list",
+        data=[_charge_public(t) for t in rows],
+        has_more=has_more,
+        next_cursor=(rows[-1].public_id if rows and has_more else None),
     )
 
 
@@ -314,14 +386,9 @@ def create_payout_route():
     return jsonify(out), 201
 
 
-@bp.get("/payouts/<public_id>")
-def get_payout(public_id: str):
-    from ..models import Payout
-    merchant = _auth()
-    p = Payout.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
-    if p is None:
-        abort(404)
-    return jsonify(
+def _payout_public(p) -> dict:
+    """Public payout shape — shared by the by-id and list endpoints."""
+    return dict(
         id=p.public_id,
         mode="test" if p.is_test else "live",
         status=p.status.value,
@@ -334,6 +401,57 @@ def get_payout(public_id: str):
         failure_reason=p.failure_reason,
         created_at=p.created_at.isoformat() if p.created_at else None,
         completed_at=p.completed_at.isoformat() if p.completed_at else None,
+    )
+
+
+@bp.get("/payouts/<public_id>")
+def get_payout(public_id: str):
+    from ..models import Payout
+    merchant = _auth()
+    p = Payout.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
+    if p is None:
+        abort(404)
+    return jsonify(_payout_public(p))
+
+
+@bp.get("/payouts")
+def list_payouts():
+    """List this merchant's payouts, newest first. Cursor pagination
+    (limit + starting_after=<payout id>), mode-scoped, never another merchant's
+    rows. Filters: status, created_after/created_before (ISO 8601)."""
+    from ..models import Payout, PayoutStatus
+    merchant = _auth()
+    q = Payout.query.filter_by(merchant_id=merchant.id, is_test=(g.api_mode == "test"))
+
+    status_f = request.args.get("status")
+    if status_f:
+        try:
+            q = q.filter(Payout.status == PayoutStatus(status_f))
+        except ValueError:
+            abort(400, description=f"invalid status: {status_f}")
+
+    limit, after, before = _parse_list_params()
+    if after:
+        q = q.filter(Payout.created_at >= after)
+    if before:
+        q = q.filter(Payout.created_at <= before)
+
+    starting_after = request.args.get("starting_after")
+    if starting_after:
+        cursor = Payout.query.filter_by(
+            public_id=starting_after, merchant_id=merchant.id).one_or_none()
+        if cursor is None:
+            abort(400, description="invalid starting_after cursor")
+        q = q.filter(Payout.id < cursor.id)
+
+    rows = q.order_by(Payout.id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return jsonify(
+        object="list",
+        data=[_payout_public(p) for p in rows],
+        has_more=has_more,
+        next_cursor=(rows[-1].public_id if rows and has_more else None),
     )
 
 
