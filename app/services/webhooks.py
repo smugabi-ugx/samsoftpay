@@ -8,12 +8,35 @@ Real PSPs typically:
 """
 import hmac
 import hashlib
+import json
+import uuid
 from datetime import timedelta
 
 import requests
 
 from ..extensions import db
 from ..models import WebhookDelivery, utcnow
+
+
+def charge_event_data(txn) -> dict:
+    """The canonical `data` body for a charge webhook.
+
+    SINGLE source of truth: the orchestrator's completion hook and the
+    gift-card checkout used to hand-build this identical dict in two places,
+    which had already drifted. Anything that emits a charge.* event builds its
+    data here so the shape can never diverge again.
+    """
+    return {
+        "id": txn.public_id,
+        "amount": txn.amount,
+        "fee": txn.fee_amount,
+        "currency": txn.currency,
+        "channel": txn.channel.value,
+        "status": txn.status.value,
+        "merchant_reference": txn.merchant_reference,
+        "failure_reason": txn.failure_reason,
+        "completed_at": txn.completed_at.isoformat() if txn.completed_at else None,
+    }
 
 
 def sign_payload(payload: str, secret: str) -> str:
@@ -51,14 +74,19 @@ def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = No
     bytes we send; re-serialising differently on the receiving side would break
     verification.
     """
-    import json
-
-    from flask import current_app
-
     if not merchant or not getattr(merchant, "webhook_url", None):
         return False
 
-    payload = json.dumps({"event": event, "data": data}, separators=(",", ":"))
+    # Envelope carries an event id + unix timestamp so a receiver can DEDUPE
+    # (retries/duplicate deliveries share the id) and enforce a replay window
+    # (the docs promise replay protection; there was nothing to check before).
+    envelope = {
+        "id": "evt_" + uuid.uuid4().hex[:24],
+        "timestamp": int(utcnow().timestamp()),
+        "event": event,
+        "data": data,
+    }
+    payload = json.dumps(envelope, separators=(",", ":"))
     secret = merchant_signing_secret(merchant)
     delivery = WebhookDelivery(
         merchant_id=merchant.id,

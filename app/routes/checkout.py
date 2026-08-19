@@ -222,13 +222,11 @@ def checkout_submit(public_id: str):
         # had actually collected the money.
         from ..services.vending import maybe_dispense_on_success
         maybe_dispense_on_success(txn_obj)
-        from ..services.webhooks import enqueue
-        enqueue(merchant, "charge.succeeded", {
-            "id": txn_obj.public_id, "amount": txn_obj.amount, "fee": txn_obj.fee_amount,
-            "currency": txn_obj.currency, "channel": txn_obj.channel.value,
-            "status": txn_obj.status.value, "merchant_reference": txn_obj.merchant_reference,
-            "failure_reason": None, "completed_at": txn_obj.completed_at.isoformat(),
-        }, transaction_id=txn_obj.id)
+        from ..services.webhooks import charge_event_data, enqueue
+        # Same shared charge payload builder as the orchestrator — no hand-built
+        # duplicate that can drift.
+        enqueue(merchant, "charge.succeeded", charge_event_data(txn_obj),
+                transaction_id=txn_obj.id)
 
         return redirect(url_for("checkout.status_page", public_id=public_id))
 
