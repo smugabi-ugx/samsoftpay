@@ -768,11 +768,16 @@ class Subscription(db.Model):
     customer_phone = Column(String(20), nullable=False)
     customer_email = Column(String(200), nullable=True)
     status = Column(String(20), nullable=False, default="active", index=True)
-    # active | paused | cancelled | failed
+    # active | past_due | paused | cancelled | failed
     current_period_start = Column(DateTime, nullable=False)
     next_billing_at = Column(DateTime, nullable=False, index=True)
     cancelled_at = Column(DateTime, nullable=True)
     failure_reason = Column(String(255), nullable=True)
+    # Dunning: a failed charge no longer kills the plan on the first miss. It
+    # goes 'past_due' and is retried on a backoff up to _MAX_DUNNING_RETRIES
+    # before finally churning to 'failed'.
+    retry_count = Column(Integer, nullable=False, default=0)
+    next_retry_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
