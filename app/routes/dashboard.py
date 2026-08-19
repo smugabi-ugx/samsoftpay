@@ -287,6 +287,98 @@ def merchant_detail(merchant_id: int):
     )
 
 
+@bp.post("/dashboard/<int:merchant_id>/charge/<public_id>/refund")
+@login_required
+@verified_required
+def dashboard_refund(merchant_id: int, public_id: str):
+    """Refund a charge from the dashboard (self-service, no API/full-scope key).
+
+    Delegates to the SAME refund_charge service the API uses — including its
+    REFUNDED row-lock claim guard and that refunds draw from MERCHANT_AVAILABLE —
+    so this is just a login-gated UI over the vetted money path.
+    """
+    from flask import flash
+    from ..services.refunds import RefundError, refund_charge
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    txn = Transaction.query.filter_by(
+        public_id=public_id, merchant_id=merchant_id).one_or_none()
+    if txn is None:
+        abort(404)
+    try:
+        result = refund_charge(txn, merchant)
+    except RefundError as exc:
+        flash(f"Refund failed: {exc}", "error")
+        return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant_id))
+    if result.get("ok"):
+        flash(f"Refund initiated for {public_id}.", "success")
+    else:
+        flash(f"Could not refund {public_id}: {result.get('error')}", "error")
+    return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant_id))
+
+
+@bp.get("/dashboard/<int:merchant_id>/export/transactions.csv")
+@login_required
+@verified_required
+def export_transactions_csv(merchant_id: int):
+    """Stream the merchant's transactions as a CSV statement.
+
+    Owner-or-admin gated (never another merchant's data). Optional filters:
+    status, after/before (ISO 8601). Includes a `mode` column so a merchant can
+    tell test rows apart rather than us silently hiding them.
+    """
+    import csv
+    import io
+    from datetime import datetime
+    from flask import Response
+    from ..models import TxnStatus
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    db.session.get(Merchant, merchant_id) or abort(404)
+
+    q = Transaction.query.filter_by(merchant_id=merchant_id)
+    status_f = request.args.get("status")
+    if status_f:
+        try:
+            q = q.filter(Transaction.status == TxnStatus(status_f))
+        except ValueError:
+            abort(400, description=f"invalid status: {status_f}")
+
+    def _dt(name):
+        raw = request.args.get(name)
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            abort(400, description=f"{name} must be an ISO 8601 datetime")
+    after, before = _dt("after"), _dt("before")
+    if after:
+        q = q.filter(Transaction.created_at >= after)
+    if before:
+        q = q.filter(Transaction.created_at <= before)
+
+    rows = q.order_by(Transaction.created_at.desc()).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id", "created_at", "status", "amount", "fee", "currency", "channel",
+                "reference", "customer_phone", "mode", "completed_at"])
+    for t in rows:
+        w.writerow([
+            t.public_id,
+            t.created_at.isoformat() if t.created_at else "",
+            t.status.value, t.amount, t.fee_amount, t.currency, t.channel.value,
+            t.merchant_reference or "", t.customer_phone or "",
+            "test" if t.is_test else "live",
+            t.completed_at.isoformat() if t.completed_at else "",
+        ])
+    return Response(
+        buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition":
+                 f"attachment; filename=samsoftpay_transactions_{merchant_id}.csv"})
+
+
 @bp.get("/dashboard/<int:merchant_id>/new-link")
 @login_required
 @verified_required
