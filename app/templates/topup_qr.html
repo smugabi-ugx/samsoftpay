@@ -147,7 +147,7 @@
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  window.feather && feather.replace();
 
   {% if topup.status == 'pending' %}
   // Poll every 5 seconds

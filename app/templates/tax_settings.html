@@ -97,4 +97,4 @@
 
 <a href="{{ url_for('bills.list_bills') }}" class="btn btn-outline" style="margin-bottom:2rem;"><i data-feather="arrow-left"></i> Back to Bills</a>
 {% endblock %}
-{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
+{% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}

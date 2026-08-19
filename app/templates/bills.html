@@ -168,7 +168,7 @@
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  window.feather && feather.replace();
   document.getElementById('is_variable').addEventListener('change', function() {
     document.getElementById('amount-group').style.opacity = this.checked ? '0.4' : '1';
   });

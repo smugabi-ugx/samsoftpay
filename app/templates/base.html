@@ -8,9 +8,12 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <meta name="theme-color" content="#6366f1">
 
+  <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
-  <script src="{{ url_for('static', filename='js/feather.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+  {# defer: 76KB of icons must never block first paint (Kampala->Oregon RTT is
+     ~300ms — a blocking script in <head> was the whole "sticky" feel). Chart.js
+     (205KB) moved out of the shared shell — only merchant_detail uses it. #}
+  <script defer src="{{ url_for('static', filename='js/feather.min.js') }}"></script>
   <meta name="csrf-token" content="{{ csrf_token() }}">
 
   <style>
@@ -1114,6 +1117,35 @@
       if (btn) btn.classList.add('active');
       if (window.feather) feather.replace({'stroke-width':2});
     };
+  </script>
+
+  <script>
+    // Deferred scripts finish before DOMContentLoaded — icons render here even
+    // if a page's own inline window.feather && feather.replace() ran too early to see the lib.
+    document.addEventListener('DOMContentLoaded', function () {
+      if (window.feather) feather.replace();
+    });
+    // Prefetch-on-intent: fetching the next page's HTML while the cursor is
+    // still travelling to the link hides most of the cross-ocean latency.
+    (function () {
+      var seen = {};
+      function prefetch(a) {
+        var href = a.getAttribute('href');
+        if (!href || href[0] === '#' || seen[href]) return;
+        if (a.origin !== location.origin) return;
+        if (a.closest('form') || a.dataset.noPrefetch !== undefined) return;
+        seen[href] = 1;
+        var l = document.createElement('link');
+        l.rel = 'prefetch'; l.href = href;
+        document.head.appendChild(l);
+      }
+      document.addEventListener('mouseover', function (e) {
+        var a = e.target.closest && e.target.closest('a'); if (a) prefetch(a);
+      }, {passive: true});
+      document.addEventListener('touchstart', function (e) {
+        var a = e.target.closest && e.target.closest('a'); if (a) prefetch(a);
+      }, {passive: true});
+    })();
   </script>
 
   {% block extra_scripts %}{% endblock %}

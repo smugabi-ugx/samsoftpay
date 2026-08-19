@@ -214,6 +214,6 @@
 {% block extra_scripts %}
 <script>
   // Re-initialize Feather Icons after content load
-  feather.replace();
+  window.feather && feather.replace();
 </script>
 {% endblock %}

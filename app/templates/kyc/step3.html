@@ -51,7 +51,7 @@
       <div class="form-group">
         <label class="form-label">Document Type *</label>
         <select class="form-select" name="doc_type" required>
-          {% for key, label in doc_types %}
+          {% for key, label in doc_types.items() %}
           <option value="{{ key }}">{{ label }}</option>
           {% endfor %}
         </select>
@@ -74,4 +74,4 @@
   <a href="{{ url_for('kyc.step2') }}" class="btn btn-outline" style="margin-left:.5rem;">← Back</a>
 </div>
 {% endblock %}
-{% block extra_scripts %}<script>feather.replace();</script>{% endblock %}
+{% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}

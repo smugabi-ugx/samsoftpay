@@ -88,6 +88,9 @@
       <a href="#balance" class="docs-nav-link">Balance</a>
       <a href="#payouts" class="docs-nav-link">Payouts</a>
       <a href="#payment-links" class="docs-nav-link">Payment Links</a>
+      <a href="#refunds" class="docs-nav-link">Refunds</a>
+      <a href="#listing" class="docs-nav-link">Listing &amp; Search</a>
+      <a href="#subaccounts" class="docs-nav-link">Subaccounts &amp; Splits</a>
       <a href="#vending" class="docs-nav-link">Vending Machines</a>
     </div>
     <div class="docs-nav-section">
@@ -156,6 +159,11 @@
     <div class="docs-section" id="authentication">
       <h2><i data-feather="lock" style="width:22px;height:22px;color:var(--primary);"></i> Authentication</h2>
       <p>Samsoftpay uses <strong>Bearer token authentication</strong>. Pass your Secret Key in the <code>Authorization</code> header on every request.</p>
+      <p><strong>Kiosk-safe keys:</strong> for code that ships on a public device (a vending
+      machine, a kiosk app), use a <em>collections-only</em> key (<code>sk_test_col_…</code> /
+      <code>sk_live_col_…</code>, generated on your Account page). It can create charges, orders
+      and payment links but is refused with <code>403</code> on payouts and refunds — so a key
+      pulled off a device can never move money out. Never embed your full secret key on a device.</p>
       <div class="tab-group">
         <div class="tabs">
           <span class="tab active" onclick="switchTab(this, 'auth')">Python</span>
@@ -445,6 +453,74 @@ print(data["url"])  # Share this link with your customer</code></pre>
     </div>
 
     <!-- Vending machines -->
+    <!-- Refunds -->
+    <div class="docs-section" id="refunds">
+      <h2><i data-feather="corner-up-left" style="width:22px;height:22px;color:var(--primary);"></i> Refunds</h2>
+      <span class="endpoint-badge post">POST</span> <code>/v1/charges/&lt;id&gt;/refund</code>
+      <p style="margin-top:.75rem;">Returns the money to the customer's mobile-money account via a
+      disbursement. The refund is <strong>net of the original processing fee</strong>: a UGX 5,000
+      charge with a UGX 200 fee refunds UGX 4,800. Requires a <strong>full</strong> secret key,
+      <code>Idempotency-Key</code> and <code>X-Timestamp</code>.</p>
+      <pre><code>HTTP 202
+{
+  "charge_id": "txn_...",
+  "status": "refunded",
+  "refund": { "id": "pout_...", "amount": 4800, "status": "pending" }
+}</code></pre>
+      <p>Refunding twice returns <code>400 {"error": "already_refunded"}</code>. A charge that was
+      created with a <code>split</code> cannot be refunded through this endpoint yet —
+      you will receive <code>400 {"error": "split_charge_refunds_not_yet_supported"}</code>;
+      contact support to reverse a split charge.</p>
+    </div>
+
+    <!-- Listing -->
+    <div class="docs-section" id="listing">
+      <h2><i data-feather="list" style="width:22px;height:22px;color:var(--primary);"></i> Listing &amp; Search</h2>
+      <span class="endpoint-badge get">GET</span> <code>/v1/charges</code> &nbsp;·&nbsp;
+      <span class="endpoint-badge get">GET</span> <code>/v1/payouts</code>
+      <p style="margin-top:.75rem;">Newest first, cursor pagination. Use this to reconcile after a
+      missed webhook — you never need to have stored an id to find a payment again.</p>
+      <pre><code>GET /v1/charges?limit=20&amp;status=succeeded&amp;created_after=2026-08-01T00:00:00Z
+
+{
+  "object": "list",
+  "data": [ { ...same shape as GET /v1/charges/&lt;id&gt;... } ],
+  "has_more": true,
+  "next_cursor": "txn_9f2c41d8a3b7e615"   // pass as ?starting_after=
+}</code></pre>
+      <p>Filters: <code>status</code>, <code>reference</code> (charges only),
+      <code>created_after</code> / <code>created_before</code> (ISO&nbsp;8601),
+      <code>limit</code> (1–100). Lists are scoped to your key's mode — a test key
+      only ever sees test data. Failed charges carry <code>failure_reason</code>
+      (e.g. <code>insufficient_funds</code>) on every charge object.</p>
+    </div>
+
+    <!-- Subaccounts & splits -->
+    <div class="docs-section" id="subaccounts">
+      <h2><i data-feather="git-branch" style="width:22px;height:22px;color:var(--primary);"></i> Subaccounts &amp; Split Payments</h2>
+      <p>For platforms settling money to multiple sub-merchants (vending operators,
+      marketplace sellers, wallet users): register subaccounts, then split any charge.</p>
+      <span class="endpoint-badge post">POST</span> <code>/v1/subaccounts</code>
+      <pre><code>{ "name": "Shop A", "payout_phone": "256772123456", "external_ref": "your-id-42" }
+-&gt; 201 { "id": "sub_...", "name": "Shop A", "status": "active" }</code></pre>
+      <p style="margin-top:.75rem;">Then add <code>split</code> to a charge — shares are fixed
+      amounts or basis points of the <strong>net</strong> (amount minus our fee). Whatever the
+      shares don't consume stays with you (the platform):</p>
+      <pre><code>POST /v1/charges
+{
+  "amount": 100000, "channel": "mtn_momo",
+  "customer": {"phone": "256700000000"},
+  "split": [
+    {"subaccount": "sub_a", "amount": 30000},
+    {"subaccount": "sub_b", "bps": 2000}
+  ]
+}</code></pre>
+      <p>Each share settles into its subaccount's own balance after the standard hold —
+      see it on <code>GET /v1/charges/&lt;id&gt;</code> (a <code>split</code> array) and
+      <code>GET /v1/subaccounts/&lt;id&gt;</code> (per-currency balances). An over-allocated
+      split (shares exceeding the net) is rejected with <code>400</code> and nothing is created.</p>
+    </div>
+
     <div class="docs-section" id="vending">
       <h2><i data-feather="grid" style="width:22px;height:22px;color:var(--primary);"></i> Vending Machines</h2>
       <p>Take Mobile Money on an unattended machine. You create an order, the machine shows the QR we return, the customer scans and pays on their phone — and we tell the machine to release the product the moment the payment succeeds. Your machine software never handles money.</p>
@@ -585,6 +661,7 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
           <tr><td><code>401</code></td><td>Unauthorized — missing or invalid Bearer token.</td></tr>
           <tr><td><code>404</code></td><td>Resource not found or belongs to a different merchant.</td></tr>
           <tr><td><code>409</code></td><td>Idempotency key reused with a different request body.</td></tr>
+          <tr><td><code>403</code></td><td>Key lacks permission — e.g. a collections-only key on a payout or refund endpoint.</td></tr>
           <tr><td><code>429</code></td><td>Rate limit exceeded. Charges: 30/min. Payouts: 10/min.</td></tr>
         </tbody>
       </table>
