@@ -21,6 +21,20 @@ def sitemap():
     return Response(xml, mimetype="application/xml")
 
 
+@bp.get("/terms")
+def terms():
+    """Terms of Service — honest, specific, no boilerplate lorem."""
+    from flask import render_template
+    return render_template("terms.html")
+
+
+@bp.get("/privacy")
+def privacy():
+    """Privacy Policy — states exactly what we collect and why."""
+    from flask import render_template
+    return render_template("privacy.html")
+
+
 @bp.get("/robots.txt")
 def robots():
     txt = (

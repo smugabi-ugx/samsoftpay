@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Privacy Policy</h1>
+  <p class="page-subtitle">Last updated: August 2026</p>
+</div>
+
+<div class="card" style="max-width:760px;line-height:1.75;">
+  <p class="text-muted mb-3">
+    This policy explains what <strong>Sam Software Co Ltd</strong> ("Samsoftpay",
+    Kampala, Uganda) collects when you use our payment services, and why.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">What we collect</h3>
+  <p class="text-muted mb-3">
+    <strong>From merchants:</strong> business name, email, phone number, and the
+    verification (KYC) documents required to move live money — company
+    registration, director identification and settlement account details.<br>
+    <strong>From paying customers:</strong> the mobile-money phone number used to
+    pay, an optional email address for receipts, and the transaction details
+    themselves (amount, time, status). We never see or store mobile-money PINs —
+    customers approve payments on their own phone.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Why we collect it</h3>
+  <p class="text-muted mb-3">
+    To process the payment you asked us to process, to meet our legal
+    record-keeping and anti-money-laundering obligations in Uganda, to prevent
+    fraud, and to support you when something goes wrong. We do not sell personal
+    data, and we do not use customer data for advertising.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Who we share it with</h3>
+  <p class="text-muted mb-3">
+    The mobile-money network processing the payment (e.g. MTN Uganda), our
+    infrastructure providers (hosting, database), and authorities where the law
+    requires it. The merchant you paid can see the transaction details needed to
+    serve you (phone number, amount, status).
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">How long we keep it</h3>
+  <p class="text-muted mb-3">
+    Transaction records are retained as required by Ugandan financial
+    record-keeping law. Operational data such as delivered webhooks and expired
+    idempotency keys is deleted after 30 days.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Security</h3>
+  <p class="text-muted mb-3">
+    API keys are stored hashed; webhooks are HMAC-signed; test money and live
+    money are kept on separate ledgers; access to production systems is
+    restricted. Payment pages are served only over HTTPS.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Your rights &amp; contact</h3>
+  <p class="text-muted mb-0">
+    To ask what we hold about you, correct it, or request deletion (subject to
+    the retention law above), contact
+    <a href="mailto:samsoftware75@gmail.com">samsoftware75@gmail.com</a> ·
+    Tel/WhatsApp +256&nbsp;783&nbsp;647260. We respond within two business days.
+  </p>
+</div>
+{% endblock %}

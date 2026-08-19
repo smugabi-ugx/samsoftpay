@@ -62,12 +62,12 @@
 {% if current_user.is_authenticated %}
 <div class="live-key-note">
   <i data-feather="zap" style="color:var(--primary);flex-shrink:0;"></i>
-  <span>You're signed in as <strong>{{ current_user.name }}</strong> — your live API keys are pre-filled in all examples below.</span>
+  <span>You're signed in as <strong>{{ current_user.name }}</strong> — your TEST API key is pre-filled in every example below. Building works the same in test and live: swap in your live key from the Account page when you go live &mdash; nothing else changes.</span>
 </div>
 {% else %}
 <div class="live-key-note">
   <i data-feather="info" style="color:var(--primary);flex-shrink:0;"></i>
-  <span><a href="{{ url_for('auth.signup_page') }}" style="color:var(--primary);font-weight:600;">Create a free account</a> to see your live API keys pre-filled in all examples.</span>
+  <span><a href="{{ url_for('auth.signup_page') }}" style="color:var(--primary);font-weight:600;">Create a free account</a> to see your test API key pre-filled in every example.</span>
 </div>
 {% endif %}
 
@@ -113,18 +113,18 @@
 <pre><code>import requests
 
 headers = {
-    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
     "Content-Type": "application/json",
 }</code></pre>
         </div>
         <div class="tab-content">
 <pre><code>const headers = {
-  "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+  "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
   "Content-Type": "application/json",
 };</code></pre>
         </div>
         <div class="tab-content">
-<pre><code>curl -H "Authorization: Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}" \
+<pre><code>curl -H "Authorization: Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}" \
      {{ request.host_url }}v1/charges</code></pre>
         </div>
       </div>
@@ -151,7 +151,7 @@ headers = {
 <pre><code>import time, uuid
 
 headers = {
-    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
     "Idempotency-Key": str(uuid.uuid4()),
     "X-Timestamp": str(int(time.time())),
     "Content-Type": "application/json",
@@ -188,7 +188,7 @@ headers = {
 resp = requests.post(
     "{{ request.host_url }}v1/charges",
     headers={
-        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
         "Idempotency-Key": str(uuid.uuid4()),
         "X-Timestamp": str(int(time.time())),
         "Content-Type": "application/json",
@@ -208,7 +208,7 @@ print(resp.json())
 <pre><code>const resp = await fetch("{{ request.host_url }}v1/charges", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
     "Idempotency-Key": crypto.randomUUID(),
     "X-Timestamp": String(Math.floor(Date.now() / 1000)),
     "Content-Type": "application/json",
@@ -226,7 +226,7 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
         </div>
         <div class="tab-content">
 <pre><code>curl -X POST {{ request.host_url }}v1/charges \
-  -H "Authorization: Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}" \
+  -H "Authorization: Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}" \
   -H "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')" \
   -H "X-Timestamp: $(date +%s)" \
   -H "Content-Type: application/json" \
@@ -240,7 +240,7 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
       <div class="endpoint-badge"><span class="method get">GET</span> /v1/charges/:id</div>
       <pre><code>resp = requests.get(
     "{{ request.host_url }}v1/charges/txn_abc123",
-    headers={"Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}"}
+    headers={"Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}"}
 )
 # status: "pending" | "authorized" | "succeeded" | "failed"</code></pre>
     </div>
@@ -271,7 +271,7 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
       <div class="endpoint-badge"><span class="method get">GET</span> /v1/balance</div>
       <pre><code>resp = requests.get(
     "{{ request.host_url }}v1/balance",
-    headers={"Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}"}
+    headers={"Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}"}
 )
 
 # {
@@ -322,7 +322,7 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
 <pre><code>resp = requests.post(
     "{{ request.host_url }}v1/payouts",
     headers={
-        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
         "Idempotency-Key": str(uuid.uuid4()),
         "X-Timestamp": str(int(time.time())),
         "Content-Type": "application/json",
@@ -341,7 +341,7 @@ print(resp.json())
 <pre><code>const resp = await fetch("{{ request.host_url }}v1/payouts", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+    "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
     "Idempotency-Key": crypto.randomUUID(),
     "X-Timestamp": String(Math.floor(Date.now() / 1000)),
     "Content-Type": "application/json",
@@ -376,7 +376,7 @@ print(resp.json())
 <pre><code>resp = requests.post(
     "{{ request.host_url }}v1/payment-links",
     headers={
-        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
         "Content-Type": "application/json",
         "Idempotency-Key": str(uuid.uuid4()),
         "X-Timestamp": str(int(time.time())),
@@ -411,7 +411,7 @@ print(data["url"])  # Share this link with your customer</code></pre>
 <pre><code>resp = requests.post(
     "{{ request.host_url }}v1/vending/orders",
     headers={
-        "Authorization": "Bearer {{ current_user.secret_key if current_user.is_authenticated else 'sk_live_YOUR_SECRET_KEY' }}",
+        "Authorization": "Bearer {{ current_user.test_secret_key if current_user.is_authenticated and current_user.test_secret_key else 'sk_test_YOUR_TEST_KEY' }}",
         "Idempotency-Key": str(uuid.uuid4()),
         "X-Timestamp": str(int(time.time())),
         "Content-Type": "application/json",
@@ -545,7 +545,7 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
 
 {% block extra_scripts %}
 <script>
-  feather.replace();
+  if (window.feather) feather.replace();
 
   function switchTab(clickedTab, group) {
     const tabGroup = clickedTab.closest('.tab-group') || clickedTab.closest('.docs-section');

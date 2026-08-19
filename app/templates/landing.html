@@ -3,21 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Samsoftpay — East Africa Payment Gateway</title>
+  <title>Samsoftpay — Uganda Payment Gateway | MTN Mobile Money API</title>
   <meta name="description" content="Accept MTN Mobile Money and crypto payments in Uganda — powering shops and scan-to-pay vending machines. One API, one dashboard. 1.5% fee, no monthly charges.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="{{ request.host_url }}">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Samsoftpay — East Africa Payment Gateway">
+  <meta property="og:title" content="Samsoftpay — Uganda Payment Gateway | MTN Mobile Money API">
   <meta property="og:description" content="MTN Mobile Money and crypto for Uganda. One API, real products live on it. No monthly fees.">
   <meta property="og:url" content="{{ request.host_url }}">
   <meta property="og:image" content="{{ url_for('static', filename='img/logo.png', _external=True) }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","description":"Payment gateway for Uganda — MTN Mobile Money, crypto and bill collection, powering shops and scan-to-pay vending machines.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG"]}}</script>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800;900&family=Lexend:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
 
   <style>
     :root {
@@ -64,7 +62,7 @@
     }
     .nav-btn:hover{background:var(--brand);transform:translateY(-1px);}
     .nav-btn svg{width:14px;height:14px;}
-    @media(max-width:740px){.nav-links{display:none;}}
+    @media(max-width:740px){.nav-links{gap:16px;} .hide-mobile{display:none;}}
 
     /* ── HERO ── */
     .hero{
@@ -274,11 +272,11 @@
     <span>Samsoftpay</span>
   </a>
   <div class="nav-links">
-    <a href="#features" class="nav-link">Features</a>
-    <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="#features" class="nav-link hide-mobile">Features</a>
+    <a href="#pricing" class="nav-link hide-mobile">Pricing</a>
     <a href="{{ url_for('docs.docs') }}" class="nav-link">Docs</a>
     {% if current_user.is_authenticated %}
-    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="nav-link">My Dashboard</a>
+    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="nav-link hide-mobile">My Dashboard</a>
     <a href="{{ url_for('auth.account') }}" class="nav-link">Settings</a>
     {% else %}
     <a href="{{ url_for('auth.login_page') }}" class="nav-link">Sign in</a>
@@ -301,9 +299,9 @@
 <section class="hero">
   <div class="hero-pill"><span class="hero-pill-dot"></span> Now live in Uganda</div>
 
-  <h1>Accept payments<br>across <b>East Africa</b></h1>
+  <h1>Accept MTN Mobile Money<br>in <b>Uganda</b> — one API</h1>
 
-  <p class="hero-sub">MTN Mobile Money and crypto today — Airtel and cards next. One clean API, one dashboard, powering real shops and vending machines right now.</p>
+  <p class="hero-sub">Your customer approves a PIN prompt on their own phone. You get a signed webhook and money on a double-entry ledger. Live today in Kampala shops and vending machines — Airtel and cards next.</p>
 
   <div class="hero-ctas">
     <a href="{{ url_for('auth.signup_page') }}" class="btn-dark">
@@ -378,7 +376,7 @@
         <div class="price-tag">Collections</div>
         <div class="price-num">1.5%</div>
         <div class="price-lbl">per transaction</div>
-        <div class="price-note">Min UGX 200 · cap UGX 5,000. Applies to every live channel, and to Airtel/cards when they launch.</div>
+        <div class="price-note">Min UGX 200 · cap UGX 5,000. Example: customer pays UGX 10,000 → fee UGX 200 → <strong>UGX 9,800</strong> lands in your balance, withdrawable after the 24-hour settlement hold.</div>
       </div>
       <div class="price hi anim">
         <div class="price-tag">Platform fee</div>
@@ -451,6 +449,8 @@
           <span>Samsoftpay</span>
         </div>
         <p class="foot-desc">Uganda's developer-first payment gateway. MTN Mobile Money and crypto live today via one clean API — Airtel and cards next.</p>
+        <p class="foot-desc" style="margin-top:.75rem;">Operated by <strong>Sam Software Co Ltd</strong><br>Registered in Uganda (URSB) · Kampala</p>
+        <p class="foot-desc" style="margin-top:.5rem;"><a href="mailto:samsoftware75@gmail.com" style="color:inherit;">samsoftware75@gmail.com</a><br><a href="tel:+256783647260" style="color:inherit;">+256 783 647260</a> · <a href="https://wa.me/256783647260" style="color:inherit;">WhatsApp</a></p>
       </div>
       <div>
         <h4>Product</h4>
@@ -473,14 +473,15 @@
       <div>
         <h4>Company</h4>
         <ul>
+          <li><a href="mailto:samsoftware75@gmail.com">Contact</a></li>
+          <li><a href="{{ url_for('seo.terms') }}">Terms of Service</a></li>
+          <li><a href="{{ url_for('seo.privacy') }}">Privacy Policy</a></li>
           <li><a href="{{ url_for('kyc.kyc_home') }}">KYC</a></li>
-          <li><a href="{{ url_for('seo.sitemap') }}">Sitemap</a></li>
-          <li><a href="{{ url_for('auth.login_page') }}">Sign In</a></li>
         </ul>
       </div>
     </div>
     <div class="foot-bottom">
-      <span>© 2026 Samsoftpay</span>
+      <span>© 2026 Sam Software Co Ltd · Kampala, Uganda</span>
       <span>Live in Uganda · East Africa next</span>
     </div>
   </div>

@@ -5,19 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Payment status — {{ merchant.name }}</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
   <style>
     :root {
-      --bg: #faf8f4;
-      --ink: #1a1814;
-      --muted: #6b665d;
-      --line: #e6e1d6;
-      --ok: #1a7f37;
-      --warn: #b88600;
-      --fail: #c44536;
-      --accent: #1a1814;
+      --bg: #f8fafc;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --ok: #059669;
+      --warn: #b45309;
+      --fail: #dc2626;
+      --accent: #4f46e5;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
@@ -38,7 +36,7 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 2.75rem 2.25rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(26,24,20,0.06);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 12px 32px rgba(15,23,42,0.06);
       text-align: center;
     }
 
@@ -54,9 +52,9 @@
       position: relative;
       transition: background 0.4s ease;
     }
-    .icon.pending { background: #fdf6e3; }
-    .icon.ok { background: #e8f3ec; }
-    .icon.fail { background: #fdebe8; }
+    .icon.pending { background: #fffbeb; }
+    .icon.ok { background: #ecfdf5; }
+    .icon.fail { background: #fef2f2; }
 
     /* pulsing ring while we wait for the customer to approve */
     .icon.pending::before {
@@ -104,7 +102,7 @@
     }
 
     h1 {
-      font-family: 'Fraunces', serif;
+      font-family: 'Inter', sans-serif;
       font-weight: 500;
       font-size: 1.6rem;
       letter-spacing: -0.01em;
@@ -143,12 +141,12 @@
     .step:first-child::before { display: none; }
     .step.done .dot { border-color: var(--ok); background: var(--ok); color: white; }
     .step.done::before { background: var(--ok); }
-    .step.active .dot { border-color: var(--warn); box-shadow: 0 0 0 4px #fdf6e3; color: var(--warn); }
+    .step.active .dot { border-color: var(--warn); box-shadow: 0 0 0 4px #fffbeb; color: var(--warn); }
     .step.active .label { color: var(--ink); font-weight: 600; }
     .step.fail .dot { border-color: var(--fail); background: var(--fail); color: white; }
 
     .amount {
-      font-family: 'Fraunces', serif;
+      font-family: 'Inter', sans-serif;
       font-size: 1.9rem;
       color: var(--ink);
       font-weight: 500;
@@ -213,7 +211,7 @@
 
     <a id="return-btn" class="btn" href="#">Return</a>
     <button id="retry-btn" class="btn" onclick="window.location.reload()">Try again</button>
-    <div id="countdown" style="display:none; margin-top:0.75rem; color:#6b665d; font-size:0.85rem;"></div>
+    <div id="countdown" style="display:none; margin-top:0.75rem; color:#64748b; font-size:0.85rem;"></div>
 
     <div class="footer">Secured by <strong>Samsoftpay</strong></div>
   </div>
@@ -230,12 +228,12 @@
     const retryBtn = document.getElementById('retry-btn');
 
     const SUCCESS_SVG = `<svg class="result-svg pop" viewBox="0 0 52 52">
-      <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#1a7f37"/>
-      <path class="draw-check" d="M16 27 l7 7 l14 -15" stroke="#1a7f37"/></svg>`;
+      <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#059669"/>
+      <path class="draw-check" d="M16 27 l7 7 l14 -15" stroke="#059669"/></svg>`;
     const FAIL_SVG = `<svg class="result-svg pop" viewBox="0 0 52 52">
-      <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#c44536"/>
-      <line class="draw-line1" x1="18" y1="18" x2="34" y2="34" stroke="#c44536"/>
-      <line class="draw-line2" x1="34" y1="18" x2="18" y2="34" stroke="#c44536"/></svg>`;
+      <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#dc2626"/>
+      <line class="draw-line1" x1="18" y1="18" x2="34" y2="34" stroke="#dc2626"/>
+      <line class="draw-line2" x1="34" y1="18" x2="18" y2="34" stroke="#dc2626"/></svg>`;
 
     function setSuccess() {
       // brief "confirming" beat, then the animated checkmark
