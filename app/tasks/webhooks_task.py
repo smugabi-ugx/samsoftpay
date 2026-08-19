@@ -44,6 +44,13 @@ def deliver_webhook(self, delivery_id: int) -> None:
 
     delivery = db.session.get(WebhookDelivery, delivery_id)
     delivery.attempts += 1
+    # SSRF re-check at delivery (DNS rebinding) — see url_guard.
+    from ..services.url_guard import is_public_http_url
+    if not is_public_http_url(delivery.url):
+        delivery.status = "failed"
+        delivery.last_response_code = 0
+        db.session.commit()
+        return
     try:
         resp = requests.post(
             delivery.url,
@@ -53,6 +60,7 @@ def deliver_webhook(self, delivery_id: int) -> None:
                 "X-Samsoftpay-Signature": delivery.signature,
             },
             timeout=5,
+            allow_redirects=False,
         )
         delivery.last_response_code = resp.status_code
         if 200 <= resp.status_code < 300:

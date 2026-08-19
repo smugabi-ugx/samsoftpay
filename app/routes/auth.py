@@ -62,8 +62,11 @@ def signup():
     email       = request.form.get("email", "").strip().lower()
     password    = request.form.get("password", "")
     raw_webhook = request.form.get("webhook_url", "").strip()
-    if raw_webhook and not re.match(r"^https?://", raw_webhook):
-        raw_webhook = ""   # reject non-http(s) URLs — prevents SSRF
+    # SSRF guard: a scheme check alone let http://169.254.169.254 (cloud
+    # metadata) / internal hosts through. Resolve and require a public IP.
+    from ..services.url_guard import is_public_http_url
+    if raw_webhook and not is_public_http_url(raw_webhook):
+        raw_webhook = ""   # drop private/internal/unresolvable webhook targets
     webhook_url = raw_webhook or None
 
     error = None
