@@ -102,12 +102,31 @@ def admin_update_merchant(merchant_id: int):
     return redirect(url_for("dashboard.list_merchants"))
 
 
+def _is_protected_merchant(m) -> bool:
+    """A merchant that must NEVER be hard-deleted.
+
+    ONE authoritative rule, shared by the confirm page and the destructive POST,
+    so they can never disagree: the POST used to protect a smaller email set than
+    the confirm page implied, and neither protected any admin by role nor the
+    configured ADMIN_EMAIL. Gate on role first (any admin is untouchable), then a
+    known-account allowlist.
+    """
+    import os
+    protected_emails = {
+        "smugabi@mail.com", "demo@samsoftpay.local", "smugabi@gmail.com",
+        "samsoftware75@gmail.com",
+        (os.environ.get("ADMIN_EMAIL") or "").strip().lower(),
+    }
+    return (getattr(m, "role", None) == "admin"
+            or (m.email or "").strip().lower() in protected_emails)
+
+
 @bp.get("/admin/merchants/<int:merchant_id>/delete-confirm")
 @login_required
 @admin_required
 def admin_delete_confirm(merchant_id: int):
     m = db.session.get(Merchant, merchant_id) or abort(404)
-    if m.email in ("smugabi@mail.com", "demo@samsoftpay.local", "smugabi@gmail.com"):
+    if _is_protected_merchant(m):
         from flask import flash
         flash("Cannot delete a protected admin account.", "error")
         return redirect(url_for("dashboard.list_merchants"))
@@ -122,8 +141,9 @@ def admin_delete_merchant(merchant_id: int):
     from flask import flash
     m = db.session.get(Merchant, merchant_id) or abort(404)
 
-    # Protect the superadmin account
-    if m.email in ("smugabi@mail.com", "demo@samsoftpay.local"):
+    # Same authoritative guard as the confirm page — never delete an admin or a
+    # protected account (the POST previously used a smaller list than the GET).
+    if _is_protected_merchant(m):
         flash(f"Cannot delete protected account: {m.email}", "error")
         return redirect(url_for("dashboard.list_merchants"))
 
