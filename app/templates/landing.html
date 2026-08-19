@@ -71,7 +71,32 @@
     }
     .nav-btn:hover{background:#4f46e5;transform:translateY(-1px);}
     .nav-btn svg{width:14px;height:14px;}
-    @media(max-width:740px){.nav-links{gap:16px;} .hide-mobile{display:none;}}
+    @media(max-width:740px){
+      .nav-links{display:none;}
+      .nav-burger{display:flex;}
+    }
+    .nav-burger{
+      display:none;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);
+      background:#fff;cursor:pointer;align-items:center;justify-content:center;
+      flex-direction:column;gap:5px;padding:0;
+    }
+    .nav-burger span{display:block;width:18px;height:2px;background:var(--ink);
+      border-radius:2px;transition:transform .25s var(--ease),opacity .2s;}
+    .nav-burger[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg);}
+    .nav-burger[aria-expanded="true"] span:nth-child(2){opacity:0;}
+    .nav-burger[aria-expanded="true"] span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
+    .mobile-menu{
+      display:none;position:fixed;top:68px;left:0;right:0;z-index:99;
+      background:#fff;border-bottom:1px solid var(--line);
+      box-shadow:0 16px 32px rgba(15,23,42,.08);
+      padding:8px 16px 16px;
+    }
+    .mobile-menu.open{display:block;}
+    .mobile-menu a{
+      display:block;padding:14px 12px;font-size:1rem;font-weight:600;color:var(--ink);
+      border-bottom:1px solid var(--line);
+    }
+    .mobile-menu a:last-child{border-bottom:none;}
 
     /* ── HERO ── */
     .hero{
@@ -305,8 +330,39 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
   </a>
   {% endif %}
+  <button class="nav-burger" id="nav-burger" aria-expanded="false" aria-controls="mobile-menu" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
  </div>
 </nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#features">Features</a>
+  <a href="#pricing">Pricing</a>
+  <a href="{{ url_for('docs.docs') }}">API Docs</a>
+  {% if current_user.is_authenticated %}
+  <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}">My Dashboard</a>
+  <a href="{{ url_for('auth.account') }}">Settings</a>
+  {% else %}
+  <a href="{{ url_for('auth.login_page') }}">Sign in</a>
+  <a href="{{ url_for('auth.signup_page') }}">Open free account</a>
+  {% endif %}
+</div>
+<script>
+(function () {
+  var b = document.getElementById('nav-burger'), m = document.getElementById('mobile-menu');
+  if (!b) return;
+  function setOpen(open) {
+    b.setAttribute('aria-expanded', open);
+    m.classList.toggle('open', open);
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  b.addEventListener('click', function () { setOpen(b.getAttribute('aria-expanded') !== 'true'); });
+  m.addEventListener('click', function (e) { if (e.target.tagName === 'A') setOpen(false); });
+  document.addEventListener('click', function (e) {
+    if (m.classList.contains('open') && !m.contains(e.target) && !b.contains(e.target)) setOpen(false);
+  });
+})();
+</script>
 
 <!-- HERO -->
 <section class="hero">

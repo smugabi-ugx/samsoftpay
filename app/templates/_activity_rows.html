@@ -1,0 +1,44 @@
+{# Shared activity rows — included by merchant_detail AND returned as an
+   HTML fragment by dashboard.activity_page for load-more pagination. #}
+    {% for t in txns %}
+    <div class="activity-row">
+      <div class="activity-icon" style="background:{% if t.status.value == 'succeeded' %}rgba(16,185,129,.1){% elif t.status.value == 'failed' %}rgba(239,68,68,.1){% else %}rgba(245,158,11,.1){% endif %};">
+        {% if t.channel.value == 'mtn_momo' %}📱
+        {% elif t.channel.value == 'airtel_money' %}📲
+        {% elif t.channel.value == 'card' or t.channel.value == 'visa' %}💳
+        {% elif t.channel.value == 'crypto' %}₿
+        {% else %}💰{% endif %}
+      </div>
+      <div class="activity-info">
+        <div class="activity-title">
+          {{ t.channel.value.replace('_',' ').title() }}
+          {% if t.is_test %}<span style="font-size:.7rem;background:rgba(245,158,11,.1);color:#d97706;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">TEST</span>{% endif %}
+        </div>
+        {# The rail's own confirmation code resolves customer disputes on the
+           first phone call — Pesapal gives it its own column for a reason. #}
+        <div class="activity-sub">{{ t.public_id }} · {{ t.created_at.strftime('%d %b %Y %H:%M') }}{% if t.merchant_reference %} · {{ t.merchant_reference }}{% endif %}{% if t.rail_reference %} · conf: {{ t.rail_reference }}{% endif %}</div>
+      </div>
+      <div>
+        <span class="badge {{ t.status.value }}">{{ t.status.value }}</span>
+      </div>
+      {# Green "+" is EARNED money only — a failed or still-pending charge
+         painted green with a plus sign misstates what the merchant has. #}
+      {% if t.status.value == 'succeeded' %}
+      <div class="activity-amount in">+ {{ "{:,}".format(t.amount) }} UGX</div>
+      {% else %}
+      <div class="activity-amount out" style="color:var(--gray-400);">{{ "{:,}".format(t.amount) }} UGX</div>
+      {% endif %}
+      {# Self-service refund for a succeeded charge — same vetted refund_charge
+         service the API uses (REFUNDED claim guard, draws from available). #}
+      {% if t.status.value == 'succeeded' and not t.is_test %}
+      <form method="post"
+            action="{{ url_for('dashboard.dashboard_refund', merchant_id=merchant.id, public_id=t.public_id) }}"
+            onsubmit="return confirm('Refund {{ t.public_id }}? This sends the money back to the customer.');"
+            style="margin-left:.5rem;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline"
+                style="padding:.25rem .6rem;font-size:.75rem;color:var(--danger);">Refund</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}

@@ -1122,6 +1122,28 @@
     };
   </script>
 
+  <style>
+    .btn-busy{position:relative;pointer-events:none;opacity:.75;}
+    .btn-busy::after{
+      content:'';display:inline-block;width:13px;height:13px;margin-left:8px;
+      vertical-align:-2px;border:2px solid currentColor;border-right-color:transparent;
+      border-radius:50%;animation:btnspin .7s linear infinite;
+    }
+    @keyframes btnspin{to{transform:rotate(360deg)}}
+  </style>
+  <script>
+    // Submit feedback + double-submit blocker: the button spins and disables
+    // the moment a POST form submits (fires only after any confirm() passed).
+    document.addEventListener('submit', function (e) {
+      var f = e.target;
+      if ((f.method || '').toLowerCase() !== 'post') return;
+      var btn = f.querySelector('button[type="submit"], input[type="submit"]');
+      if (btn && !btn.classList.contains('btn-busy')) {
+        btn.classList.add('btn-busy');
+        setTimeout(function () { btn.disabled = true; }, 0);  // after value serialization
+      }
+    }, true);
+  </script>
   <script>
     // Deferred scripts finish before DOMContentLoaded — icons render here even
     // if a page's own inline window.feather && feather.replace() ran too early to see the lib.
