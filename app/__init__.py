@@ -108,6 +108,14 @@ def create_app(config: dict | None = None) -> Flask:
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # True on Render, False locally
+        # The app now answers on BOTH samsoftpay.com (apex) and
+        # api.samsoftpay.com. Cookies are per-host by default, so logging in on
+        # one host looked like a logout the moment navigation crossed to the
+        # other (the "clicked wallet, got the login page" bug). A parent-domain
+        # cookie makes one session span apex + www + api. Local dev keeps
+        # host-only cookies so localhost works.
+        SESSION_COOKIE_DOMAIN=(os.environ.get("SESSION_COOKIE_DOMAIN")
+                               or (".samsoftpay.com" if os.environ.get("RENDER") else None)),
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),  # idle timeout
         SESSION_REFRESH_EACH_REQUEST=True,       # reset 30-min window on activity
         SQLALCHEMY_DATABASE_URI=_db_uri,

@@ -769,9 +769,12 @@
         <div class="nav-section">
           <div class="nav-section-title">Account</div>
           {% if current_user.is_authenticated %}
-          <a href="{{ url_for('auth.logout') }}" class="nav-link">
-            <i data-feather="log-out"></i><span>Sign Out</span>
-          </a>
+          <form method="post" action="{{ url_for('auth.logout') }}" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="nav-link" style="width:100%;background:none;border:none;cursor:pointer;font:inherit;text-align:left;">
+              <i data-feather="log-out"></i><span>Sign Out</span>
+            </button>
+          </form>
           {% else %}
           <a href="{{ url_for('auth.login_page') }}" class="nav-link {% if request.endpoint == 'auth.login_page' %}active{% endif %}">
             <i data-feather="log-in"></i><span>Sign In</span>
