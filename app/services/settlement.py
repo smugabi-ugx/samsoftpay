@@ -67,6 +67,14 @@ def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
             current_app.logger.exception(
                 "settlement sweep failed for merchant %s", merchant_id
             )
+
+    # Second pass: split-charge shares. A split txn carries settled_at from the
+    # moment it succeeds (so the pass above skips it); its money lives in
+    # SplitAllocation rows that settle per-share here, after the same hold.
+    from .splits import sweep_split_allocations
+    for merchant_id, amount in sweep_split_allocations(
+            cutoff=cutoff, batch_size=batch_size).items():
+        moved[merchant_id] = moved.get(merchant_id, 0) + amount
     return moved
 
 

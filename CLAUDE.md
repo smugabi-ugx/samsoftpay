@@ -219,6 +219,21 @@
     (`checkout.order_qr_png`, `crypto_qr_png`, `profile_qr_png`). A payment QR must
     not depend on someone else's uptime nor leak its content to them.
 
+26. **Split payments are EXACT by construction; split refunds are NOT yet supported.**
+    A subaccount is a MANAGED Merchant (parent_merchant_id, is_managed — api._auth refuses
+    is_managed rows outright). Shares are validated and resolved ONLY against N = amount − fee
+    (never gross — an over-N split would mint money; rejected 400 with zero writes). The
+    platform's residual r = N − Σshares is the ROUNDING SINK: bps shares use floor division and
+    every leftover shilling lands in the platform's own pending, so Σshares + r == N always.
+    Posting happens inside complete_transaction's locked block sharing ONE commit with
+    status+settled_at (txn.settled_at is set at success so the Transaction sweep skips it — the
+    money lives in split_allocations, settled per-share by splits.sweep_split_allocations).
+    A subaccount deactivated mid-flight is NEVER credited (share folds into the residual).
+    refunds.refund_charge REJECTS split charges with zero writes — the adversarial audit found
+    three critical hazards in split refunds (clawback stranding, cross-mode leak, in-hold
+    funding); do NOT enable them without implementing those fixes (memory:
+    split-payments-design). Migration d4e5f6a7b8c9. Tests: tests/test_split_payments.py (31).
+
 ---
 
 ## Who is Sam

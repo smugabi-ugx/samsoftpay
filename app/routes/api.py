@@ -55,7 +55,10 @@ def _auth() -> Merchant:
                 if merchant:
                     g.api_mode = "live"
 
-    if merchant is None or not merchant.is_active:
+    # A MANAGED merchant (a platform's subaccount) is a ledger identity only —
+    # it must never authenticate, even though it technically holds (random,
+    # never-displayed) key columns. Belt-and-braces with splits.create_subaccount.
+    if merchant is None or not merchant.is_active or getattr(merchant, "is_managed", False):
         log_event("auth.failed", detail={"reason": "invalid_key"})
         abort(401, description="invalid api key")
     return merchant
@@ -123,6 +126,9 @@ def create_charge_route():
         currency = body.get("currency", "UGX")
         channel = Channel(body["channel"])
         customer = body.get("customer") or {}
+        split = body.get("split")   # optional [{subaccount, amount|bps}, ...]
+        if split is not None and not isinstance(split, list):
+            raise ValueError("split must be a list")
     except (KeyError, ValueError, TypeError) as exc:
         idempotency.release(merchant.id, idem_key)
         abort(400, description=f"invalid request: {exc}")
@@ -136,6 +142,7 @@ def create_charge_route():
             customer_phone=customer.get("phone"),
             customer_email=customer.get("email"),
             merchant_reference=body.get("reference"),
+            split=split,
         )
     except OrchestratorError as exc:
         body_out = {"error": str(exc)}
@@ -178,7 +185,7 @@ def get_charge(public_id: str):
     txn = Transaction.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
     if txn is None:
         abort(404)
-    return jsonify(
+    out = dict(
         id=txn.public_id,
         mode="test" if txn.is_test else "live",
         status=txn.status.value,
@@ -192,6 +199,28 @@ def get_charge(public_id: str):
         created_at=txn.created_at.isoformat() if txn.created_at else None,
         completed_at=txn.completed_at.isoformat() if txn.completed_at else None,
     )
+    # Split charges: expose each resolved share so the platform can reconcile
+    # every sub-ledger against ours. Allocations exist only once SUCCEEDED.
+    if txn.split_meta:
+        from ..models import SplitAllocation, Subaccount
+        allocs = SplitAllocation.query.filter_by(transaction_id=txn.id).all()
+        sub_by_mid = {
+            s.merchant_id: s.public_id
+            for s in Subaccount.query.filter_by(platform_merchant_id=merchant.id).all()
+        }
+        out["split"] = [
+            dict(
+                # The platform's own residual row has no sub_ id — label it.
+                subaccount=sub_by_mid.get(a.merchant_id, "platform_residual"),
+                amount=a.amount,
+                settlement_status=(
+                    "reversed" if a.reversed_at else
+                    "available" if a.settled_at else "pending"),
+                settled_at=a.settled_at.isoformat() if a.settled_at else None,
+            )
+            for a in allocs
+        ]
+    return jsonify(out)
 
 
 # ---------- refunds ----------
@@ -686,6 +715,88 @@ def create_bulk_payout():
         batch_id=batch_id, total=len(items), accepted=accepted,
         failed=len(items) - accepted, results=results,
     ), 200
+
+
+# ---------- subaccounts (split payments) ----------
+
+@bp.post("/subaccounts")
+@limiter.limit("30 per minute")
+def create_subaccount_route():
+    """Register a sub-merchant this platform can direct split shares to.
+
+    A subaccount is a managed ledger identity — it cannot log in or call the
+    API; its money settles through the normal per-merchant machinery and the
+    platform pays it out (merchant-of-record stays the platform).
+    """
+    from ..services.splits import SplitError, create_subaccount
+
+    _check_timestamp()
+    merchant = _auth()
+    body = request.get_json(silent=True) or {}
+    try:
+        sub = create_subaccount(
+            platform=merchant,
+            name=str(body.get("name") or ""),
+            payout_phone=(str(body.get("payout_phone")) if body.get("payout_phone") else None),
+            external_ref=(str(body.get("external_ref"))[:120] if body.get("external_ref") else None),
+        )
+    except SplitError as exc:
+        abort(400, description=str(exc))
+    log_event("subaccount.created", merchant_id=merchant.id, resource_id=sub.public_id,
+              detail={"name": sub.name})
+    return jsonify(id=sub.public_id, name=sub.name, external_ref=sub.external_ref,
+                   payout_phone=sub.payout_phone, status="active"), 201
+
+
+def _subaccount_balances(sub, mode: bool) -> list[dict]:
+    from ..models import Account, AccountType
+    rows = Account.query.filter(
+        Account.merchant_id == sub.merchant_id,
+        Account.is_test.is_(True) if mode else Account.is_test.is_(False),
+        Account.type.in_([AccountType.MERCHANT_PENDING, AccountType.MERCHANT_AVAILABLE]),
+    ).all()
+    by_ccy: dict = {}
+    for a in rows:
+        entry = by_ccy.setdefault(a.currency, {"currency": a.currency, "pending": 0, "available": 0})
+        # credit-normal accounts are stored negative — flip for display
+        if a.type == AccountType.MERCHANT_PENDING:
+            entry["pending"] = -a.cached_balance
+        else:
+            entry["available"] = -a.cached_balance
+    return list(by_ccy.values())
+
+
+@bp.get("/subaccounts")
+def list_subaccounts():
+    from ..models import Merchant as _M, Subaccount
+    merchant = _auth()
+    subs = (Subaccount.query.filter_by(platform_merchant_id=merchant.id)
+            .order_by(Subaccount.id.desc()).all())
+    managed = {m.id: m for m in _M.query.filter(
+        _M.id.in_([s.merchant_id for s in subs])).all()} if subs else {}
+    return jsonify(object="list", data=[
+        dict(id=s.public_id, name=s.name, external_ref=s.external_ref,
+             payout_phone=s.payout_phone,
+             status="active" if managed.get(s.merchant_id) and managed[s.merchant_id].is_active else "inactive")
+        for s in subs
+    ])
+
+
+@bp.get("/subaccounts/<public_id>")
+def get_subaccount(public_id: str):
+    from ..models import Merchant as _M, Subaccount
+    merchant = _auth()
+    sub = Subaccount.query.filter_by(
+        public_id=public_id, platform_merchant_id=merchant.id).one_or_none()
+    if sub is None:
+        abort(404)
+    managed = db.session.get(_M, sub.merchant_id)
+    return jsonify(
+        id=sub.public_id, name=sub.name, external_ref=sub.external_ref,
+        payout_phone=sub.payout_phone,
+        status="active" if managed and managed.is_active else "inactive",
+        balances=_subaccount_balances(sub, mode=(g.api_mode == "test")),
+    )
 
 
 # ---------- payment links ----------
