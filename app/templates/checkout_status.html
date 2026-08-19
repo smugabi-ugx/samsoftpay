@@ -212,7 +212,15 @@
     </div>
 
     <a id="return-btn" class="btn" href="#">Return</a>
-    <button id="retry-btn" class="btn" onclick="window.location.reload()">Try again</button>
+    {# Retry POSTs to a route that detaches the FAILED attempt so the checkout
+       form re-opens — reloading this page alone just showed the failure again. #}
+    <form id="retry-form" method="post"
+          action="{{ url_for('checkout.retry_payment', public_id=link.public_id) }}"
+          style="display:none; margin:0;">
+      {# Button forced visible; the FORM's display (toggled by JS on failure/
+         timeout) is what actually shows/hides the retry action. #}
+      <button id="retry-btn" class="btn" type="submit" style="display:inline-block;">Try again</button>
+    </form>
     <div id="countdown" style="display:none; margin-top:0.75rem; color:#6b665d; font-size:0.85rem;"></div>
 
     <div class="footer">Secured by <strong>Samsoftpay</strong></div>
@@ -227,7 +235,7 @@
     const stateIcon = document.getElementById('state-icon');
     const step2 = document.getElementById('step2');
     const step3 = document.getElementById('step3');
-    const retryBtn = document.getElementById('retry-btn');
+    const retryForm = document.getElementById('retry-form');
 
     const SUCCESS_SVG = `<svg class="result-svg pop" viewBox="0 0 52 52">
       <circle class="draw-circle" cx="26" cy="26" r="24" stroke="#1a7f37"/>
@@ -264,7 +272,7 @@
       heading.textContent = 'Payment not completed';
       message.textContent = reason ? ('Reason: ' + reason) : 'The request was declined or timed out.';
       hint.style.display = 'none';
-      retryBtn.style.display = 'inline-block';
+      retryForm.style.display = 'inline-block';
       {% if link.cancel_url %}
       addReturnLink({{ link.cancel_url|tojson }}, "Return to " + {{ merchant.name|tojson }});
       {% endif %}
@@ -275,7 +283,7 @@
       heading.textContent = 'Still waiting…';
       message.textContent = 'We haven’t received confirmation yet. If you didn’t get a prompt, you can try again.';
       hint.style.display = 'none';
-      retryBtn.style.display = 'inline-block';
+      retryForm.style.display = 'inline-block';
     }
 
     function showReturnButton() {

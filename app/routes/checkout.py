@@ -324,6 +324,36 @@ def status_json(public_id: str):
     )
 
 
+@bp.post("/pay/<public_id>/retry")
+def retry_payment(public_id: str):
+    """Re-open a single-use link whose only attempt FAILED, so the customer can
+    try again instead of hitting a dead-end status page.
+
+    MoMo failures (wrong PIN, ignored prompt, momentary insufficient funds) are
+    usually retryable, but a single-use link stays bound to its failed txn and
+    /pay/<id> just redirects back to the failed status forever. Detaching the
+    FAILED txn lets the checkout form render again; the failed txn itself is kept
+    as a record. Only a FAILED attempt is detached — never a succeeded or
+    in-flight one — and only if it is still the txn bound to the link (so a
+    concurrent success that just attached can't be undone).
+    """
+    from flask import session
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or link.transaction_id is None:
+        abort(404)
+    txn = db.session.get(Transaction, link.transaction_id)
+    if txn is not None and txn.status == TxnStatus.FAILED:
+        if txn.customer_phone:
+            # Prefill the retried form with the phone they already typed.
+            session[f"checkout_prefill_{public_id}"] = {"phone": txn.customer_phone}
+        db.session.query(PaymentLink).filter(
+            PaymentLink.id == link.id,
+            PaymentLink.transaction_id == txn.id,
+        ).update({"transaction_id": None}, synchronize_session=False)
+        db.session.commit()
+    return redirect(url_for("checkout.checkout_page", public_id=public_id))
+
+
 # ── QR codes + vending machine display ─────────────────────────────────
 
 def _qr_response(public_id: str, kind: str):
