@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Terms of Service{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Terms of Service</h1>
+  <p class="page-subtitle">Last updated: August 2026</p>
+</div>
+
+<div class="card" style="max-width:760px;line-height:1.75;">
+  <h3 style="margin-bottom:.5rem;">Who we are</h3>
+  <p class="text-muted mb-3">
+    Samsoftpay is operated by <strong>Sam Software Co Ltd</strong>, a company
+    registered in Uganda (URSB), based in Kampala. Contact:
+    <a href="mailto:samsoftware75@gmail.com">samsoftware75@gmail.com</a> ·
+    Tel/WhatsApp +256&nbsp;783&nbsp;647260.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">The service</h3>
+  <p class="text-muted mb-3">
+    We provide payment collection (MTN Mobile Money and crypto) and disbursement
+    services for merchants in Uganda, through an API, hosted checkout pages and a
+    merchant dashboard. Airtel Money and card payments are in development and are
+    not yet available for live transactions.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Fees</h3>
+  <p class="text-muted mb-3">
+    Collections: <strong>1.5%</strong> per successful charge, minimum UGX&nbsp;200,
+    capped at UGX&nbsp;5,000. Payouts/disbursements: <strong>UGX&nbsp;750</strong>
+    per payout. No monthly or setup fees. Fees are deducted from the collected
+    amount before settlement; the fee schedule in force at the time of a
+    transaction applies to that transaction.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Settlement</h3>
+  <p class="text-muted mb-3">
+    Collected funds are held for a <strong>24-hour settlement hold</strong> after
+    a successful charge, then become available for withdrawal. Every transaction
+    is recorded on a double-entry ledger and reconciled against the mobile-money
+    network's own records.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Refunds</h3>
+  <p class="text-muted mb-3">
+    Refunds are initiated by the merchant (via the dashboard or API) and return
+    the net collected amount to the customer's mobile-money account. The original
+    processing fee is not returned.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Merchant obligations</h3>
+  <p class="text-muted mb-3">
+    Merchants must provide accurate business information, complete verification
+    (KYC) before moving live money, keep API keys confidential, and use the
+    service only for lawful commerce. We may suspend accounts that breach these
+    terms or that we reasonably suspect of fraud or money laundering.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Liability</h3>
+  <p class="text-muted mb-3">
+    We provide the service with reasonable skill and care. We are not liable for
+    losses caused by the mobile-money network's outages, by incorrect recipient
+    details supplied to us, or for indirect or consequential loss. Nothing in
+    these terms excludes liability that cannot be excluded under Ugandan law.
+  </p>
+
+  <h3 style="margin-bottom:.5rem;">Governing law</h3>
+  <p class="text-muted mb-0">
+    These terms are governed by the laws of the Republic of Uganda. Questions or
+    disputes: contact us first at
+    <a href="mailto:samsoftware75@gmail.com">samsoftware75@gmail.com</a> — we
+    respond within two business days.
+  </p>
+</div>
+{% endblock %}

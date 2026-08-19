@@ -1,0 +1,90 @@
+/* Samsoftpay design tokens — the ONE design language.
+   Loaded first on every page (base.html + the standalone public pages).
+
+   Self-hosted type: no fonts.googleapis / gstatic / unpkg / jsdelivr anywhere.
+   Those CDNs are blocked in mainland China — the XY Vending engineers judging
+   this site would otherwise see missing fonts and empty icon slots — and a
+   payment page must not depend on (or leak visitors to) third-party CDNs
+   (guardrail 20, extended to the whole shell).
+
+   The alias trick: templates historically named five families (Inter, Urbanist,
+   Lexend, Fraunces, JetBrains Mono). Instead of rewriting hundreds of
+   font-family declarations, the legacy names are declared as @font-face aliases
+   of the SAME Inter Variable file — every page converges on one typeface with
+   zero template churn, and the checkout->status serif mismatch dies at the
+   root. JetBrains Mono maps to the system mono stack (code must stay mono). */
+
+@font-face {
+  font-family: "Inter";
+  src: url("../fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Urbanist";
+  src: url("../fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lexend";
+  src: url("../fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("../fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: local("Cascadia Code"), local("Cascadia Mono"), local("Consolas"),
+       local("Menlo"), local("DejaVu Sans Mono");
+  font-display: swap;
+}
+
+:root {
+  /* color — exactly two purples; slate neutrals; AA-safe semantic pairs */
+  --primary: #4f46e5;
+  --primary-deep: #312e81;
+  --ink: #0f172a;
+  --body-c: #334155;
+  --muted-c: #64748b;
+  --faint: #94a3b8;
+  --line-c: #e2e8f0;
+  --surface: #ffffff;
+  --surface-alt: #f8fafc;
+  --success-c: #059669;
+  --success-bg: #ecfdf5;
+  --warning-c: #b45309;
+  --warning-bg: #fffbeb;
+  --danger-c: #dc2626;
+  --danger-bg: #fef2f2;
+
+  /* radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* spacing (4px grid) */
+  --s1: .25rem;
+  --s2: .5rem;
+  --s3: .75rem;
+  --s4: 1rem;
+  --s5: 1.5rem;
+  --s6: 2rem;
+  --s7: 3rem;
+  --s8: 5rem;
+
+  /* shadows — three only */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, .10);
+  --shadow-brand: 0 4px 14px rgba(79, 70, 229, .30);
+}

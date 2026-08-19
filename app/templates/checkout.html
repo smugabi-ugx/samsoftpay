@@ -6,8 +6,7 @@
   <meta name="theme-color" content="#0f172a">
   <title>Pay {{ merchant.name }}</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -454,7 +453,7 @@
            of view by then. -->
       <div class="pay-reassure">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Payments are encrypted and processed securely by Samsoftpay
+        You approve on your phone with your Mobile Money PIN — you never enter your PIN on this page
       </div>
     </div>
 
