@@ -23,13 +23,11 @@ from ..models import (
     RailEvent,
     Transaction,
     TxnStatus,
-    WebhookDelivery,
     utcnow,
 )
 from . import ledger
 from .fees import calculate_fee
 from .rails import get_adapter
-from .webhooks import sign_payload
 
 
 class OrchestratorError(Exception):
@@ -290,50 +288,14 @@ def _maybe_mark_bill_paid(txn: Transaction) -> None:
 
 
 def _queue_webhook(txn: Transaction) -> None:
+    # Route through the ONE enqueue path (signing, event id + timestamp
+    # envelope, immediate best-effort delivery + the beat-sweep fallback) and
+    # build the charge data from the SINGLE shared helper — this used to
+    # hand-build both the delivery row and the charge dict, duplicating logic
+    # that had already drifted from the gift-card checkout's copy.
+    from .webhooks import charge_event_data, enqueue
     merchant = db.session.get(Merchant, txn.merchant_id)
     if not merchant or not merchant.webhook_url:
         return
-    payload = json.dumps(
-        {
-            "event": f"charge.{txn.status.value}",
-            "data": {
-                "id": txn.public_id,
-                "amount": txn.amount,
-                "fee": txn.fee_amount,
-                "currency": txn.currency,
-                "channel": txn.channel.value,
-                "status": txn.status.value,
-                "merchant_reference": txn.merchant_reference,
-                "failure_reason": txn.failure_reason,
-                "completed_at": txn.completed_at.isoformat() if txn.completed_at else None,
-            },
-        },
-        separators=(",", ":"),  # canonical JSON for signing
-    )
-    # Per-merchant signing (see webhooks.merchant_signing_secret): the global
-    # secret is inbound-only now.
-    from .webhooks import merchant_signing_secret
-    secret = merchant_signing_secret(merchant)
-    sig = sign_payload(payload, secret)
-    db.session.add(
-        WebhookDelivery(
-            merchant_id=merchant.id,
-            transaction_id=txn.id,
-            url=merchant.webhook_url,
-            payload=payload,
-            signature=sig,
-            next_attempt_at=utcnow(),
-        )
-    )
-    db.session.commit()
-    # Deliver NOW (best-effort) instead of waiting up to 30s for the beat
-    # sweep — the task module always claimed this happened; it never did.
-    try:
-        row = db.session.query(WebhookDelivery).filter_by(
-            merchant_id=merchant.id, transaction_id=txn.id
-        ).order_by(WebhookDelivery.id.desc()).first()
-        if row is not None:
-            from ..tasks.webhooks_task import deliver_webhook
-            deliver_webhook.delay(row.id)
-    except Exception:
-        pass   # broker down must never fail the payment that produced the event
+    enqueue(merchant, f"charge.{txn.status.value}", charge_event_data(txn),
+            transaction_id=txn.id)
