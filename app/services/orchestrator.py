@@ -251,7 +251,45 @@ def complete_transaction(
         maybe_dispense_on_success(txn)
         _maybe_mark_bill_paid(txn)
 
+    # Subscription dunning bridge — runs on BOTH outcomes: a failed subscription
+    # charge (the common insufficient-funds case, which resolves async here) goes
+    # past_due and is retried on a backoff; a succeeded one clears the dunning
+    # state. Never raises.
+    _maybe_update_subscription(txn, success=success)
+
     _queue_webhook(txn)
+
+
+def _maybe_update_subscription(txn: Transaction, *, success: bool) -> None:
+    """Advance a subscription's dunning state when its charge settles async.
+
+    Subscription charges complete asynchronously (prompt accepted, then
+    succeeds/fails on the rail callback), so bill_due can't know the outcome
+    synchronously. The reference is "sub_<subscription.public_id>". Never raises.
+    """
+    try:
+        ref = txn.merchant_reference or ""
+        if not ref.startswith("sub_"):
+            return
+        sub_public_id = ref[len("sub_"):]   # bill_due prefixes the public_id
+        from ..models import Subscription
+        from .subscriptions_service import _mark_charge_failed, _mark_charge_succeeded
+        sub = Subscription.query.filter_by(
+            public_id=sub_public_id, merchant_id=txn.merchant_id).one_or_none()
+        # Don't resurrect a cancelled/paused/already-failed subscription.
+        if sub is None or sub.status not in ("active", "past_due"):
+            return
+        if success:
+            _mark_charge_succeeded(sub)
+        else:
+            _mark_charge_failed(sub, txn.failure_reason or "charge_failed", utcnow())
+    except Exception:
+        db.session.rollback()
+        try:
+            current_app.logger.exception(
+                "failed to update subscription dunning for txn %s", txn.public_id)
+        except Exception:
+            pass
 
 
 def _maybe_mark_bill_paid(txn: Transaction) -> None:
