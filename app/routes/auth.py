@@ -357,7 +357,8 @@ def resend_2fa():
 
 # ---------- logout ----------
 
-@bp.get("/logout")
+@bp.route("/logout", methods=["GET", "POST"])
+# POST is the real path (state change); GET kept only so old bookmarks don't 405.
 @login_required
 def logout():
     session.pop(_PENDING_2FA_KEY, None)

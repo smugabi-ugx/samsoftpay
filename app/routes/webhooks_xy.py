@@ -46,6 +46,14 @@ The doc is internally inconsistent about two field names — the table says
 example is not actually sorted. We therefore accept any of the documented
 spellings and try the small set of documented orderings rather than rejecting
 a legitimate callback over a typo in the vendor's PDF.
+
+SIGNATURE RECIPE (for testing / for the supplier's engineers):
+  sign = MD5( merchant_xy_secret + timestamp + canonical ) where canonical is
+  "k1=v1&k2=v2&..." over all non-empty payload fields EXCEPT `sign` itself,
+  sorted by key. Both documented field spellings are accepted on our side
+  (`status`/`state`, `dsfshdh`/`dsfshbh`) — the vendor doc contradicts itself,
+  so do not "tidy" that tolerance away. See tests/test_xy_dispense_callback.py
+  for a worked signed payload.
 """
 from __future__ import annotations
 
