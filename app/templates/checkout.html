@@ -290,8 +290,16 @@
     <div class="summary-to">You are paying</div>
     <div class="summary-merchant">{{ merchant.name }}</div>
     <div class="summary-amount">
-      <span class="summary-currency">{{ link.currency }}</span>{{ "{:,}".format(link.amount) }}
+      {# When a gift card is applied the customer pays the DISCOUNTED amount —
+         show that as the headline (the full price used to stay here while a
+         separate line said "you pay less", which read as bait-and-switch). #}
+      <span class="summary-currency">{{ link.currency }}</span>{{ "{:,}".format(link.amount - voucher_discount if voucher_applied else link.amount) }}
     </div>
+    {% if voucher_applied %}
+    <div class="summary-desc" style="text-decoration:line-through;opacity:.6;">
+      {{ link.currency }} {{ "{:,}".format(link.amount) }}
+    </div>
+    {% endif %}
     {% if link.description %}
     <div class="summary-desc">{{ link.description }}</div>
     {% endif %}
@@ -438,7 +446,7 @@
       <button type="submit" class="pay-btn" id="pay-btn">
         <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10" stroke-opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
         <span class="btn-text">
-          Pay {{ link.currency }} {{ "{:,}".format(link.amount) }}
+          Pay {{ link.currency }} {{ "{:,}".format(link.amount - voucher_discount if voucher_applied else link.amount) }}
         </span>
       </button>
       <!-- Reassurance goes HERE, not the header: trust anxiety peaks at the

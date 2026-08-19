@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="page-header">
-  <h1 class="page-title">Welcome to Sam Soft Pay</h1>
+  <h1 class="page-title">Welcome to Samsoftpay</h1>
   <p class="page-subtitle">A modern, professional payment gateway platform for East Africa — Collections, Disbursements & More</p>
 </div>
 
@@ -51,10 +51,12 @@
         <i data-feather="check-circle"></i>
       </div>
     </div>
-    <div class="stat-value">100%</div>
+    {# Was a hardcoded fabricated "100%" uptime. Point at the real health check
+       instead of inventing a metric. #}
+    <div class="stat-value">Live</div>
     <div class="stat-change">
       <i data-feather="activity"></i>
-      <span>System operational</span>
+      <span><a href="/healthz" style="color:inherit;">Check /healthz</a></span>
     </div>
   </div>
 
