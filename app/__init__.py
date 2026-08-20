@@ -489,14 +489,40 @@ def create_app(config: dict | None = None) -> Flask:
             # a genuinely dead pipeline will flip to stale (503) once the key ages
             # out or, if it never wrote, stays here — surfaced in the body.
             return jsonify(status="unknown", worker="unknown",
-                           heartbeat_age_seconds=None), 200
+                           heartbeat_age_seconds=None, **_rail_diag()), 200
         fresh = age <= threshold
         return jsonify(
             status="ok" if fresh else "stale",
             worker="up" if fresh else "down",
             heartbeat_age_seconds=age,
             threshold_seconds=threshold,
+            **_rail_diag(),
         ), (200 if fresh else 503)
+
+    def _rail_diag() -> dict:
+        """Non-secret rail configuration, so 'is the real MTN rail on?' can be
+        answered from outside the box.
+
+        Env vars are PER SERVICE on Render, so the same variable can be set on
+        the worker and missing on web. This reports what THIS (web) process
+        actually resolved, names the service, and says whether each credential
+        is present — never their values.
+        """
+        return {
+            "service": os.environ.get("RENDER_SERVICE_NAME")
+                       or os.environ.get("RENDER_SERVICE_ID") or "local",
+            "mtn_rail": "real" if app.config.get("MOMO_USE_REAL") else "mocked",
+            "momo_use_real_raw": os.environ.get("MOMO_USE_REAL", "(not set)"),
+            "momo_target_env": app.config.get("MOMO_TARGET_ENV"),
+            "momo_credentials_present": {
+                "collections": bool(app.config.get("MOMO_SUBSCRIPTION_KEY")
+                                    and app.config.get("MOMO_API_USER")
+                                    and app.config.get("MOMO_API_KEY")),
+                "disbursement": bool(app.config.get("MOMO_DISBURSEMENT_SUBSCRIPTION_KEY")
+                                     and app.config.get("MOMO_DISBURSEMENT_API_USER")
+                                     and app.config.get("MOMO_DISBURSEMENT_API_KEY")),
+            },
+        }
 
     # Cache-bust every static asset on each deploy WITHOUT touching a single
     # template: append ?v=<deploy commit> to every url_for('static', ...).
