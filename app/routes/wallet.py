@@ -35,6 +35,23 @@ def wallet_home():
     available = -avail_acct.cached_balance if avail_acct else 0
     pending   = -pending_acct.cached_balance if pending_acct else 0
 
+    # SANDBOX balance visibility: until MTN production is live, every MoMo
+    # top-up settles to the SANDBOX ledger (guardrail 14 — a mock payment must
+    # never mint real withdrawable money). The wallet only ever showed the
+    # live balance, so a merchant who topped up saw "UGX 0" and thought their
+    # money vanished. Surface the sandbox balance too, clearly labelled, so the
+    # money is visible exactly where it landed — without ever letting it be
+    # withdrawn as real funds.
+    test_avail_acct = Account.query.filter_by(
+        merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE, is_test=True
+    ).first()
+    test_pending_acct = Account.query.filter_by(
+        merchant_id=current_user.id, type=AccountType.MERCHANT_PENDING, is_test=True
+    ).first()
+    sandbox_available = -test_avail_acct.cached_balance if test_avail_acct else 0
+    sandbox_pending   = -test_pending_acct.cached_balance if test_pending_acct else 0
+    sandbox_balance   = sandbox_available + sandbox_pending
+
     topups = (TopUpRequest.query
               .filter_by(merchant_id=current_user.id)
               .order_by(TopUpRequest.created_at.desc())
@@ -76,6 +93,9 @@ def wallet_home():
         topups=topups,
         settlements=settlements,
         payouts_paused_reason=payouts_paused_reason,
+        sandbox_balance=sandbox_balance,
+        sandbox_available=sandbox_available,
+        sandbox_pending=sandbox_pending,
     )
 
 

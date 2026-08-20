@@ -8,7 +8,11 @@ db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login_page"
-login_manager.login_message = "Please log in to access that page."
+# No flash on redirect-to-login: the login form is self-explanatory, and the
+# message used to STACK (one per bounce) into a wall of "Please log in..."
+# banners when a session dropped repeatedly. Gold-standard apps just show the
+# form. The `next=` param still returns the user to where they were headed.
+login_manager.login_message = None
 
 
 def _rate_limit_key():

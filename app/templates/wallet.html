@@ -89,6 +89,20 @@
   </div>
 </div>
 
+{% if sandbox_balance and sandbox_balance > 0 %}
+<div class="alert alert-warning" style="margin-bottom:1.5rem;">
+  <i data-feather="alert-triangle" class="alert-icon"></i>
+  <div>
+    <strong>UGX {{ "{:,}".format(sandbox_balance) }} sandbox (test) balance.</strong>
+    Your MoMo top-up completed, but MTN Mobile Money is still running in
+    <strong>sandbox</strong> until production onboarding finishes — so this money credited
+    your <strong>test</strong> balance, not real withdrawable funds. It is here (not lost) and
+    proves the top-up flow works end to end. The moment MTN goes live, real top-ups credit your
+    withdrawable balance automatically.
+  </div>
+</div>
+{% endif %}
+
 {% if pending > 0 %}
 <div class="alert alert-info" style="margin-bottom:1.5rem;">
   <i data-feather="info" class="alert-icon"></i>

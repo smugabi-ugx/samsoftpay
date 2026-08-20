@@ -108,7 +108,8 @@ def signup():
     db.session.add(merchant)
     db.session.commit()
 
-    login_user(merchant, remember=False)
+    session.permanent = True
+    login_user(merchant, remember=True)
     return redirect(url_for("auth.account"))
 
 
@@ -284,7 +285,11 @@ def login():
         session[_PENDING_2FA_KEY] = merchant.id
         return redirect(url_for("auth.verify_2fa_page"))
 
-    login_user(merchant, remember=False)   # no persistent cookies by default
+    # remember=True writes the persistent ssp_remember cookie so a mobile
+    # browser evicting the tab no longer logs the merchant out (the repeated
+    # "Please log in..." bounce). Session stays HttpOnly/Secure/SameSite=Lax.
+    session.permanent = True
+    login_user(merchant, remember=True)
     # Land on the dashboard (home), not settings — natural fintech-app flow.
     return redirect(_safe_redirect(
         request.args.get("next"),
@@ -338,6 +343,7 @@ def verify_2fa():
     m.otp_expires_at = None
     db.session.commit()
     session.pop(_PENDING_2FA_KEY, None)
+    session.permanent = True
     login_user(m, remember=True)
     return redirect(_safe_redirect(request.args.get("next"), url_for("auth.account")))
 

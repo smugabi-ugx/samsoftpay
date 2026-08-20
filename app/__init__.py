@@ -116,8 +116,24 @@ def create_app(config: dict | None = None) -> Flask:
         # host-only cookies so localhost works.
         SESSION_COOKIE_DOMAIN=(os.environ.get("SESSION_COOKIE_DOMAIN")
                                or (".samsoftpay.com" if os.environ.get("RENDER") else None)),
-        PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),  # idle timeout
-        SESSION_REFRESH_EACH_REQUEST=True,       # reset 30-min window on activity
+        PERMANENT_SESSION_LIFETIME=timedelta(days=14),  # sliding window; remember cookie re-auths after
+        SESSION_REFRESH_EACH_REQUEST=True,       # reset the window on activity
+        # ── Persistent "remember me" cookie ─────────────────────────────────
+        # login_user(remember=True) writes this. Without it the session was a
+        # BROWSER-SESSION cookie (no expiry) that mobile browsers evict the
+        # moment they background the tab — the merchant looked logged out and
+        # every protected page bounced to /login ("Please log in..." stacking
+        # up). The remember cookie survives tab eviction and re-establishes the
+        # session. It mirrors the session cookie's security exactly (same
+        # parent domain, Secure on Render, HttpOnly, SameSite=Lax) so it can
+        # never become the stale-shadow-cookie problem the session rename fixed.
+        REMEMBER_COOKIE_NAME="ssp_remember",
+        REMEMBER_COOKIE_DURATION=timedelta(days=14),
+        REMEMBER_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_SECURE=bool(os.environ.get("RENDER")),
+        REMEMBER_COOKIE_DOMAIN=(os.environ.get("SESSION_COOKIE_DOMAIN")
+                                or (".samsoftpay.com" if os.environ.get("RENDER") else None)),
         SQLALCHEMY_DATABASE_URI=_db_uri,
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         # Connection pool — the default (5 + 10 overflow) saturates under load and
