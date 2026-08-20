@@ -24,16 +24,15 @@ bp = Blueprint("kyc", __name__, url_prefix="/kyc")
 _UPLOAD_FOLDER = None   # resolved at request time via current_app.instance_path
 _ALLOWED = {"pdf", "jpg", "jpeg", "png", "doc", "docx"}
 
+# Light-KYC document list: an owner ID is the only one that matters to start
+# (Pesapal-style). The rest are OPTIONAL — a merchant can add them for higher
+# limits or if asked during review, but they are not demanded upfront.
 DOC_TYPES = [
-    ("certificate",         "Certificate of Incorporation"),
-    ("form7_8",             "Form 7 / Form 8 (URSB)"),
-    ("tin",                 "TIN Certificate (URA)"),
-    ("trade_licence",       "Trade Licence"),
-    ("annual_returns",      "Latest Annual Returns"),
-    ("director_id",         "Director National ID / Passport"),
-    ("aml_questionnaire",   "AML/CFT Questionnaire"),
-    ("financial_statements","Audited Financial Statements"),
-    ("other",               "Other Supporting Document"),
+    ("director_id",         "Your National ID or Passport"),
+    ("certificate",         "Certificate of Incorporation (optional)"),
+    ("trade_licence",       "Trade Licence (optional)"),
+    ("tin",                 "TIN Certificate (optional)"),
+    ("other",               "Other Supporting Document (optional)"),
 ]
 
 
@@ -236,7 +235,11 @@ def step4_save():
     app.account_number = request.form.get("account_number", "").strip()
     app.account_name   = request.form.get("account_name", "").strip()
     _touch(app)
-    return redirect(url_for("kyc.step5"))
+    # Bank is the LAST required step now — the AML/CFT questionnaire (step 5) is
+    # OPTIONAL (Pesapal-style light KYC), reachable from the review page for
+    # merchants who want to provide it or need higher limits. Go straight to
+    # review so the default path is Business -> Owner -> ID -> Bank -> Submit.
+    return redirect(url_for("kyc.review"))
 
 
 # ── Step 5: AML/CFT Questionnaire ──
@@ -281,13 +284,16 @@ def submit():
     app = _get_or_create_app()
     if app.status != "draft":
         return redirect(url_for("kyc.kyc_home"))
-    # Server-side completeness check — cannot be bypassed by direct POST
+    # Server-side completeness check — cannot be bypassed by direct POST.
+    # LIGHT KYC (Pesapal-style): only the essentials are required to submit —
+    # business name, one owner, an ID document, and a settlement destination.
+    # The AML/CFT questionnaire is optional (higher-limit / risk-based), so it
+    # is NOT in this gate.
     missing = []
-    if not app.company_name:  missing.append("business information")
-    if not app.directors:     missing.append("at least one director")
-    if not app.documents:     missing.append("supporting documents")
-    if not app.bank_name:     missing.append("bank details")
-    if not app.ownership_structure: missing.append("AML/CFT questionnaire")
+    if not app.company_name:  missing.append("business name")
+    if not app.directors:     missing.append("the business owner")
+    if not app.documents:     missing.append("an ID document")
+    if not app.bank_name:     missing.append("a settlement (bank) account")
     if missing:
         return render_template("kyc/review.html", app=app,
                                doc_types=dict(DOC_TYPES),
@@ -308,9 +314,10 @@ def admin_download(app_id: int, doc_id: int):
         abort(403)
     from flask import send_from_directory
     doc = KYCDocument.query.filter_by(id=doc_id, application_id=app_id).first_or_404()
-    folder = os.path.join(_upload_root(), str(
-        KYCApplication.query.get(app_id).merchant_id
-    ))
+    # Guard the application lookup — .query.get(app_id).merchant_id 500'd
+    # (AttributeError) when app_id didn't exist. doc is already scoped to app_id.
+    kyc_app = db.session.get(KYCApplication, app_id) or abort(404)
+    folder = os.path.join(_upload_root(), str(kyc_app.merchant_id))
     return send_from_directory(folder, doc.stored_filename,
                                download_name=doc.original_filename, as_attachment=True)
 
@@ -343,14 +350,23 @@ def admin_review(app_id: int):
     app = db.session.get(KYCApplication, app_id) or abort(404)
     action = request.form.get("action")
     if action in ("approve", "reject"):
-        app.status = "approved" if action == "approve" else "rejected"
         app.reviewer_notes = request.form.get("notes", "").strip()
         app.reviewed_at = datetime.now(timezone.utc)
-        # Update merchant KYC status
         from ..models import Merchant
         m = db.session.get(Merchant, app.merchant_id)
-        if m:
-            m.kyc_status = "verified" if action == "approve" else "rejected"
+        if action == "approve":
+            app.status = "approved"
+            if m:
+                m.kyc_status = "verified"
+        else:
+            # REJECT: send the application back to 'draft' so the merchant can
+            # FIX and resubmit (the step guards allow 'draft'); the reviewer_notes
+            # tell them why. Merchant.kyc_status stays 'rejected' so live money is
+            # gated until re-approval. A rejection was previously a permanent dead
+            # end the merchant could never edit.
+            app.status = "draft"
+            if m:
+                m.kyc_status = "rejected"
         db.session.commit()
     return redirect(url_for("kyc.admin_detail", app_id=app_id))
 

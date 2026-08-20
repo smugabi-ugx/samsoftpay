@@ -18,19 +18,31 @@
 
 {% else %}
 <!-- Status banner -->
+{% if current_user.kyc_status == 'rejected' %}
+{# A rejected application is sent back to 'draft' so the merchant can FIX and
+   resubmit — show WHY, with a clear resubmit path (was a permanent dead end). #}
+<div class="alert alert-danger" style="margin-bottom:2rem;">
+  <i data-feather="x-circle" class="alert-icon"></i>
+  <div>
+    <strong>Your application needs changes.</strong>
+    {{ app.reviewer_notes or 'Please review your details and resubmit.' }}
+    Edit the steps below and submit again.
+  </div>
+</div>
+{% else %}
 {% set status_map = {'draft':'warning','submitted':'info','under_review':'info','approved':'success','rejected':'danger'} %}
 <div class="alert alert-{{ status_map.get(app.status, 'info') }}" style="margin-bottom:2rem;">
-  <i data-feather="{% if app.status == 'approved' %}check-circle{% elif app.status == 'rejected' %}x-circle{% else %}clock{% endif %}" class="alert-icon"></i>
+  <i data-feather="{% if app.status == 'approved' %}check-circle{% else %}clock{% endif %}" class="alert-icon"></i>
   <div>
     <strong>Status: {{ app.status.replace('_',' ').title() }}</strong>
-    {% if app.status == 'draft' %} — Complete all steps and submit.
+    {% if app.status == 'draft' %} — A few quick steps: business, owner ID, and where to pay you. Then submit.
     {% elif app.status == 'submitted' %} — Under review (usually within 2 business days). Check this page for your status; we don't send email yet.
-    {% elif app.status == 'under_review' %} — Our compliance team is reviewing your documents.
+    {% elif app.status == 'under_review' %} — Our compliance team is reviewing your details.
     {% elif app.status == 'approved' %} — Your account is fully verified.
-    {% elif app.status == 'rejected' %} — {{ app.reviewer_notes or 'Please contact support.' }}
     {% endif %}
   </div>
 </div>
+{% endif %}
 
 <!-- Progress steps -->
 <div class="card">
