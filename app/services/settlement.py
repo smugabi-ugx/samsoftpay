@@ -158,4 +158,17 @@ def _settle_one_merchant(*, merchant_id, currency, is_test, cutoff, batch_size) 
     for txn in due:
         # net<=0 txns move no money but are still marked so the sweep skips them next time.
         txn.settled_at = now
+
+    if total > 0:
+        # First-class settlement record (Paystack lesson): each release is a
+        # row the merchant can see, list via GET /v1/settlements, and set a
+        # watch by. Same transaction as the ledger post — they commit or roll
+        # back together, so a Settlement row can never exist without its money.
+        import uuid as _uuid
+        from ..models import Settlement
+        db.session.add(Settlement(
+            public_id=f"setl_{_uuid.uuid4().hex[:16]}",
+            merchant_id=merchant_id, currency=currency, is_test=is_test,
+            amount=total, txn_count=len(due), kind="sweep",
+        ))
     return total

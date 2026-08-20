@@ -411,12 +411,21 @@ class _MockDisbursementAdapter:
         prob = app.config["RAIL_SUCCESS_PROBABILITY"]
         payout_id = payout.id
 
+        # DETERMINISTIC sandbox, like collections (guardrail 16): a magic
+        # recipient number produces its documented outcome every time; every
+        # other number succeeds. Randomness only via the legacy knob.
+        from .rails import TEST_PAYOUT_OUTCOMES, _phone_key
+        forced = TEST_PAYOUT_OUTCOMES.get(_phone_key(payout.recipient_phone), "unset")
+
         def _fire():
             with app.app_context():
-                success = random.random() < prob
-                reason = None if success else random.choice([
-                    "recipient_not_found", "wallet_locked", "timeout"
-                ])
+                if forced != "unset":
+                    success, reason = forced is None, forced
+                else:
+                    success = random.random() < prob
+                    reason = None if success else random.choice([
+                        "recipient_not_found", "wallet_locked", "timeout"
+                    ])
                 complete_payout(payout_id, success=success,
                                 rail_reference=rail_ref, reason=reason)
 

@@ -335,6 +335,18 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
       </table>
       <div class="callout">Matched on the last 9 digits, so <code>0700000001</code>, <code>256700000001</code> and <code>256 700 000 001</code> all trigger the same outcome. Any other number succeeds — a sandbox should never make an ordinary test transaction randomly fail.</div>
 
+      <h3>Payout failure simulation</h3>
+      <p>Payouts have their own deterministic scenarios, matched on the <strong>recipient</strong> number's last 9 digits — rehearse your <code>payout.failed</code> handling before it can happen with real money. A failed payout refunds the amount <em>and</em> the fee to your available balance.</p>
+      <table class="param-table">
+        <thead><tr><th>Recipient number</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td><code>256700000000</code></td><td>Always succeeds</td></tr>
+          <tr><td><code>256700000001</code></td><td>Fails with <code>recipient_not_found</code></td></tr>
+          <tr><td><code>256700000002</code></td><td>Fails with <code>wallet_locked</code></td></tr>
+          <tr><td><code>256700000003</code></td><td>Fails with <code>timeout</code></td></tr>
+        </tbody>
+      </table>
+
       <h3>Exact <code>charge.failed</code> payloads</h3>
       <p>Each failure number produces a <code>charge.failed</code> webhook whose <code>data</code>
       is exactly this shape (identical to <code>GET /v1/charges/&lt;id&gt;</code>) — build your

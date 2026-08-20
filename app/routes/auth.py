@@ -408,6 +408,7 @@ def account():
 
 
 @bp.post("/account/webhooks/<int:delivery_id>/resend")
+@limiter.limit("30 per minute")   # resend makes OUR worker POST outward — cap it
 @login_required
 @verified_required
 def resend_webhook(delivery_id: int):

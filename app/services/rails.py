@@ -48,6 +48,17 @@ TEST_PHONE_OUTCOMES = {
     "700000003": "timeout",
 }
 
+# Payout-side scenarios (Flutterwave lesson: transfers need their own failure
+# simulation — KarlPOS must be able to rehearse a payout.failed webhook before
+# it happens with real money). Matched on the RECIPIENT phone's last 9 digits,
+# same numbers as collections but with payout-flavoured outcomes.
+TEST_PAYOUT_OUTCOMES = {
+    "700000000": None,                 # documented "always succeeds" number
+    "700000001": "recipient_not_found",
+    "700000002": "wallet_locked",
+    "700000003": "timeout",
+}
+
 
 def _phone_key(phone: str | None) -> str:
     digits = re.sub(r"\D", "", phone or "")

@@ -299,6 +299,36 @@
       </div>
     </div>
 
+    <!-- Settlements: every release of pending -> available, on the record -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title"><i data-feather="clock"></i> Settlements</h3>
+        <a href="{{ url_for('wallet.statement_csv') }}" class="btn btn-outline" style="font-size:.75rem;padding:.3rem .625rem;">
+          <i data-feather="download"></i> Statement (CSV)
+        </a>
+      </div>
+      <p class="text-muted" style="font-size:.8125rem;margin-bottom:.75rem;">
+        Charges become available <strong>24 hours</strong> after they complete; the sweep runs
+        hourly. Every release is recorded below — if one looks more than 2 hours late,
+        contact support. Also via <code>GET /v1/settlements</code>.
+      </p>
+      {% if settlements %}
+      <div style="display:flex;flex-direction:column;gap:.5rem;">
+        {% for s in settlements %}
+        <div style="display:flex;align-items:center;gap:.875rem;padding:.625rem;border:1px solid var(--gray-100);border-radius:10px;">
+          <div style="flex:1;">
+            <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">{{ s.currency }} {{ "{:,}".format(s.amount) }}</div>
+            <div style="font-size:.75rem;color:var(--gray-500);">{{ s.txn_count }} charge{{ 's' if s.txn_count != 1 }} · {{ s.created_at.strftime('%d %b %Y %H:%M') }} UTC</div>
+          </div>
+          <span class="badge succeeded">Released</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:.8125rem;">No settlements yet — your first one lands about 24 hours after your first successful charge.</div>
+      {% endif %}
+    </div>
+
     <!-- Top-up history -->
     {% if topups %}
     <div class="card">

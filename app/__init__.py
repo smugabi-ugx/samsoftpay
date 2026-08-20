@@ -269,7 +269,15 @@ def create_app(config: dict | None = None) -> Flask:
         if _rq.path.startswith("/v1"):
             return _js(error="session token invalid — retry the request"), 400
         _flash("Your session expired — please try again.", "warning")
-        return _redir(_rq.referrer or url_for_login()), 303
+        # Only bounce back to OUR OWN pages — a foreign Referer must not turn
+        # this handler into an open redirect.
+        target = url_for_login()
+        ref = _rq.referrer
+        if ref:
+            from urllib.parse import urlparse as _up
+            if _up(ref).netloc in ("", _rq.host):
+                target = ref
+        return _redir(target), 303
 
     def url_for_login():
         from flask import url_for as _uf

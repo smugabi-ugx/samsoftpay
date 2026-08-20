@@ -249,6 +249,16 @@ def create_charge_route():
 def _charge_public(txn) -> dict:
     """Public charge shape — shared by the by-id and list endpoints so they
     can never drift."""
+    # Stripe lesson: ambiguity about WHEN money becomes withdrawable — not the
+    # hold itself — is what merchants distrust. available_on states it per
+    # charge: the actual settlement time once swept, else completed_at + the
+    # 24h hold (the sweep runs hourly, so the estimate is at most an hour shy).
+    available_on = None
+    if txn.settled_at is not None:
+        available_on = txn.settled_at.isoformat()
+    elif txn.completed_at is not None and txn.status.value == "succeeded":
+        from datetime import timedelta
+        available_on = (txn.completed_at + timedelta(hours=24)).isoformat()
     return dict(
         id=txn.public_id,
         mode="test" if txn.is_test else "live",
@@ -262,6 +272,8 @@ def _charge_public(txn) -> dict:
         failure_reason=txn.failure_reason,
         created_at=txn.created_at.isoformat() if txn.created_at else None,
         completed_at=txn.completed_at.isoformat() if txn.completed_at else None,
+        settled=txn.settled_at is not None,
+        available_on=available_on,
     )
 
 
@@ -899,7 +911,10 @@ def create_bulk_payout():
                 results.append({"index": i, "ok": False, "reference": ref,
                                 "error": "reference reused with different payout details"})
             else:
+                # replayed=True: same contract as the Idempotent-Replayed
+                # header — the caller KNOWS this item wasn't disbursed twice.
                 results.append({"index": i, "ok": True, "reference": ref,
+                                "replayed": True,
                                 **json.loads(existing.response_body)})
             continue
 
@@ -1238,6 +1253,7 @@ def _delivery_public(wh) -> dict:
 
 
 @bp.get("/webhooks")
+@limiter.limit("60 per minute")
 def list_webhook_deliveries():
     merchant = _auth()
     from ..models import WebhookDelivery
@@ -1256,12 +1272,16 @@ def list_webhook_deliveries():
 
 
 @bp.post("/webhooks/<event_id>/resend")
+@limiter.limit("30 per minute")   # resend makes OUR worker POST outward — cap the amplification
 def resend_webhook_delivery(event_id: str):
     _check_timestamp()
     merchant = _auth()
     from ..models import WebhookDelivery, utcnow
     from ..services.webhooks import resend_delivery
-    if not event_id.startswith("evt_") or len(event_id) > 40:
+    import re as _re
+    # Strict shape (hex only) — also keeps LIKE wildcards (%, _) out of the
+    # payload match below.
+    if not _re.fullmatch(r"evt_[0-9a-f]{1,32}", event_id):
         abort(400, description="event id must look like evt_…")
     # The envelope id is embedded in the signed payload (we sign exact bytes,
     # so it was never stored as a column). Scoped to this merchant's rows and
@@ -1277,3 +1297,41 @@ def resend_webhook_delivery(event_id: str):
     log_event("webhook.resend", merchant_id=merchant.id,
               detail={"event_id": event_id, "delivery_id": wh.id})
     return jsonify(ok=True, **_delivery_public(wh)), 202
+
+
+# ---------- settlements (first-class: predictability is the product) ----------
+
+@bp.get("/settlements")
+def list_settlements():
+    """Each row is one release of pending -> available for this merchant.
+
+    Paystack lesson: merchants trust a settlement schedule they can set a
+    watch by. Mode-scoped like /v1/balance — a test key sees sandbox sweeps.
+    The published schedule: every charge becomes available 24h after it
+    completes; the sweep runs hourly. If a settlement looks late by more than
+    2 hours, contact support with the charge id.
+    """
+    merchant = _auth()
+    from ..models import Settlement
+    limit, created_after, created_before = _parse_list_params()
+    q = Settlement.query.filter_by(
+        merchant_id=merchant.id,
+        is_test=(g.api_mode == "test"),
+    )
+    if created_after:
+        q = q.filter(Settlement.created_at > created_after)
+    if created_before:
+        q = q.filter(Settlement.created_at < created_before)
+    rows = q.order_by(Settlement.id.desc()).limit(limit).all()
+    return jsonify(
+        mode=g.api_mode,
+        data=[dict(
+            id=s.public_id,
+            amount=s.amount,
+            currency=s.currency,
+            transactions=s.txn_count,
+            kind=s.kind,
+            created_at=s.created_at.isoformat() if s.created_at else None,
+        ) for s in rows],
+        count=len(rows),
+    )

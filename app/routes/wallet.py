@@ -40,12 +40,77 @@ def wallet_home():
               .order_by(TopUpRequest.created_at.desc())
               .limit(10).all())
 
+    # First-class settlements (live ledger): every release of pending ->
+    # available, newest first — the "you can set a watch by it" table.
+    from ..models import Settlement
+    settlements = (Settlement.query
+                   .filter_by(merchant_id=current_user.id, is_test=False)
+                   .order_by(Settlement.id.desc())
+                   .limit(15).all())
+
     return render_template("wallet.html",
         accounts=accounts, withdrawals=withdrawals,
         available=available, pending=pending,
         withdrawal_fee=_WITHDRAWAL_FEE,
         topups=topups,
+        settlements=settlements,
     )
+
+
+@bp.get("/dashboard/wallet/statement.csv")
+@login_required
+@verified_required
+def statement_csv():
+    """Merchant statement from the JOURNAL — the same source of truth as
+    /v1/balance (MTN *165# lesson: a balance the merchant can audit themselves
+    is a balance they'll leave money in). Live ledger only; one line per
+    journal entry on the merchant's pending/available accounts.
+
+    ?month=YYYY-MM limits to a calendar month (default: everything).
+    """
+    import csv
+    import io as _io
+    from datetime import datetime, timedelta
+    from ..models import JournalEntry
+
+    q = (db.session.query(JournalEntry, Account)
+         .join(Account, JournalEntry.account_id == Account.id)
+         .filter(Account.merchant_id == current_user.id,
+                 Account.is_test.is_(False),
+                 Account.type.in_([AccountType.MERCHANT_PENDING,
+                                   AccountType.MERCHANT_AVAILABLE])))
+    month = request.args.get("month")
+    if month:
+        try:
+            start = datetime.strptime(month, "%Y-%m")
+        except ValueError:
+            abort(400)
+        end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        q = q.filter(JournalEntry.created_at >= start,
+                     JournalEntry.created_at < end)
+    rows = q.order_by(JournalEntry.id).all()
+
+    buf = _io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["date", "entry_id", "account", "memo", "amount", "currency"])
+    for je, acct in rows:
+        # Journal stores merchant money credit-normal (negative) — flip so the
+        # statement reads like a bank statement: positive = money to you.
+        w.writerow([
+            je.created_at.isoformat() if je.created_at else "",
+            je.id,
+            "available" if acct.type == AccountType.MERCHANT_AVAILABLE else "pending",
+            (je.memo or "").replace("\n", " "),
+            -je.amount,
+            acct.currency,
+        ])
+    from flask import Response
+    fname = f"samsoftpay-statement-{current_user.handle or current_user.id}"
+    if month:
+        fname += f"-{month}"
+    return Response(
+        buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={fname}.csv"})
 
 
 @bp.post("/dashboard/wallet/add-account")

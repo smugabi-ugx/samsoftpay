@@ -315,9 +315,27 @@ def sweep_split_allocations(*, cutoff, batch_size: int = 500) -> dict:
                 [(pending, +total), (available, -total)],
                 currency=currency,
                 memo=f"split settlement merchant={merchant_id} ({len(due)} shares)")
+            # Same release invariant as the main sweep (NIBSS lesson): if this
+            # release drove pending positive we're releasing money the ledger
+            # never held — abort this group, nothing moves.
+            db.session.flush()
+            db.session.refresh(pending)
+            if int(pending.cached_balance) > 0:
+                raise RuntimeError(
+                    f"split settlement invariant violated for merchant "
+                    f"{merchant_id}: released {total} > pending balance")
             now = utcnow()
             for a in due:
                 a.settled_at = now
+            if total > 0:
+                import uuid as _uuid
+                from ..models import Settlement
+                db.session.add(Settlement(
+                    public_id=f"setl_{_uuid.uuid4().hex[:16]}",
+                    merchant_id=merchant_id, currency=currency,
+                    is_test=bool(is_test), amount=total, txn_count=len(due),
+                    kind="split_sweep",
+                ))
             db.session.commit()
             moved[merchant_id] = moved.get(merchant_id, 0) + total
         except Exception:

@@ -346,6 +346,26 @@ class WebhookDelivery(db.Model):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
 
+class Settlement(db.Model):
+    """One settlement batch: a sweep releasing pending -> available.
+
+    Paystack lesson: a settlement schedule merchants can set a watch by.
+    Making each release a first-class row gives the dashboard a Settlements
+    page and the API GET /v1/settlements — predictability, not speed, is
+    what makes a merchant leave money in the balance.
+    """
+    __tablename__ = "settlements"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), unique=True, nullable=False, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    currency = Column(String(3), nullable=False)
+    is_test = Column(Boolean, default=False, nullable=False)
+    amount = Column(BigInteger, nullable=False)          # released to available
+    txn_count = Column(Integer, nullable=False)          # charges (or shares) in the batch
+    kind = Column(String(20), nullable=False, default="sweep")  # sweep | split_sweep
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+
 class PlatformFlag(db.Model):
     """Tiny operational key/value switchboard (e.g. the payout kill switch).
 

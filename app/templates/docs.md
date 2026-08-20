@@ -72,6 +72,7 @@ Account page and receive signed events instead. Charge statuses:
 | `POST /v1/payouts/bulk` | Many payouts in one call (full-scope key only) |
 | `GET /v1/payouts` | List payouts |
 | `GET /v1/balance` | Per-currency balance for reconciliation (journal-derived; mode-scoped) |
+| `GET /v1/settlements` | Every release of pending → available (amount, charge count, timestamp; mode-scoped) |
 | `POST /v1/payment-links` | Create a shareable hosted-checkout link (returns `url`, `qr_png_url`, `qr_svg_url`) |
 | `POST /v1/vending/orders` | Create a scan-to-pay vending order (QR + auto-dispense) |
 | `GET /v1/webhooks` | List your recent webhook deliveries: event id, event, status, attempts, last_response_code |
@@ -80,6 +81,15 @@ Account page and receive signed events instead. Charge statuses:
 Fees: charges 1.5% (min UGX 200, cap UGX 5,000), returned in the `fee` field — you receive
 `amount - fee`. Payouts: flat UGX 750, fully refunded with the amount if the payout fails.
 All amounts are integers in minor units (whole UGX).
+
+### Settlement timing (set your watch by it)
+
+A succeeded charge becomes withdrawable **24 hours after it completes**; the settlement sweep
+runs **hourly**, so the release lands at most an hour after the hold expires. Every charge
+response carries `available_on` (the actual settlement time once released, else the estimate)
+and `settled` (boolean). Each release is a first-class record on `GET /v1/settlements` and the
+dashboard's Settlements table. **Escalation threshold:** if a settlement is more than 2 hours
+late, contact support with the charge id — you should never have to discover a delay yourself.
 
 ## Webhooks — the operations contract
 
@@ -190,6 +200,22 @@ magic number, matched on the **last 9 digits** (so `0700000001`, `256700000001` 
 | `256700000001` | Fails | `insufficient_funds` |
 | `256700000002` | Fails | `user_cancelled` |
 | `256700000003` | Fails | `timeout` |
+
+### Payout failure simulation
+
+Payouts (`sk_test_` keys) have their own deterministic scenario set, matched on the
+**recipient** phone's last 9 digits — rehearse your `payout.failed` handling before it
+happens with real money:
+
+| Recipient number | Outcome | `failure_reason` |
+|---|---|---|
+| `256700000000` | Always succeeds | — |
+| `256700000001` | Fails | `recipient_not_found` |
+| `256700000002` | Fails | `wallet_locked` |
+| `256700000003` | Fails | `timeout` |
+
+A failed payout refunds the amount **and** the fee to your available balance, and fires the
+`payout.failed` webhook.
 
 ### Exact `charge.failed` payloads
 
