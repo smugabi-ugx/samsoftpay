@@ -24,6 +24,30 @@ def _fix_db_url(url: str) -> str:
     return url
 
 
+_TRUTHY = {"1", "true", "yes", "on"}
+_FALSY = {"", "0", "false", "no", "off"}
+
+
+def _momo_use_real() -> bool:
+    """Is the REAL MTN rail switched on?
+
+    Tolerant parsing on purpose: an exact `== "1"` meant that setting this to
+    "true" (or leaving a stray space) silently kept MTN mocked, which hides it
+    from every live payment surface with no error anywhere. Anything we do not
+    recognise is treated as OFF but logged loudly, because a misconfigured
+    payment rail must never fail quietly.
+    """
+    raw = os.environ.get("MOMO_USE_REAL", "0")
+    val = raw.strip().strip('"').strip("'").lower()
+    if val in _TRUTHY:
+        return True
+    if val not in _FALSY:
+        logging.getLogger(__name__).error(
+            "MOMO_USE_REAL=%r is not a recognised boolean — treating the MTN "
+            "rail as MOCKED. Use 1/true/yes/on to enable the real rail.", raw)
+    return False
+
+
 def _init_sentry() -> None:
     """Initialise Sentry error tracking IF a SENTRY_DSN is configured.
 
@@ -168,8 +192,14 @@ def create_app(config: dict | None = None) -> Flask:
         # platform-wide ceiling. Override per deployment via env.
         CHARGE_RATE_LIMIT=os.environ.get("CHARGE_RATE_LIMIT", "120 per minute;3000 per hour"),
         PAYOUT_RATE_LIMIT=os.environ.get("PAYOUT_RATE_LIMIT", "30 per minute;600 per hour"),
-        # ---- MTN MoMo real-rail config (only used when MOMO_USE_REAL=1) ----
-        MOMO_USE_REAL=os.environ.get("MOMO_USE_REAL", "0") == "1",
+        # ---- MTN MoMo real-rail config (only used when MOMO_USE_REAL is on) ----
+        # Accepts 1/true/yes/on (any case, whitespace-tolerant). This used to be
+        # an exact `== "1"`, so setting it to "true" or leaving a trailing space
+        # silently left the rail MOCKED — which hides MTN from checkout, empties
+        # the subscription channel dropdown and sends top-ups to the sandbox
+        # ledger, with nothing anywhere saying why. _momo_use_real() also warns
+        # loudly on a value it does not recognise.
+        MOMO_USE_REAL=_momo_use_real(),
         MOMO_BASE_URL=os.environ.get(
             "MOMO_BASE_URL", "https://sandbox.momodeveloper.mtn.com"
         ),
