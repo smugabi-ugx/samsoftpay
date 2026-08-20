@@ -25,7 +25,7 @@
   <div class="table-container">
     <table>
       <thead>
-        <tr><th>Phone</th><th>Email</th><th>Status</th><th>Next Billing</th><th>Subscribed</th><th></th></tr>
+        <tr><th>Phone</th><th>Email</th><th>Status</th><th>Next / Retry</th><th>Paid</th><th>Subscribed</th><th></th></tr>
       </thead>
       <tbody>
         {% for s in subs %}
@@ -33,12 +33,24 @@
           <td><strong>{{ s.customer_phone }}</strong></td>
           <td>{{ s.customer_email or '—' }}</td>
           <td>
-            <span class="badge {% if s.status == 'active' %}succeeded{% elif s.status == 'paused' %}pending{% else %}failed{% endif %}">
-              {{ s.status.title() }}
+            <span class="badge {% if s.status == 'active' %}succeeded{% elif s.status in ('paused',) %}pending{% elif s.status == 'past_due' %}pending{% else %}failed{% endif %}">
+              {% if s.status == 'past_due' %}Past due{% else %}{{ s.status.title() }}{% endif %}
             </span>
+            {% if s.status in ('past_due','failed') and s.failure_reason %}
+            <div style="font-size:.7rem;color:var(--gray-500);margin-top:.15rem;">{{ s.failure_reason }}</div>
+            {% endif %}
           </td>
           <td style="font-size:.875rem;color:var(--gray-500);">
-            {{ s.next_billing_at.strftime('%d %b %Y %H:%M') if s.status == 'active' else '—' }}
+            {% if s.status == 'active' %}{{ s.next_billing_at.strftime('%d %b %Y %H:%M') }}
+            {% elif s.status == 'past_due' %}Retry {{ s.next_retry_at.strftime('%d %b %H:%M') if s.next_retry_at else 'soon' }} · attempt {{ s.retry_count or 1 }}/4
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:.875rem;">
+            {% set pp = pay.get(s.id) %}
+            {% if pp and pp.charge_count %}
+              <strong>{{ plan.currency }} {{ "{:,}".format(pp.total_paid) }}</strong>
+              <div style="font-size:.7rem;color:var(--gray-500);">{{ pp.charge_count }} charge{{ 's' if pp.charge_count != 1 }}{% if pp.last_paid_at %} · last {{ pp.last_paid_at.strftime('%d %b') }}{% endif %}</div>
+            {% else %}<span style="color:var(--gray-400);">—</span>{% endif %}
           </td>
           <td style="font-size:.875rem;color:var(--gray-500);">{{ s.created_at.strftime('%d %b %Y') }}</td>
           <td>

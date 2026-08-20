@@ -56,15 +56,28 @@ def list_plans():
              .filter_by(merchant_id=current_user.id)
              .order_by(SubscriptionPlan.created_at.desc())
              .all())
-    # Subscriber counts per plan
+    # Live subscribers per plan (active + past_due are both still billing).
     counts = {
-        p.id: Subscription.query.filter_by(plan_id=p.id, status="active").count()
+        p.id: Subscription.query.filter(
+            Subscription.plan_id == p.id,
+            Subscription.status.in_(("active", "past_due"))).count()
         for p in plans
     }
-    total_subs = Subscription.query.filter_by(merchant_id=current_user.id).count()
+    # MRR: normalise each plan's live revenue to a monthly figure so the
+    # merchant sees one number that means "recurring revenue" (Stripe/Paystack
+    # show this front and centre — it's what makes a plan feel like it "brings"
+    # something).
+    _to_monthly = {"daily": 30.0, "weekly": 4.33, "monthly": 1.0, "yearly": 1 / 12.0}
+    mrr = 0
+    for p in plans:
+        if p.is_active:
+            mrr += int(counts.get(p.id, 0) * p.amount * _to_monthly.get(p.interval, 1.0))
+    total_subs = Subscription.query.filter(
+        Subscription.merchant_id == current_user.id,
+        Subscription.status.in_(("active", "past_due"))).count()
     return render_template("subscriptions.html",
                            plans=plans, counts=counts,
-                           total_subs=total_subs,
+                           total_subs=total_subs, mrr=mrr,
                            channels=_live_channels(), intervals=_INTERVALS)
 
 
@@ -109,7 +122,27 @@ def plan_subscribers(plan_id: int):
     ).first_or_404()
     subs = (Subscription.query.filter_by(plan_id=plan_id)
             .order_by(Subscription.created_at.desc()).all())
-    return render_template("subscription_subscribers.html", plan=plan, subs=subs)
+    # Per-subscriber payment history (read-only), so the merchant can see money
+    # actually collected — the audit flagged the page as a "dead end".
+    from ..models import Transaction, TxnStatus
+    from sqlalchemy import func as safunc
+    pay = {}
+    collected_total = 0
+    for s in subs:
+        rows = (Transaction.query
+                .filter(Transaction.merchant_id == current_user.id,
+                        Transaction.merchant_reference == f"sub_{s.public_id}")
+                .order_by(Transaction.created_at.desc()).all())
+        paid = sum(t.amount for t in rows if t.status == TxnStatus.SUCCEEDED)
+        collected_total += paid
+        last = next((t for t in rows if t.status == TxnStatus.SUCCEEDED), None)
+        pay[s.id] = {
+            "total_paid": paid,
+            "charge_count": len(rows),
+            "last_paid_at": last.completed_at if last else None,
+        }
+    return render_template("subscription_subscribers.html", plan=plan, subs=subs,
+                           pay=pay, collected_total=collected_total)
 
 
 @bp.post("/dashboard/subscriptions/<int:sub_id>/cancel")

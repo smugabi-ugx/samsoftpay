@@ -17,9 +17,14 @@
     <div class="stat-change"><i data-feather="check-circle"></i> <span>Live plans</span></div>
   </div>
   <div class="stat-card success">
-    <div class="stat-header"><span class="stat-label">Total Subscribers</span><div class="stat-icon success"><i data-feather="users"></i></div></div>
+    <div class="stat-header"><span class="stat-label">Active Subscribers</span><div class="stat-icon success"><i data-feather="users"></i></div></div>
     <div class="stat-value">{{ total_subs }}</div>
-    <div class="stat-change positive"><i data-feather="trending-up"></i> <span>All time</span></div>
+    <div class="stat-change positive"><i data-feather="trending-up"></i> <span>Billing now</span></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-header"><span class="stat-label">Monthly Recurring Revenue</span><div class="stat-icon primary"><i data-feather="repeat"></i></div></div>
+    <div class="stat-value">UGX {{ "{:,}".format(mrr) }}</div>
+    <div class="stat-change"><i data-feather="calendar"></i> <span>Normalised to monthly</span></div>
   </div>
 </div>
 
