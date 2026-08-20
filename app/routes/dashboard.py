@@ -18,6 +18,10 @@ from ..utils import admin_required, merchant_or_admin, verified_required
 
 bp = Blueprint("dashboard", __name__)
 
+# Transactions load a small page at a time via infinite scroll (the list can be
+# huge for a busy merchant). 5 keeps the first paint light and scrolls smoothly.
+_ACTIVITY_PAGE = 5
+
 
 @bp.get("/")
 def index():
@@ -227,7 +231,7 @@ def merchant_detail(merchant_id: int):
     txns = (
         Transaction.query.filter_by(merchant_id=merchant_id)
         .order_by(Transaction.id.desc())   # id-desc = stable load-more cursor
-        .limit(25)
+        .limit(_ACTIVITY_PAGE)             # small first page — infinite scroll loads more
         .all()
     )
     payouts = (
@@ -310,9 +314,9 @@ def activity_page(merchant_id: int):
     q = Transaction.query.filter_by(merchant_id=merchant_id)
     if before_id:
         q = q.filter(Transaction.id < before_id)
-    rows = q.order_by(Transaction.id.desc()).limit(26).all()
-    has_more = len(rows) > 25
-    rows = rows[:25]
+    rows = q.order_by(Transaction.id.desc()).limit(_ACTIVITY_PAGE + 1).all()
+    has_more = len(rows) > _ACTIVITY_PAGE
+    rows = rows[:_ACTIVITY_PAGE]
     html = render_template("_activity_rows.html", txns=rows, merchant=merchant)
     return jsonify(html=html, has_more=has_more,
                    next_before=(rows[-1].id if rows else None))
