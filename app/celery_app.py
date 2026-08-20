@@ -51,6 +51,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.sweep.resolve_stale_payouts",
                 "schedule": 3600.0,        # every hour — OUTBOUND straggler net (payouts stuck AUTHORIZED)
             },
+            "complete-pending-topups": {
+                "task": "app.tasks.sweep.complete_pending_topups",
+                "schedule": 900.0,         # every 15 min — finish top-ups whose payer closed the page
+            },
             "prune-old-rows": {
                 "task": "app.tasks.sweep.prune_old_rows",
                 "schedule": 86400.0,       # daily — sent webhooks + aged idempotency keys (30d retention)

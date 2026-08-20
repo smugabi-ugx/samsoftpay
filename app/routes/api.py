@@ -477,6 +477,17 @@ def create_payout_route():
         idempotency.store(merchant.id, idem_key, request_hash, 400, body_out)
         log_event("payout.rejected", merchant_id=merchant.id, detail={"reason": str(exc)})
         return jsonify(body_out), 400
+    except Exception as exc:
+        # A config/rail crash (e.g. MOMO_DISBURSEMENT_* missing on the live
+        # switch) must not surface as a 500 with a poisoned idempotency key.
+        # Release the key so the SAME request retries cleanly once fixed, and
+        # return a retryable 503 — never store this outcome under the key.
+        db.session.rollback()
+        idempotency.release(merchant.id, idem_key)
+        from flask import current_app
+        current_app.logger.exception("payout creation crashed (disbursement config?)")
+        return jsonify(error="disbursement temporarily unavailable — retry with "
+                             "the same Idempotency-Key"), 503
 
     out = {
         "id": payout.public_id,

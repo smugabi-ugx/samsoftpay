@@ -396,13 +396,22 @@ def admin_approve_withdrawal(wr_id: int):
     sa = db.session.get(SettlementAccount, wr.settlement_account_id)
     merchant = db.session.get(Merchant, wr.merchant_id)
 
-    # Map account type to disbursement channel
-    channel_map = {
-        "momo_mtn":    Channel.MTN_MOMO,
-        "momo_airtel": Channel.AIRTEL_MONEY,
-        "bank":        Channel.MTN_MOMO,   # bank via MoMo bridge for now
-    }
-    channel = channel_map.get(sa.account_type, Channel.MTN_MOMO)
+    # Resolve the disbursement channel from an EXPLICIT allowlist. The old map
+    # sent "bank" (and any unknown type) to MTN_MOMO using the settlement
+    # account NUMBER as the recipient MSISDN — on the live rail that either
+    # fails every bank withdrawal or, on a digit collision, wires real money to
+    # a stranger's MoMo wallet. Only MTN MoMo has a real disbursement rail
+    # today; reject anything else with ZERO money writes (guardrail 13).
+    channel = {"momo_mtn": Channel.MTN_MOMO}.get(sa.account_type)
+    if channel is None:
+        wr.status = "rejected"
+        wr.admin_notes = (
+            f"No disbursement rail for account type '{sa.account_type}'. "
+            f"Only MTN Mobile Money withdrawals are supported until a bank/Airtel "
+            f"rail is live. Ask the merchant to add an MTN MoMo settlement account.")
+        db.session.commit()
+        flash(wr.admin_notes, "error")
+        return redirect(url_for("wallet.admin_withdrawals"))
 
     g.api_mode = "live"
     try:
@@ -425,6 +434,20 @@ def admin_approve_withdrawal(wr_id: int):
         wr.admin_notes = f"Payout failed: {exc}"
         db.session.commit()
         flash(f"Could not create payout: {exc}", "error")
+    except Exception as exc:
+        # A config/credential crash (e.g. MOMO_DISBURSEMENT_* missing when the
+        # live rail is switched on) must not strand the request in 'processing'
+        # or 500. Roll back, leave it 'pending' so it can be retried once the
+        # config is fixed, and tell the admin plainly.
+        db.session.rollback()
+        db.session.refresh(wr)
+        wr.status = "pending"
+        wr.admin_notes = f"Payout could not be created (system/config error): {exc}"
+        db.session.commit()
+        from flask import current_app
+        current_app.logger.exception("withdrawal approve crashed (disbursement config?)")
+        flash("Payout system is temporarily unavailable (configuration error). "
+              "The request is left pending — retry once resolved.", "error")
 
     return redirect(url_for("wallet.admin_withdrawals"))
 
@@ -568,6 +591,19 @@ def _settle_topup(merchant_id: int, txn, ref: str) -> None:
     This is the same fee applied to all collections.
     """
     from ..services import ledger
+
+    # SETTLE-ONCE GUARD (critical, armed by MTN go-live): this function is
+    # called from the poll endpoint, but the hourly settlement sweep can settle
+    # the SAME transaction first (a merchant who paid then closed the poll page
+    # gets settled by the sweep after 24h, which sets txn.settled_at). If the
+    # merchant later re-opens the QR, the poll endpoint would call this again —
+    # and a second pending->available post mints withdrawable money nobody
+    # funded (real money once MOMO_USE_REAL=1). txn.settled_at is the real
+    # settle-once key (guardrails 4/12/14): if it's set, the money is already
+    # in available; do nothing here. The caller still marks the TopUpRequest
+    # completed, which is correct.
+    if txn.settled_at is not None:
+        return
 
     net_amount = txn.amount - txn.fee_amount   # e.g. 1000 - 200 = 800
     currency   = txn.currency

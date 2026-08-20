@@ -88,3 +88,57 @@ def resolve_stale_payouts() -> None:
     except Exception as exc:
         print(f"stale payout sweep error: {exc}")
         raise
+
+
+@celery.task(name="app.tasks.sweep.complete_pending_topups")
+def complete_pending_topups() -> None:
+    """Backstop that finishes MoMo top-ups whose payer navigated away.
+
+    Top-up settlement was driven ONLY by the merchant's browser hitting
+    topup_status_json. A merchant who paid then closed the QR page left the
+    TopUpRequest stuck 'pending' forever (its money reached `available` via the
+    24h sweep, but the record lied). This resolver settles + advances the
+    status server-side, and is safe because _settle_topup is now idempotent
+    against txn.settled_at (the sweep may have settled it first).
+    """
+    from datetime import datetime, timezone
+
+    from ..extensions import db
+    from ..models import PaymentLink, TopUpRequest, Transaction, TxnStatus
+    from ..routes.wallet import _settle_topup
+
+    pending = (TopUpRequest.query
+               .filter(TopUpRequest.status == "pending",
+                       TopUpRequest.method == "momo",
+                       TopUpRequest.payment_link_id.isnot(None))
+               .limit(500).all())
+    done = 0
+    for topup in pending:
+        try:
+            db.session.refresh(topup, with_for_update=True)
+            if topup.status != "pending":
+                db.session.commit()
+                continue
+            link = db.session.get(PaymentLink, topup.payment_link_id)
+            if not (link and link.transaction_id):
+                db.session.commit()
+                continue
+            txn = db.session.get(Transaction, link.transaction_id)
+            if txn and txn.status == TxnStatus.SUCCEEDED:
+                _settle_topup(topup.merchant_id, txn, topup.public_id)
+                topup.status = "completed"
+                topup.transaction_id = txn.id
+                topup.processed_at = datetime.now(timezone.utc)
+                db.session.commit()
+                done += 1
+            elif txn and txn.status == TxnStatus.FAILED:
+                topup.status = "rejected"
+                topup.admin_notes = txn.failure_reason or "Payment failed"
+                db.session.commit()
+            else:
+                db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"complete_pending_topups error for {topup.public_id}: {exc}")
+    if done:
+        print(f"complete_pending_topups: completed {done} top-up(s)")

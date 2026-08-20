@@ -382,7 +382,15 @@ def _get_disbursement_adapter(channel: Channel):
     sandbox = g.get("api_mode") == "test"
     if not sandbox and current_app.config.get("MOMO_USE_REAL"):
         from .rails_mtn_disbursement import RealMTNMoMoDisbursementAdapter
-        return RealMTNMoMoDisbursementAdapter()
+        try:
+            return RealMTNMoMoDisbursementAdapter()
+        except Exception as exc:
+            # Missing/mis-set MOMO_DISBURSEMENT_* creds raised RuntimeError,
+            # which propagated as an uncaught 500 that poisoned the idempotency
+            # key. Re-raise as PayoutError so callers take the money-safe path
+            # (zero writes — this is before any ledger post).
+            raise PayoutError(
+                "disbursement temporarily unavailable — configuration error") from exc
     return _MockDisbursementAdapter()
 
 
