@@ -103,6 +103,11 @@ def create_app(config: dict | None = None) -> Flask:
         # re-fetched every asset across the ocean (Kampala->Oregon ~300ms RTT
         # each), which is what made page-to-page movement feel sticky.
         SEND_FILE_MAX_AGE_DEFAULT=86400,
+        # KYC documents go on a mounted persistent disk on Render (survives
+        # redeploys); unset locally -> instance_path. See render.yaml disk.
+        KYC_UPLOAD_ROOT=os.environ.get("KYC_UPLOAD_ROOT"),
+        # Enforce the '10MB per file' promise server-side (was unbounded).
+        MAX_CONTENT_LENGTH=int(os.environ.get("MAX_CONTENT_LENGTH", 10 * 1024 * 1024)),
         # ── Secure session cookies ──────────────────────────────────────────
         SESSION_COOKIE_NAME="ssp_session",
         SESSION_COOKIE_HTTPONLY=True,

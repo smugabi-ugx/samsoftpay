@@ -12,11 +12,19 @@ services:
     startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile -
     preDeployCommand: python -m flask --app run.py db upgrade
     healthCheckPath: /healthz
+    # Persistent disk for KYC documents — the web dyno's own filesystem is
+    # wiped on every deploy, which silently erased uploaded IDs/certificates.
+    disk:
+      name: samsoftpay-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: FLASK_ENV
         value: production
       - key: RENDER
         value: "true"
+      - key: KYC_UPLOAD_ROOT
+        value: /var/data
       - key: SECRET_KEY
         generateValue: true
       - key: WEBHOOK_SIGNING_SECRET

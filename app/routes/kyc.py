@@ -48,7 +48,17 @@ def _get_or_create_app() -> KYCApplication:
 
 
 def _upload_root() -> str:
+    """Where KYC documents live.
+
+    On Render the web dyno's local disk (instance_path) is WIPED on every
+    deploy, so uploaded IDs/certificates silently vanished. KYC_UPLOAD_ROOT
+    points at a mounted PERSISTENT DISK (see render.yaml disk mountPath) so
+    documents survive redeploys. Falls back to instance_path locally.
+    """
     from flask import current_app
+    root = current_app.config.get("KYC_UPLOAD_ROOT")
+    if root:
+        return os.path.join(root, "kyc_uploads")
     return os.path.join(current_app.instance_path, "kyc_uploads")
 
 
