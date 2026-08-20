@@ -109,6 +109,34 @@ def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = No
     return True
 
 
+def resend_delivery(wh) -> None:
+    """Re-queue one delivery for the sweep (self-service recovery).
+
+    The payload and signature are reused byte-for-byte — the receiver dedupes
+    on the envelope id, so a resend of an already-processed event is harmless.
+    An exhausted delivery (8 attempts) gets a fresh cycle; the sweep's
+    `attempts < 8` cap would otherwise ignore it forever.
+    """
+    wh.status = "pending"
+    wh.next_attempt_at = utcnow()
+    if wh.attempts >= 8:
+        wh.attempts = 0
+    # The #1 recovery case is "my endpoint URL was wrong" — deliver to the
+    # merchant's CURRENT url, not the one stored at enqueue time. Safe: the
+    # signature covers the payload bytes, not the destination.
+    from ..models import Merchant
+    m = db.session.get(Merchant, wh.merchant_id)
+    if m is not None and getattr(m, "webhook_url", None):
+        wh.url = m.webhook_url
+    db.session.commit()
+    # Best-effort immediate attempt, same pattern as enqueue().
+    try:
+        from ..tasks.webhooks_task import deliver_webhook
+        deliver_webhook.delay(wh.id)
+    except Exception:
+        pass
+
+
 def deliver_pending_webhooks(*, limit: int = 50) -> int:
     """Send any pending webhooks whose next_attempt_at <= now. Returns count sent.
 

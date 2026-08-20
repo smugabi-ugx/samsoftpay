@@ -165,6 +165,35 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"{m.name} ({m.email}) instant_settlement = {m.instant_settlement}")
 
+    @app.cli.command("freeze-payouts")
+    @click.argument("state", required=False, default="status")
+    def freeze_payouts(state):
+        """Platform-wide LIVE payout kill switch. STATE: on|off|status.
+
+        `on` stops every live payout instantly (create_payout refuses with
+        zero writes) — the incident response for a suspected drain. Test-mode
+        payouts keep working. No deploy needed; flips a DB flag.
+        """
+        from .services import platform_flags
+        with app.app_context():
+            state = state.lower()
+            if state == "status":
+                frozen = platform_flags.payouts_frozen()
+                print("payouts are " + ("FROZEN" if frozen else "flowing (not frozen)"))
+                return
+            if state not in ("on", "off"):
+                print("usage: flask freeze-payouts [on|off|status]")
+                return
+            platform_flags.set_flag(platform_flags.FREEZE_PAYOUTS, state,
+                                    updated_by="cli")
+            from .services.audit import log_event
+            log_event("payouts.freeze_" + state, detail={"via": "cli"})
+            db.session.commit()
+            if state == "on":
+                print("PAYOUTS FROZEN platform-wide. Unfreeze: flask freeze-payouts off")
+            else:
+                print("Payouts unfrozen — live payouts flow again.")
+
     @app.cli.command("stranded-payouts")
     def stranded_payouts():
         """List payouts that took the merchant's money but never reached a rail.

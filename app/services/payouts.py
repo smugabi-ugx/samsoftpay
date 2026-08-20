@@ -97,6 +97,33 @@ def create_payout(
     # once, here, and used for every account below.
     is_test = g.get("api_mode") == "test"
 
+    if not is_test:
+        # Platform payout kill switch (Pegasus lesson: the aggregator is THE
+        # target and attacks are timed for when nobody is watching). One
+        # command — `flask freeze-payouts on` — stops all live money-out
+        # instantly, without a deploy. Zero writes on refusal.
+        from .platform_flags import payouts_frozen
+        if payouts_frozen():
+            raise PayoutError(
+                "payouts are temporarily paused platform-wide for a safety "
+                "review — no action needed on your side; money in is unaffected")
+
+        # NIBSS lesson: the window between "ledger says credited" and "money
+        # is withdrawable" is the only place errors are cheaply reversible.
+        # An OPEN critical reconciliation exception means our ledger and MTN
+        # disagree about this merchant's money — freeze THEIR live payouts
+        # until a human resolves it, instead of letting possibly-wrong money
+        # become unrecoverable.
+        from ..models import ReconException
+        open_recon = ReconException.query.filter_by(
+            merchant_id=merchant.id, status="open", severity="critical",
+        ).count()
+        if open_recon:
+            raise PayoutError(
+                "payouts are paused on this account while a payment "
+                "reconciliation issue is investigated — support has been "
+                "notified; your balance is safe and money in is unaffected")
+
     # Check the merchant has enough available balance (amount + fee).
     avail_acct = ledger.get_or_create_account(
         type=AccountType.MERCHANT_AVAILABLE,

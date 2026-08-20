@@ -372,18 +372,58 @@ def logout():
 @login_required
 @verified_required
 def account():
-    from ..models import Payout, Transaction, TxnStatus
+    from ..models import Payout, Transaction, TxnStatus, WebhookDelivery
     txn_count = Transaction.query.filter_by(merchant_id=current_user.id).count()
     succeeded = Transaction.query.filter_by(
         merchant_id=current_user.id, status=TxnStatus.SUCCEEDED
     ).count()
     payout_count = Payout.query.filter_by(merchant_id=current_user.id).count()
+    # Delivery log for the Webhooks card (self-service resend — a missed
+    # webhook must never need a support ticket). Event name lives inside the
+    # signed payload; parse just enough to label the row.
+    import json as _json
+    deliveries = []
+    for wh in (WebhookDelivery.query.filter_by(merchant_id=current_user.id)
+               .order_by(WebhookDelivery.id.desc()).limit(20).all()):
+        try:
+            env = _json.loads(wh.payload)
+        except ValueError:
+            env = {}
+        deliveries.append({
+            "row_id": wh.id,
+            "event_id": env.get("id") or "—",
+            "event": env.get("event") or "—",
+            "status": wh.status,
+            "attempts": wh.attempts,
+            "code": wh.last_response_code,
+            "created_at": wh.created_at,
+        })
     return render_template(
         "account.html",
         txn_count=txn_count,
         succeeded=succeeded,
         payout_count=payout_count,
+        deliveries=deliveries,
     )
+
+
+@bp.post("/account/webhooks/<int:delivery_id>/resend")
+@login_required
+@verified_required
+def resend_webhook(delivery_id: int):
+    from ..models import WebhookDelivery
+    wh = db.session.get(WebhookDelivery, delivery_id)
+    # Own rows only — an id from another merchant 404s, never 403s (no oracle).
+    if wh is None or wh.merchant_id != current_user.id:
+        abort(404)
+    from ..services.webhooks import resend_delivery
+    resend_delivery(wh)
+    from ..services.audit import log_event
+    log_event("webhook.resend", merchant_id=current_user.id,
+              detail={"delivery_id": wh.id, "via": "dashboard"})
+    db.session.commit()
+    flash("Webhook re-queued — it will be delivered to your current endpoint within seconds.", "success")
+    return redirect(url_for("auth.account") + "#webhooks")
 
 
 @bp.post("/account/toggle-2fa")

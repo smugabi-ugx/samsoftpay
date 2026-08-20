@@ -127,6 +127,34 @@ def _settle_one_merchant(*, merchant_id, currency, is_test, cutoff, batch_size) 
             currency=currency,
             memo=f"settlement sweep merchant={merchant_id} ({len(due)} txns)",
         )
+        # RELEASE INVARIANT (NIBSS lesson: erroneously-credited money that
+        # becomes withdrawable converts an ops fix into multi-year litigation).
+        # pending is credit-normal (negative); if this release drove it ABOVE
+        # zero we just moved money into `available` that pending never held —
+        # a dry posting. Abort THIS merchant's settlement (caller rolls back,
+        # nothing releases) and page a human. All other merchants still settle.
+        # cached_balance is updated with an atomic SQL increment, so the
+        # instance attribute holds an expression until re-read — refresh to
+        # get the post-release number from the database.
+        db.session.flush()
+        db.session.refresh(pending)
+        if int(pending.cached_balance) > 0:
+            try:
+                from .alerts import send_alert
+                send_alert(
+                    "SETTLEMENT INVARIANT VIOLATION — release aborted",
+                    f"merchant={merchant_id} currency={currency} is_test={is_test}: "
+                    f"sweep tried to release {total} but merchant_pending went "
+                    f"positive ({int(pending.cached_balance)}). Rolled back; "
+                    f"investigate before this merchant settles again.",
+                    severity="critical",
+                    key=f"settle-invariant-{merchant_id}-{currency}-{int(is_test)}",
+                )
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"settlement invariant violated for merchant {merchant_id}: "
+                f"released {total} > pending balance")
     for txn in due:
         # net<=0 txns move no money but are still marked so the sweep skips them next time.
         txn.settled_at = now

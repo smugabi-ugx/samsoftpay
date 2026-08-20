@@ -109,6 +109,18 @@ def _check_timestamp() -> None:
         abort(400, description="request timestamp is too far in the future — check your system clock")
 
 
+def _replayed(payload: dict, status: int):
+    """Return a cached idempotent response, marked as a replay.
+
+    Flutterwave lesson: a replay must be DISTINGUISHABLE from a fresh
+    execution — `Idempotent-Replayed: true` lets a retrying integrator KNOW
+    the payout/charge wasn't fired twice, instead of guessing.
+    """
+    resp = jsonify(payload)
+    resp.headers["Idempotent-Replayed"] = "true"
+    return resp, status
+
+
 def _optional_idempotency(merchant, body):
     """Optional-but-honored idempotency for money-adjacent CREATE endpoints
     (payment links, vending orders). If the caller sends an Idempotency-Key we
@@ -170,7 +182,7 @@ def create_charge_route():
             abort(409, description="idempotency key reused with different request body")
         if existing.response_status == idempotency.IN_FLIGHT:
             abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
-        return jsonify(json.loads(existing.response_body)), existing.response_status
+        return _replayed(json.loads(existing.response_body), existing.response_status)
     # Reserve the key BEFORE executing: concurrent duplicates used to both
     # find nothing and both execute (double prompt / double disbursement).
     if not idempotency.reserve(merchant.id, idem_key, request_hash):
@@ -423,7 +435,7 @@ def create_payout_route():
             abort(409, description="idempotency key reused with different request body")
         if existing.response_status == idempotency.IN_FLIGHT:
             abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
-        return jsonify(json.loads(existing.response_body)), existing.response_status
+        return _replayed(json.loads(existing.response_body), existing.response_status)
     # Reserve the key BEFORE executing: concurrent duplicates used to both
     # find nothing and both execute (double prompt / double disbursement).
     if not idempotency.reserve(merchant.id, idem_key, request_hash):
@@ -576,7 +588,7 @@ def create_vending_order():
     # used to create a duplicate order + QR against the same machine.
     idem_key, request_hash, cached = _optional_idempotency(merchant, body)
     if cached is not None:
-        return jsonify(cached[0]), cached[1]
+        return _replayed(cached[0], cached[1])
 
     try:
         link = vending.create_order(
@@ -1049,7 +1061,7 @@ def create_payment_link():
     # customer paid the wrong one. Honored when a key is sent.
     idem_key, request_hash, cached = _optional_idempotency(merchant, body)
     if cached is not None:
-        return jsonify(cached[0]), cached[1]
+        return _replayed(cached[0], cached[1])
 
     link = PaymentLink(
         public_id=f"lnk_{_uuid.uuid4().hex[:16]}",
@@ -1199,3 +1211,69 @@ def get_balance():
         consistent=consistent,
         as_of=int(time.time()),
     )
+
+
+# ---------- webhook deliveries: log + self-service resend ----------
+#
+# Flutterwave lesson: a missed webhook must never need a support ticket.
+# GET lists what we sent (or tried to); POST re-queues one delivery. Read-only
+# plus re-notify — no money moves — so collections-scoped keys may use both
+# (a kiosk that missed vending.dispensed needs the resend as much as anyone).
+
+def _delivery_public(wh) -> dict:
+    try:
+        envelope = json.loads(wh.payload)
+    except (ValueError, TypeError):
+        envelope = {}
+    return {
+        "id": envelope.get("id"),               # evt_… — same id the receiver deduped on
+        "event": envelope.get("event"),
+        "url": wh.url,
+        "status": wh.status,                    # pending | sent | failed
+        "attempts": wh.attempts,
+        "last_response_code": wh.last_response_code,
+        "next_attempt_at": wh.next_attempt_at.isoformat() if wh.next_attempt_at and wh.status != "sent" else None,
+        "created_at": wh.created_at.isoformat() if wh.created_at else None,
+    }
+
+
+@bp.get("/webhooks")
+def list_webhook_deliveries():
+    merchant = _auth()
+    from ..models import WebhookDelivery
+    try:
+        limit = min(max(int(request.args.get("limit", 25)), 1), 100)
+    except ValueError:
+        abort(400, description="limit must be an integer")
+    q = WebhookDelivery.query.filter_by(merchant_id=merchant.id)
+    status = request.args.get("status")
+    if status:
+        if status not in ("pending", "sent", "failed"):
+            abort(400, description="status must be pending, sent or failed")
+        q = q.filter_by(status=status)
+    rows = q.order_by(WebhookDelivery.id.desc()).limit(limit).all()
+    return jsonify(data=[_delivery_public(w) for w in rows], count=len(rows))
+
+
+@bp.post("/webhooks/<event_id>/resend")
+def resend_webhook_delivery(event_id: str):
+    _check_timestamp()
+    merchant = _auth()
+    from ..models import WebhookDelivery, utcnow
+    from ..services.webhooks import resend_delivery
+    if not event_id.startswith("evt_") or len(event_id) > 40:
+        abort(400, description="event id must look like evt_…")
+    # The envelope id is embedded in the signed payload (we sign exact bytes,
+    # so it was never stored as a column). Scoped to this merchant's rows and
+    # payloads are canonical JSON, so the quoted match is exact.
+    wh = (WebhookDelivery.query
+          .filter_by(merchant_id=merchant.id)
+          .filter(WebhookDelivery.payload.contains(f'"id":"{event_id}"'))
+          .first())
+    if wh is None:
+        abort(404, description="no webhook delivery with that event id "
+                               "(deliveries are retained 30 days)")
+    resend_delivery(wh)
+    log_event("webhook.resend", merchant_id=merchant.id,
+              detail={"event_id": event_id, "delivery_id": wh.id})
+    return jsonify(ok=True, **_delivery_public(wh)), 202

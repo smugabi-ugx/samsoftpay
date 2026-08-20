@@ -346,6 +346,19 @@ class WebhookDelivery(db.Model):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
 
+class PlatformFlag(db.Model):
+    """Tiny operational key/value switchboard (e.g. the payout kill switch).
+
+    Flags live in the DATABASE so flipping one is a CLI command, not a deploy —
+    `flask freeze-payouts on` must work from a phone during an incident.
+    """
+    __tablename__ = "platform_flags"
+    key = Column(String(60), primary_key=True)
+    value = Column(String(200), nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+    updated_by = Column(String(120), nullable=True)
+
+
 class RailEvent(db.Model):
     """Persists every event coming back from a mock rail — used by reconciliation."""
     __tablename__ = "rail_events"

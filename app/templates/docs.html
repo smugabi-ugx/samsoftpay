@@ -71,6 +71,10 @@
 </div>
 {% endif %}
 
+<p style="color:var(--gray-500);font-size:.85rem;margin:-0.75rem 0 1.5rem;">
+  These docs are machine-readable: <a href="/docs/llms.txt">/docs/llms.txt</a> &middot; <a href="/docs.md">/docs.md</a>
+</p>
+
 <div class="docs-layout">
   <!-- Inner Nav -->
   <nav class="docs-nav card" style="padding:1.25rem;">
@@ -80,6 +84,7 @@
       <a href="#authentication" class="docs-nav-link">Authentication</a>
       <a href="#headers" class="docs-nav-link">Required Headers</a>
       <a href="#errors" class="docs-nav-link">Errors</a>
+      <a href="#best-practices" class="docs-nav-link">Best Practices</a>
     </div>
     <div class="docs-nav-section">
       <div class="docs-nav-title">Endpoints</div>
@@ -97,6 +102,7 @@
       <div class="docs-nav-title">Webhooks</div>
       <a href="#webhooks" class="docs-nav-link">Events</a>
       <a href="#webhook-verify" class="docs-nav-link">Verification</a>
+      <a href="#webhook-ops" class="docs-nav-link">Operations &amp; Retries</a>
     </div>
   </nav>
 
@@ -217,6 +223,14 @@ headers = {
     "X-Timestamp": str(int(time.time())),
     "Content-Type": "application/json",
 }</code></pre>
+      <h3>Idempotency semantics</h3>
+      <p>Keys are <strong>reserved before execution</strong> — two concurrent requests with the
+      same key can never both run; the loser gets <code>409</code> and should retry shortly.
+      Replaying a key returns the <strong>original response</strong>, unchanged, plus the header
+      <code>Idempotent-Replayed: true</code> so you can tell a replay from a fresh execution.
+      Keys are retained for <strong>30 days</strong>. On a network error, timeout or <code>5xx</code>,
+      retry with the <strong>same</strong> key — that is the whole point. <code>Idempotency-Key</code>
+      is required on the money POSTs and optional-but-honored on payment links and vending orders.</p>
     </div>
 
     <!-- Charges -->
@@ -320,6 +334,30 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
         </tbody>
       </table>
       <div class="callout">Matched on the last 9 digits, so <code>0700000001</code>, <code>256700000001</code> and <code>256 700 000 001</code> all trigger the same outcome. Any other number succeeds — a sandbox should never make an ordinary test transaction randomly fail.</div>
+
+      <h3>Exact <code>charge.failed</code> payloads</h3>
+      <p>Each failure number produces a <code>charge.failed</code> webhook whose <code>data</code>
+      is exactly this shape (identical to <code>GET /v1/charges/&lt;id&gt;</code>) — build your
+      error handling against these, not against guesses:</p>
+      <p style="margin-bottom:.25rem;"><code>256700000001</code>:</p>
+<pre><code>{
+  "id": "txn_9f2c41d8a3b7e615",
+  "amount": 5000,
+  "fee": 200,
+  "currency": "UGX",
+  "channel": "mtn_momo",
+  "status": "failed",
+  "merchant_reference": "order-001",
+  "failure_reason": "insufficient_funds",
+  "completed_at": "2026-08-20T10:30:00+00:00"
+}</code></pre>
+      <p style="margin-bottom:.25rem;"><code>256700000002</code>: same shape with
+      <code>"failure_reason": "user_cancelled"</code>.</p>
+      <p style="margin-bottom:.25rem;"><code>256700000003</code>: same shape with
+      <code>"failure_reason": "timeout"</code>.</p>
+      <p style="margin-top:.75rem;">A successful charge's <code>charge.succeeded</code> data is
+      identical in shape with <code>"status": "succeeded"</code> and
+      <code>"failure_reason": null</code>.</p>
     </div>
 
     <!-- Balance -->
@@ -573,8 +611,12 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
       <p>Samsoftpay POSTs a JSON payload to your <code>webhook_url</code> whenever a charge or payout changes state. We retry up to 8 times with exponential backoff.</p>
       <p>Respond with any <strong>2xx</strong> status code within 5 seconds to acknowledge receipt.</p>
 
-      <h3>Charge Events</h3>
+      <h3>The Envelope</h3>
+      <p>Every delivery is one JSON envelope, sent as <strong>canonical JSON with no spaces</strong>
+      (the signature covers these exact bytes). Shown pretty-printed here for readability:</p>
 <pre><code>{
+  "id": "evt_1a2b3c4d5e6f7a8b9c0d1e2f",
+  "timestamp": 1755900000,
   "event": "charge.succeeded",
   "data": {
     "id": "txn_abc123",
@@ -584,10 +626,18 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
     "channel": "mtn_momo",
     "status": "succeeded",
     "merchant_reference": "order-001",
-    "completed_at": "2024-01-15T10:30:00+00:00"
+    "failure_reason": null,
+    "completed_at": "2026-08-20T10:30:00+00:00"
   }
 }</code></pre>
-      <p>Possible event values: <code>charge.succeeded</code>, <code>charge.failed</code>.</p>
+      <p>The envelope <code>id</code> is unique per event and <strong>retries share it</strong> —
+      dedupe on it. <code>timestamp</code> is Unix seconds; use it to enforce a replay window.</p>
+      <p>Event catalogue: <code>charge.succeeded</code>, <code>charge.failed</code>,
+      <code>payout.succeeded</code>, <code>payout.failed</code>, <code>vending.dispensed</code>,
+      <code>vending.dispense_failed</code>.</p>
+      <div class="callout warning"><code>charge.succeeded</code> means the <strong>money arrived</strong> —
+      nothing else. For vending, it does not mean the product came out: wait for
+      <code>vending.dispensed</code> before treating the product as delivered.</div>
     </div>
 
     <!-- Webhook Verification -->
@@ -648,6 +698,104 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
 });</code></pre>
         </div>
       </div>
+      <div class="callout">Verify over the <strong>raw request body</strong> exactly as received —
+      never parse and re-serialize the JSON first. Any change in key order or whitespace breaks
+      the digest.</div>
+    </div>
+
+    <!-- Webhook Operations -->
+    <div class="docs-section" id="webhook-ops">
+      <h2><i data-feather="refresh-cw" style="width:22px;height:22px;color:var(--primary);"></i> Webhook Operations &amp; Retries</h2>
+      <p>Respond with any <strong>2xx within 5 seconds</strong>. Return 200 immediately and process
+      asynchronously — a slow handler is indistinguishable from a dead one and will be retried.
+      Retries carry the <strong>same envelope <code>id</code></strong>, so dedupe on it, not on
+      receipt count.</p>
+
+      <h3>Retry schedule</h3>
+      <p>The first attempt fires immediately. Each failure schedules the next attempt after a
+      growing backoff, up to <strong>8 attempts</strong> in total:</p>
+      <table class="param-table">
+        <thead><tr><th>Attempt</th><th>Delay after previous failure</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>immediate</td></tr>
+          <tr><td>2</td><td>1 minute</td></tr>
+          <tr><td>3</td><td>5 minutes</td></tr>
+          <tr><td>4</td><td>30 minutes</td></tr>
+          <tr><td>5</td><td>2 hours</td></tr>
+          <tr><td>6</td><td>6 hours</td></tr>
+          <tr><td>7</td><td>12 hours</td></tr>
+          <tr><td>8</td><td>24 hours</td></tr>
+        </tbody>
+      </table>
+      <p>So a delivery keeps retrying for roughly two days after the event before giving up.
+      After that, resend it yourself (below) or reconcile by listing charges.</p>
+
+      <h3>Inspect &amp; resend deliveries</h3>
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/webhooks</div>
+      <p>Lists your most recent webhook deliveries — each with its event id (<code>evt_…</code>),
+      <code>event</code>, <code>status</code>, <code>attempts</code> and
+      <code>last_response_code</code> — so you can see exactly what we sent and how your endpoint
+      answered.</p>
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/webhooks/{event_id}/resend</div>
+      <p>Re-queues one delivery by its <code>evt_…</code> id and returns <code>202</code>. The
+      resent delivery carries the same envelope (same <code>id</code>) — your dedupe logic handles
+      it like any retry.</p>
+
+      <h3>Egress IPs</h3>
+      <p>Webhook deliveries originate from these static ranges — allowlist them if your endpoint
+      is firewalled:</p>
+      <table class="param-table">
+        <thead><tr><th>Range</th></tr></thead>
+        <tbody>
+          <tr><td><code>74.220.48.0/24</code></td></tr>
+          <tr><td><code>74.220.56.0/24</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Best Practices -->
+    <div class="docs-section" id="best-practices">
+      <h2><i data-feather="award" style="width:22px;height:22px;color:var(--primary);"></i> Integration Best Practices</h2>
+      <table class="param-table">
+        <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Give value only on a definite outcome.</strong></td>
+            <td><code>pending</code> / <code>authorized</code> is <em>not</em> failed — an ambiguous
+            network answer parks a charge, it never fails it. Release goods or credit a wallet only
+            when <code>status</code> is <code>succeeded</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Confirm before fulfilling.</strong></td>
+            <td>Via the <code>charge.succeeded</code> webhook or <code>GET /v1/charges/&lt;id&gt;</code> —
+            never from a client-side signal alone.</td>
+          </tr>
+          <tr>
+            <td><strong>Verify amount, currency and reference.</strong></td>
+            <td>Check the confirmed charge matches the order you are about to fulfil, before
+            delivering value.</td>
+          </tr>
+          <tr>
+            <td><strong>Prefer webhooks over polling.</strong></td>
+            <td>Poll as a fallback; reconcile with <code>GET /v1/charges</code> and
+            <code>GET /v1/balance</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Dedupe on the envelope <code>id</code>.</strong></td>
+            <td>Retries and resends share it — process each event once.</td>
+          </tr>
+          <tr>
+            <td><strong>Never embed a full <code>sk_</code> key on a device.</strong></td>
+            <td>Use a collections-only <code>sk_*_col_</code> key on kiosks and apps — it cannot
+            call payouts or refunds.</td>
+          </tr>
+          <tr>
+            <td><strong>Never log full keys; TLS only.</strong></td>
+            <td>Keep keys and webhook secrets in environment variables; serve your webhook endpoint
+            over HTTPS.</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Errors -->

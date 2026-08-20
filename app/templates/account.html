@@ -230,6 +230,39 @@
     </div>
     <div class="form-hint">Yours alone — never shared across merchants, and safe to put in your server's env.</div>
   </div>
+
+  {% if deliveries %}
+  <div style="margin-top:1.25rem;">
+    <label class="form-label">Recent deliveries</label>
+    <div class="table-container">
+      <table style="width:100%;font-size:.8125rem;">
+        <thead>
+          <tr><th>Event</th><th>Status</th><th>Attempts</th><th>Response</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for d in deliveries %}
+          <tr>
+            <td>
+              <code style="font-size:.75rem;">{{ d.event }}</code>
+              <div class="text-muted" style="font-size:.6875rem;">{{ d.event_id }}</div>
+            </td>
+            <td><span class="badge {% if d.status == 'sent' %}succeeded{% elif d.status == 'failed' %}failed{% else %}pending{% endif %}">{{ d.status }}</span></td>
+            <td>{{ d.attempts }}</td>
+            <td>{{ d.code if d.code is not none else '—' }}</td>
+            <td style="text-align:right;">
+              <form method="POST" action="{{ url_for('auth.resend_webhook', delivery_id=d.row_id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-secondary" style="font-size:.75rem;padding:.25rem .625rem;">Resend</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="form-hint">A resend delivers the original signed event to your current endpoint — receivers dedupe on the event id, so it's always safe. Also available as <code>POST /v1/webhooks/&lt;event_id&gt;/resend</code>.</div>
+  </div>
+  {% endif %}
 </div>
 
 <!-- Business Logo Upload -->
