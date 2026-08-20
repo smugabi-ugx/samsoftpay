@@ -64,7 +64,7 @@ def main():
         db.create_all()
         m = Merchant(name="Sweep Co", email="sweep@x.com", public_key="pk_sw",
                      secret_key="sk_live_sw", test_public_key="pk_test_sw",
-                     test_secret_key="sk_test_sw", kyc_status="pending",
+                     test_secret_key="sk_test_sw", kyc_status="verified",
                      email_verified=True, handle="sweep-co")
         from werkzeug.security import generate_password_hash
         m.password_hash = generate_password_hash("Password123")
@@ -144,6 +144,38 @@ def main():
               after_second == after_first)
     check("duplicate bulk item returns a result (idempotent), 200",
           r2.status_code == 200)
+
+    # ── Ledger cache: two postings to ONE account in one transaction ──
+    # ledger.post() assigned the SQL increment expression per leg, so a second
+    # posting to the same Account before a flush REPLACED the first pending
+    # expression: the journal stayed right while cached_balance silently lost
+    # an increment — and the payout overdraft check reads cached_balance.
+    with app.app_context():
+        from app.services import ledger as _lg
+        acct = _lg.get_or_create_account(
+            type=AccountType.MERCHANT_AVAILABLE, merchant_id=mid,
+            currency="UGX", is_test=False)
+        rail = _lg.get_or_create_account(
+            type=AccountType.RAIL_CLEARING, merchant_id=None,
+            currency="UGX", is_test=False)
+        _lg.post([(rail, +7000), (acct, -7000)], currency="UGX", memo="cache-a")
+        _lg.post([(rail, +3000), (acct, -3000)], currency="UGX", memo="cache-b")
+        db.session.commit()
+        db.session.refresh(acct)
+        check("two postings to one account in one transaction: cache == journal",
+              int(acct.cached_balance) == _lg.recompute_balance(acct))
+        # Same account twice within a SINGLE posting must aggregate, not clobber.
+        susp = _lg.get_or_create_account(
+            type=AccountType.SUSPENSE, merchant_id=mid,
+            currency="UGX", is_test=False)
+        db.session.refresh(susp)
+        before = int(susp.cached_balance)   # may already hold a payout earmark
+        _lg.post([(susp, +5000), (susp, -2000), (rail, -3000)],
+                 currency="UGX", memo="cache-c")
+        db.session.commit()
+        db.session.refresh(susp)
+        check("same account twice in one posting aggregates correctly",
+              int(susp.cached_balance) == _lg.recompute_balance(susp) == before + 3000)
 
     failed = [lbl for lbl, ok in CHECKS if not ok]
     print()
