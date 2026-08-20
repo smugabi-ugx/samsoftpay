@@ -73,7 +73,9 @@
     .nav-btn svg{width:14px;height:14px;}
     @media(max-width:740px){
       .nav-links{display:none;}
+      .nav-btn{display:none;}      /* the mobile menu carries the CTA — don't crowd the burger */
       .nav-burger{display:flex;}
+      .nav-inner{padding:0 16px;}
     }
     .nav-burger{
       display:none;width:40px;height:40px;border-radius:10px;border:1px solid var(--line);
@@ -102,6 +104,7 @@
     .hero{
       padding:calc(64px + 80px) 24px 64px;
       text-align:center;
+      overflow:hidden;   /* the radial-gradient bg must never widen the page */
       background:radial-gradient(ellipse 100% 60% at 50% 0%,rgba(87,89,168,.06),transparent);
     }
     .hero-pill{
@@ -114,9 +117,10 @@
     .hero-pill-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--green);opacity:0;animation:pill-pulse 2s ease-out infinite;}
     @keyframes pill-pulse{0%{transform:scale(.6);opacity:.7}100%{transform:scale(1.5);opacity:0}}
     .hero h1{
-      font-size:clamp(2.75rem,7vw,5.5rem);
-      font-weight:900;line-height:1.03;
+      font-size:clamp(2rem,7vw,5.5rem);   /* min 2rem so it never overflows a 360px phone */
+      font-weight:900;line-height:1.05;
       color:var(--ink);margin-bottom:20px;
+      overflow-wrap:break-word;word-break:break-word;
     }
     .hero h1 b{color:var(--brand);}
     .hero-sub{
@@ -125,6 +129,10 @@
       max-width:520px;margin:0 auto 36px;
     }
     .hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:48px;}
+    @media(max-width:600px){
+      .hero{padding:calc(64px + 32px) 18px 40px;}
+      .hero-ctas .nav-btn,.hero-ctas a{width:100%;justify-content:center;}
+    }
     .btn-dark{
       display:inline-flex;align-items:center;gap:8px;
       background:var(--ink);color:#fff;
