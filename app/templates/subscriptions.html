@@ -28,45 +28,13 @@
   </div>
 </div>
 
-<!-- Create plan -->
-<div class="card">
-  <div class="card-header"><h3 class="card-title"><i data-feather="plus-circle"></i> Create New Plan</h3></div>
-  <form method="POST" action="{{ url_for('subscriptions.new_plan') }}">
-    <div class="grid-2">
-      <div class="form-group">
-        <label class="form-label">Plan Name *</label>
-        <input class="form-input" type="text" name="name" required placeholder="Monthly Newsletter">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Amount (UGX) *</label>
-        <input class="form-input" type="number" name="amount" required min="500" placeholder="10000">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Billing Interval *</label>
-        <select class="form-select" name="interval" required>
-          {% for val, label in intervals %}
-          <option value="{{ val }}">{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Payment Channel *</label>
-        <select class="form-select" name="channel" required>
-          {% for val, label in channels %}
-          <option value="{{ val }}">{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Description <span style="color:var(--gray-400);font-weight:400;">(optional)</span></label>
-      <input class="form-input" type="text" name="description" placeholder="What subscribers receive">
-    </div>
-    <button type="submit" class="btn btn-primary"><i data-feather="plus"></i> Create Plan</button>
-  </form>
+<div class="tabbar">
+  <button data-tab="plans"><i data-feather="list"></i> Plans</button>
+  <button data-tab="new"><i data-feather="plus-circle"></i> New Plan</button>
 </div>
 
 <!-- Plans list -->
+<div class="tab-panel" id="tab-plans">
 <div class="card">
   <div class="card-header"><h3 class="card-title"><i data-feather="list"></i> Your Plans ({{ plans|length }})</h3></div>
 
@@ -121,9 +89,50 @@
   {% else %}
   <div style="text-align:center;padding:3rem;color:var(--gray-500);">
     <i data-feather="rotate-cw" style="width:40px;height:40px;margin-bottom:1rem;"></i>
-    <p>No plans yet. Create your first recurring billing plan above.</p>
+    <p>No plans yet. Create your first recurring billing plan in the New Plan tab.</p>
   </div>
   {% endif %}
+</div>
+</div>
+<!-- /tab-plans -->
+
+<!-- New plan -->
+<div class="tab-panel" id="tab-new">
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="plus-circle"></i> Create New Plan</h3></div>
+  <form method="POST" action="{{ url_for('subscriptions.new_plan') }}">
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Plan Name *</label>
+        <input class="form-input" type="text" name="name" required placeholder="Monthly Newsletter">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Amount (UGX) *</label>
+        <input class="form-input" type="number" name="amount" required min="500" placeholder="10000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Billing Interval *</label>
+        <select class="form-select" name="interval" required>
+          {% for val, label in intervals %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Payment Channel *</label>
+        <select class="form-select" name="channel" required>
+          {% for val, label in channels %}
+          <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description <span style="color:var(--gray-400);font-weight:400;">(optional)</span></label>
+      <input class="form-input" type="text" name="description" placeholder="What subscribers receive">
+    </div>
+    <button type="submit" class="btn btn-primary"><i data-feather="plus"></i> Create Plan</button>
+  </form>
 </div>
 
 <!-- How billing works -->
@@ -148,6 +157,8 @@
     </div>
   </div>
 </div>
+</div>
+<!-- /tab-new -->
 
 {% endblock %}
 {% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}

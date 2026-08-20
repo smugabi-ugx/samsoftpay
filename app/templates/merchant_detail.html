@@ -290,7 +290,15 @@
   </div>
 </div>
 
+<!-- ── LOWER SECTIONS AS TABS ── -->
+<div class="tabbar">
+  <button data-tab="transactions"><i data-feather="activity"></i> Transactions</button>
+  <button data-tab="payouts"><i data-feather="send"></i> Payouts</button>
+  <button data-tab="links"><i data-feather="link"></i> Payment Links</button>
+</div>
+
 <!-- ── RECENT ACTIVITY (bank-grade table) ── -->
+<div class="tab-panel" id="tab-transactions">
 <div class="card">
   <div class="card-header">
     <h3 class="card-title"><i data-feather="activity"></i> Recent Transactions</h3>
@@ -395,7 +403,10 @@
   {% endif %}
 </div>
 
+</div><!-- /tab-transactions -->
+
 <!-- ── PAYOUTS ── -->
+<div class="tab-panel" id="tab-payouts">
 <div class="card">
   <div class="card-header">
     <h3 class="card-title"><i data-feather="send"></i> Recent Payouts</h3>
@@ -434,7 +445,10 @@
   {% endif %}
 </div>
 
+</div><!-- /tab-payouts -->
+
 <!-- ── PAYMENT LINKS ── -->
+<div class="tab-panel" id="tab-links">
 <div class="card">
   <div class="card-header">
     <h3 class="card-title"><i data-feather="link"></i> Payment Links</h3>
@@ -481,6 +495,7 @@
   </div>
   {% endif %}
 </div>
+</div><!-- /tab-links -->
 
 {% endblock %}
 

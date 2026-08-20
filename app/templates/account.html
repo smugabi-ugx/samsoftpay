@@ -91,6 +91,18 @@
   </div>
 </div>
 
+<!-- Section tabs -->
+<div class="tabbar">
+  <button data-tab="keys"><i data-feather="key"></i> API Keys</button>
+  <button data-tab="webhooks"><i data-feather="zap"></i> Webhooks</button>
+  <button data-tab="security"><i data-feather="shield"></i> Security</button>
+  <button data-tab="branding"><i data-feather="image"></i> Branding</button>
+  <button data-tab="golive"><i data-feather="flag"></i> Go-Live</button>
+</div>
+
+<!-- =========================== API KEYS =========================== -->
+<div class="tab-panel" id="tab-keys">
+
 <!-- API Keys Card -->
 <div class="card">
   <div class="card-header">
@@ -201,6 +213,52 @@
   </div>
 </div>
 
+<!-- Quick Integration -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="code"></i> Quick Start</h3>
+    <a href="{{ url_for('docs.docs') }}" class="btn btn-primary" style="padding:0.5rem 1rem;font-size:0.875rem;">
+      <i data-feather="book-open"></i> Full API Docs
+    </a>
+  </div>
+  <p class="text-muted mb-2">Test charge — safe to run, uses sandbox rails:</p>
+  <pre><code>import requests, time, uuid
+
+resp = requests.post(
+    "{{ request.host_url }}v1/charges",
+    headers={
+        "Authorization": "Bearer {{ current_user.test_secret_key or 'sk_test_YOUR_KEY' }}",
+        "Idempotency-Key": str(uuid.uuid4()),
+        "X-Timestamp": str(int(time.time())),
+        "Content-Type": "application/json",
+    },
+    json={"amount": 5000, "currency": "UGX", "channel": "mtn_momo",
+          "customer": {"phone": "256700123456"}, "reference": "test-001"},
+)
+print(resp.json())
+# {"id": "txn_...", "mode": "test", "status": "authorized", "fee": 200, ...}</code></pre>
+</div>
+
+<!-- Dashboard Link -->
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="bar-chart-2"></i> Your Dashboard</h3>
+  </div>
+  <div class="btn-group">
+    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="btn btn-primary">
+      <i data-feather="activity"></i> Transactions &amp; Balances
+    </a>
+    <a href="{{ url_for('docs.docs') }}" class="btn btn-outline">
+      <i data-feather="book-open"></i> API Documentation
+    </a>
+  </div>
+</div>
+
+</div><!-- /tab-keys -->
+
+<!-- =========================== WEBHOOKS =========================== -->
+<div class="tab-panel" id="tab-webhooks">
+
 <!-- Webhooks -->
 <div class="card" id="webhooks">
   <div class="card-header">
@@ -281,29 +339,45 @@
   {% endif %}
 </div>
 
-<!-- Go-live checklist -->
-{% set done_count = golive|selectattr(1)|list|length %}
-<div class="card" id="golive">
+</div><!-- /tab-webhooks -->
+
+<!-- =========================== SECURITY =========================== -->
+<div class="tab-panel" id="tab-security">
+
+<!-- Key rotation cards -->
+<div class="card">
   <div class="card-header">
-    <h3 class="card-title"><i data-feather="flag"></i> Ready to go live?</h3>
-    <span class="badge {% if done_count == golive|length %}succeeded{% else %}pending{% endif %}">{{ done_count }}/{{ golive|length }}</span>
+    <h3 class="card-title"><i data-feather="refresh-cw"></i> Key Rotation</h3>
   </div>
-  <p class="text-muted mb-3" style="font-size:.875rem;">
-    The config-drift items that actually break launch days — checked against your account,
-    not self-reported. Full walkthrough in the <a href="{{ url_for('docs.docs') }}#go-live">docs</a>.
-  </p>
-  <div style="display:flex;flex-direction:column;gap:.5rem;">
-    {% for label, ok, hint in golive %}
-    <div style="display:flex;align-items:flex-start;gap:.625rem;padding:.5rem .625rem;border:1px solid var(--gray-100);border-radius:10px;">
-      <i data-feather="{{ 'check-circle' if ok else 'circle' }}" style="width:18px;height:18px;flex-shrink:0;margin-top:.1rem;color:{{ 'var(--success, #16a34a)' if ok else 'var(--gray-400)' }};"></i>
-      <div>
-        <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">{{ label }}</div>
-        <div style="font-size:.75rem;color:var(--gray-500);">{{ hint }}</div>
-      </div>
+  <p class="text-muted mb-3">Rotate your keys every 90 days or immediately if you suspect they have been compromised. Old keys stop working instantly.</p>
+  <div class="grid-2">
+    <div style="background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:1.125rem;">
+      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Test Keys</div>
+      <div style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Safe to rotate anytime — only affects your sandbox.</div>
+      <form method="POST" action="{{ url_for('auth.rotate_keys', key_type='test') }}"
+            onsubmit="return confirm('Rotate test keys? Your old sk_test_ key will stop working.')">
+        <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;color:#d97706;border-color:#d97706;width:100%;">
+          <i data-feather="refresh-cw" style="width:14px;height:14px;"></i> Rotate Test Keys
+        </button>
+      </form>
     </div>
-    {% endfor %}
+    <div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:1.125rem;">
+      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Live Keys</div>
+      <div style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Update production immediately after rotating.</div>
+      <form method="POST" action="{{ url_for('auth.rotate_keys', key_type='live') }}"
+            onsubmit="return confirm('Rotate LIVE keys? All production integrations using your current sk_live_ key will break until updated.')">
+        <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;color:var(--danger);border-color:var(--danger);width:100%;">
+          <i data-feather="alert-triangle" style="width:14px;height:14px;"></i> Rotate Live Keys
+        </button>
+      </form>
+    </div>
   </div>
 </div>
+
+</div><!-- /tab-security -->
+
+<!-- =========================== BRANDING =========================== -->
+<div class="tab-panel" id="tab-branding">
 
 <!-- Business Logo Upload -->
 <div class="card" id="logo-upload">
@@ -371,36 +445,6 @@
   {% endif %}
 </div>
 
-<!-- Key rotation cards -->
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title"><i data-feather="refresh-cw"></i> Key Rotation</h3>
-  </div>
-  <p class="text-muted mb-3">Rotate your keys every 90 days or immediately if you suspect they have been compromised. Old keys stop working instantly.</p>
-  <div class="grid-2">
-    <div style="background:rgba(245,158,11,.05);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:1.125rem;">
-      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Test Keys</div>
-      <div style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Safe to rotate anytime — only affects your sandbox.</div>
-      <form method="POST" action="{{ url_for('auth.rotate_keys', key_type='test') }}"
-            onsubmit="return confirm('Rotate test keys? Your old sk_test_ key will stop working.')">
-        <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;color:#d97706;border-color:#d97706;width:100%;">
-          <i data-feather="refresh-cw" style="width:14px;height:14px;"></i> Rotate Test Keys
-        </button>
-      </form>
-    </div>
-    <div style="background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:1.125rem;">
-      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.375rem;">Live Keys</div>
-      <div style="font-size:.8125rem;color:var(--gray-500);margin-bottom:1rem;">Update production immediately after rotating.</div>
-      <form method="POST" action="{{ url_for('auth.rotate_keys', key_type='live') }}"
-            onsubmit="return confirm('Rotate LIVE keys? All production integrations using your current sk_live_ key will break until updated.')">
-        <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;color:var(--danger);border-color:var(--danger);width:100%;">
-          <i data-feather="alert-triangle" style="width:14px;height:14px;"></i> Rotate Live Keys
-        </button>
-      </form>
-    </div>
-  </div>
-</div>
-
 <!-- QR Modal -->
 <div id="qr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:9000;align-items:center;justify-content:center;padding:1rem;">
   <div style="background:white;border-radius:20px;padding:2rem;text-align:center;max-width:300px;width:100%;animation:modal-in .25s ease both;">
@@ -417,46 +461,37 @@
   </div>
 </div>
 
-<!-- Quick Integration -->
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title"><i data-feather="code"></i> Quick Start</h3>
-    <a href="{{ url_for('docs.docs') }}" class="btn btn-primary" style="padding:0.5rem 1rem;font-size:0.875rem;">
-      <i data-feather="book-open"></i> Full API Docs
-    </a>
-  </div>
-  <p class="text-muted mb-2">Test charge — safe to run, uses sandbox rails:</p>
-  <pre><code>import requests, time, uuid
+</div><!-- /tab-branding -->
 
-resp = requests.post(
-    "{{ request.host_url }}v1/charges",
-    headers={
-        "Authorization": "Bearer {{ current_user.test_secret_key or 'sk_test_YOUR_KEY' }}",
-        "Idempotency-Key": str(uuid.uuid4()),
-        "X-Timestamp": str(int(time.time())),
-        "Content-Type": "application/json",
-    },
-    json={"amount": 5000, "currency": "UGX", "channel": "mtn_momo",
-          "customer": {"phone": "256700123456"}, "reference": "test-001"},
-)
-print(resp.json())
-# {"id": "txn_...", "mode": "test", "status": "authorized", "fee": 200, ...}</code></pre>
+<!-- =========================== GO-LIVE =========================== -->
+<div class="tab-panel" id="tab-golive">
+
+<!-- Go-live checklist -->
+{% set done_count = golive|selectattr(1)|list|length %}
+<div class="card" id="golive">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="flag"></i> Ready to go live?</h3>
+    <span class="badge {% if done_count == golive|length %}succeeded{% else %}pending{% endif %}">{{ done_count }}/{{ golive|length }}</span>
+  </div>
+  <p class="text-muted mb-3" style="font-size:.875rem;">
+    The config-drift items that actually break launch days — checked against your account,
+    not self-reported. Full walkthrough in the <a href="{{ url_for('docs.docs') }}#go-live">docs</a>.
+  </p>
+  <div style="display:flex;flex-direction:column;gap:.5rem;">
+    {% for label, ok, hint in golive %}
+    <div style="display:flex;align-items:flex-start;gap:.625rem;padding:.5rem .625rem;border:1px solid var(--gray-100);border-radius:10px;">
+      <i data-feather="{{ 'check-circle' if ok else 'circle' }}" style="width:18px;height:18px;flex-shrink:0;margin-top:.1rem;color:{{ 'var(--success, #16a34a)' if ok else 'var(--gray-400)' }};"></i>
+      <div>
+        <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">{{ label }}</div>
+        <div style="font-size:.75rem;color:var(--gray-500);">{{ hint }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 
-<!-- Dashboard Link -->
-<div class="card">
-  <div class="card-header">
-    <h3 class="card-title"><i data-feather="bar-chart-2"></i> Your Dashboard</h3>
-  </div>
-  <div class="btn-group">
-    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}" class="btn btn-primary">
-      <i data-feather="activity"></i> Transactions &amp; Balances
-    </a>
-    <a href="{{ url_for('docs.docs') }}" class="btn btn-outline">
-      <i data-feather="book-open"></i> API Documentation
-    </a>
-  </div>
-</div>
+</div><!-- /tab-golive -->
+
 {% endblock %}
 
 {% block extra_scripts %}

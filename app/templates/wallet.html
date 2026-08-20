@@ -103,37 +103,154 @@
 </div>
 {% endif %}
 
-{% if pending > 0 %}
-<div class="alert alert-info" style="margin-bottom:1.5rem;">
-  <i data-feather="info" class="alert-icon"></i>
-  <div>
-    <strong>UGX {{ "{:,}".format(pending) }} is from customer payments still confirming.</strong>
-    This is NOT money you deposited — it is payments your customers made to you that are waiting for final rail confirmation. Click <strong>Settle Now</strong> to move them to Available.
-  </div>
+<!-- ══ Tab navigation ══ -->
+<div class="tabbar">
+  <button data-tab="balance"><i data-feather="pie-chart"></i> Balance</button>
+  <button data-tab="topup"><i data-feather="arrow-down-circle"></i> Top Up</button>
+  <button data-tab="withdraw"><i data-feather="send"></i> Withdraw</button>
+  <button data-tab="settlements"><i data-feather="clock"></i> Settlements</button>
+  <button data-tab="history"><i data-feather="list"></i> History</button>
 </div>
-{% endif %}
 
-<!-- Settle pending -->
-{% if pending > 0 %}
-<div class="card" style="margin-bottom:1.5rem;border-left:4px solid var(--warning);">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+<!-- ══ TAB: Balance ══ -->
+<div class="tab-panel" id="tab-balance">
+
+  {% if pending > 0 %}
+  <div class="alert alert-info" style="margin-bottom:1.5rem;">
+    <i data-feather="info" class="alert-icon"></i>
     <div>
-      <div style="font-weight:700;color:var(--gray-900);margin-bottom:.25rem;">UGX {{ "{:,}".format(pending) }} is pending settlement</div>
-      <div style="font-size:.875rem;color:var(--gray-500);">Funds settle automatically after transaction confirmation. Click below to check now.</div>
+      <strong>UGX {{ "{:,}".format(pending) }} is from customer payments still confirming.</strong>
+      This is NOT money you deposited — it is payments your customers made to you that are waiting for final rail confirmation. Click <strong>Settle Now</strong> to move them to Available.
     </div>
-    <form method="POST" action="{{ url_for('wallet.manual_sweep') }}">
-      <button type="submit" class="btn btn-outline" style="padding:.5rem 1rem;font-size:.875rem;">
-        <i data-feather="refresh-cw"></i> Settle Now
-      </button>
-    </form>
   </div>
+
+  <!-- Settle pending -->
+  <div class="card" style="margin-bottom:1.5rem;border-left:4px solid var(--warning);">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+      <div>
+        <div style="font-weight:700;color:var(--gray-900);margin-bottom:.25rem;">UGX {{ "{:,}".format(pending) }} is pending settlement</div>
+        <div style="font-size:.875rem;color:var(--gray-500);">Funds settle automatically after transaction confirmation. Click below to check now.</div>
+      </div>
+      <form method="POST" action="{{ url_for('wallet.manual_sweep') }}">
+        <button type="submit" class="btn btn-outline" style="padding:.5rem 1rem;font-size:.875rem;">
+          <i data-feather="refresh-cw"></i> Settle Now
+        </button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title"><i data-feather="check-circle"></i> Balance up to date</h3>
+    </div>
+    <p class="text-muted" style="font-size:.875rem;">
+      Nothing is pending settlement right now. Customer payments appear here while they confirm on the rail, then move to your Available balance automatically after the 24-hour hold.
+    </p>
+  </div>
+  {% endif %}
+
 </div>
-{% endif %}
 
-<div class="grid-2">
+<!-- ══ TAB: Top Up ══ -->
+<div class="tab-panel" id="tab-topup">
 
-  <!-- Settlement Accounts -->
-  <div>
+  <!-- Top-up card -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title"><i data-feather="arrow-down-circle"></i> Top Up Wallet</h3>
+    </div>
+    {# Copy must match what _settle_topup actually credits: amount MINUS the
+       1.5% (min UGX 200) collection fee — and only MTN has a live rail, so
+       no Airtel promise here. #}
+    <p class="text-muted mb-3" style="font-size:.875rem;">Add funds to your available balance. MoMo top-up generates a QR you scan — credited on payment, minus the 1.5% collection fee (min UGX 200).</p>
+
+    <!-- ── MTN MoMo top-up (generates QR) ── -->
+    <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
+        <span style="font-size:1.5rem;">📱</span>
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">MTN Mobile Money</div>
+          <div style="font-size:.8rem;color:var(--gray-500);">Scan QR with your phone — wallet credited on success (fee deducted)</div>
+        </div>
+      </div>
+      <form method="POST" action="{{ url_for('wallet.topup_momo') }}">
+        <div style="display:flex;gap:.5rem;align-items:center;">
+          <div style="display:flex;align-items:center;border:2px solid var(--gray-200);border-radius:10px;overflow:hidden;flex:1;transition:border-color .2s;" onfocusin="this.style.borderColor='var(--primary)'" onfocusout="this.style.borderColor='var(--gray-200)'">
+            <span style="padding:0 .875rem;background:var(--gray-50);border-right:1px solid var(--gray-200);font-size:.875rem;font-weight:600;color:var(--gray-500);height:44px;display:flex;align-items:center;white-space:nowrap;">UGX</span>
+            <input type="number" name="topup_amount" min="1000" required
+                   placeholder="Enter amount (min 1,000)"
+                   style="flex:1;border:none;outline:none;padding:0 .875rem;height:44px;font-size:.9375rem;font-family:inherit;color:var(--gray-900);background:transparent;min-width:0;">
+          </div>
+          <button type="submit" class="btn btn-primary" style="padding:.5rem 1rem;white-space:nowrap;flex-shrink:0;">
+            <i data-feather="grid"></i> Get QR
+          </button>
+        </div>
+        <div class="form-hint" style="margin-top:.375rem;">A payment page with QR code opens. Scan it with your phone and approve the MTN MoMo prompt.</div>
+      </form>
+    </div>
+
+    <!-- ── Bank transfer top-up ── -->
+    <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
+        <span style="font-size:1.5rem;">🏦</span>
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Bank Transfer</div>
+          <div style="font-size:.8rem;color:var(--gray-500);">Transfer to our account and submit the reference — credited within 1 business day</div>
+        </div>
+      </div>
+
+      {# No fabricated account numbers: the previous hardcoded bank+account
+         pair was a placeholder formatted like a real account — a merchant
+         could have wired real money at it. Details come from support until
+         a real account is configured to display here. #}
+      <div style="background:var(--gray-50);border-radius:8px;padding:.75rem;font-size:.875rem;margin-bottom:.875rem;">
+        <div style="margin-bottom:.25rem;color:var(--gray-600);">Request our bank details from <a href="mailto:samsoftware75@gmail.com?subject=Bank%20transfer%20top-up%20TOPUP-{{ current_user.id }}" style="font-weight:600;">support</a> before transferring.</div>
+        <div style="display:flex;justify-content:space-between;"><span style="color:var(--gray-600);">Your Reference</span><strong>TOPUP-{{ current_user.id }}</strong></div>
+      </div>
+
+      <!-- Reference submission form -->
+      <form method="POST" action="{{ url_for('wallet.topup_bank') }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem;">
+          <input type="number" name="bank_amount" min="10000" required
+                 placeholder="Amount (UGX)" class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;">
+          <input type="text" name="bank_name" placeholder="Your bank name"
+                 class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;">
+        </div>
+        <div style="display:flex;gap:.5rem;">
+          <input type="text" name="bank_ref" required
+                 placeholder="Transaction reference from your bank"
+                 class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;flex:1;">
+          <button type="submit" class="btn btn-outline" style="padding:.5rem .875rem;white-space:nowrap;flex-shrink:0;font-size:.8125rem;">
+            <i data-feather="send"></i> Submit
+          </button>
+        </div>
+        <div class="form-hint" style="margin-top:.375rem;">Our team verifies your reference and credits your wallet within 1 business day.</div>
+      </form>
+    </div>
+
+    <!-- ── Crypto top-up ── -->
+    <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;">
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
+        <span style="font-size:1.5rem;">₿</span>
+        <div>
+          <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Crypto (USDT / BTC / ETH)</div>
+          <div style="font-size:.8rem;color:var(--gray-500);">Via ChangeNow instant exchange</div>
+        </div>
+      </div>
+      <a href="mailto:support@samsoftpay.com?subject=Crypto Top-Up Request&body=Account: {{ current_user.email }}%0AAmount (USDT): "
+         class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .75rem;width:100%;">
+        <i data-feather="mail"></i> Request Crypto Top-Up
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ TAB: Withdraw ══ -->
+<div class="tab-panel" id="tab-withdraw">
+  <div class="grid-2">
+
+    <!-- Settlement Accounts -->
     <div class="card">
       <div class="card-header">
         <h3 class="card-title"><i data-feather="credit-card"></i> Settlement Accounts</h3>
@@ -230,156 +347,7 @@
       {% endif %}
     </div>
 
-    <!-- Top-up card -->
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title"><i data-feather="arrow-down-circle"></i> Top Up Wallet</h3>
-      </div>
-      {# Copy must match what _settle_topup actually credits: amount MINUS the
-         1.5% (min UGX 200) collection fee — and only MTN has a live rail, so
-         no Airtel promise here. #}
-      <p class="text-muted mb-3" style="font-size:.875rem;">Add funds to your available balance. MoMo top-up generates a QR you scan — credited on payment, minus the 1.5% collection fee (min UGX 200).</p>
-
-      <!-- ── MTN MoMo top-up (generates QR) ── -->
-      <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
-        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
-          <span style="font-size:1.5rem;">📱</span>
-          <div>
-            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">MTN Mobile Money</div>
-            <div style="font-size:.8rem;color:var(--gray-500);">Scan QR with your phone — wallet credited on success (fee deducted)</div>
-          </div>
-        </div>
-        <form method="POST" action="{{ url_for('wallet.topup_momo') }}">
-          <div style="display:flex;gap:.5rem;align-items:center;">
-            <div style="display:flex;align-items:center;border:2px solid var(--gray-200);border-radius:10px;overflow:hidden;flex:1;transition:border-color .2s;" onfocusin="this.style.borderColor='var(--primary)'" onfocusout="this.style.borderColor='var(--gray-200)'">
-              <span style="padding:0 .875rem;background:var(--gray-50);border-right:1px solid var(--gray-200);font-size:.875rem;font-weight:600;color:var(--gray-500);height:44px;display:flex;align-items:center;white-space:nowrap;">UGX</span>
-              <input type="number" name="topup_amount" min="1000" required
-                     placeholder="Enter amount (min 1,000)"
-                     style="flex:1;border:none;outline:none;padding:0 .875rem;height:44px;font-size:.9375rem;font-family:inherit;color:var(--gray-900);background:transparent;min-width:0;">
-            </div>
-            <button type="submit" class="btn btn-primary" style="padding:.5rem 1rem;white-space:nowrap;flex-shrink:0;">
-              <i data-feather="grid"></i> Get QR
-            </button>
-          </div>
-          <div class="form-hint" style="margin-top:.375rem;">A payment page with QR code opens. Scan it with your phone and approve the MTN MoMo prompt.</div>
-        </form>
-      </div>
-
-      <!-- ── Bank transfer top-up ── -->
-      <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.75rem;">
-        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;">
-          <span style="font-size:1.5rem;">🏦</span>
-          <div>
-            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Bank Transfer</div>
-            <div style="font-size:.8rem;color:var(--gray-500);">Transfer to our account and submit the reference — credited within 1 business day</div>
-          </div>
-        </div>
-
-        {# No fabricated account numbers: the previous hardcoded bank+account
-           pair was a placeholder formatted like a real account — a merchant
-           could have wired real money at it. Details come from support until
-           a real account is configured to display here. #}
-        <div style="background:var(--gray-50);border-radius:8px;padding:.75rem;font-size:.875rem;margin-bottom:.875rem;">
-          <div style="margin-bottom:.25rem;color:var(--gray-600);">Request our bank details from <a href="mailto:samsoftware75@gmail.com?subject=Bank%20transfer%20top-up%20TOPUP-{{ current_user.id }}" style="font-weight:600;">support</a> before transferring.</div>
-          <div style="display:flex;justify-content:space-between;"><span style="color:var(--gray-600);">Your Reference</span><strong>TOPUP-{{ current_user.id }}</strong></div>
-        </div>
-
-        <!-- Reference submission form -->
-        <form method="POST" action="{{ url_for('wallet.topup_bank') }}">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem;">
-            <input type="number" name="bank_amount" min="10000" required
-                   placeholder="Amount (UGX)" class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;">
-            <input type="text" name="bank_name" placeholder="Your bank name"
-                   class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;">
-          </div>
-          <div style="display:flex;gap:.5rem;">
-            <input type="text" name="bank_ref" required
-                   placeholder="Transaction reference from your bank"
-                   class="form-input" style="height:40px;padding:.5rem .75rem;font-size:.875rem;flex:1;">
-            <button type="submit" class="btn btn-outline" style="padding:.5rem .875rem;white-space:nowrap;flex-shrink:0;font-size:.8125rem;">
-              <i data-feather="send"></i> Submit
-            </button>
-          </div>
-          <div class="form-hint" style="margin-top:.375rem;">Our team verifies your reference and credits your wallet within 1 business day.</div>
-        </form>
-      </div>
-
-      <!-- ── Crypto top-up ── -->
-      <div style="border:1px solid var(--gray-200);border-radius:12px;padding:1rem;">
-        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.625rem;">
-          <span style="font-size:1.5rem;">₿</span>
-          <div>
-            <div style="font-weight:700;font-size:.9rem;color:var(--gray-900);">Crypto (USDT / BTC / ETH)</div>
-            <div style="font-size:.8rem;color:var(--gray-500);">Via ChangeNow instant exchange</div>
-          </div>
-        </div>
-        <a href="mailto:support@samsoftpay.com?subject=Crypto Top-Up Request&body=Account: {{ current_user.email }}%0AAmount (USDT): "
-           class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .75rem;width:100%;">
-          <i data-feather="mail"></i> Request Crypto Top-Up
-        </a>
-      </div>
-    </div>
-
-    <!-- Settlements: every release of pending -> available, on the record -->
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title"><i data-feather="clock"></i> Settlements</h3>
-        <a href="{{ url_for('wallet.statement_csv') }}" class="btn btn-outline" style="font-size:.75rem;padding:.3rem .625rem;">
-          <i data-feather="download"></i> Statement (CSV)
-        </a>
-      </div>
-      <p class="text-muted" style="font-size:.8125rem;margin-bottom:.75rem;">
-        Charges become available <strong>24 hours</strong> after they complete; the sweep runs
-        hourly. Every release is recorded below — if one looks more than 2 hours late,
-        contact support. Also via <code>GET /v1/settlements</code>.
-      </p>
-      {% if settlements %}
-      <div style="display:flex;flex-direction:column;gap:.5rem;">
-        {% for s in settlements %}
-        <div style="display:flex;align-items:center;gap:.875rem;padding:.625rem;border:1px solid var(--gray-100);border-radius:10px;">
-          <div style="flex:1;">
-            <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">{{ s.currency }} {{ "{:,}".format(s.amount) }}</div>
-            <div style="font-size:.75rem;color:var(--gray-500);">{{ s.txn_count }} charge{{ 's' if s.txn_count != 1 }} · {{ s.created_at.strftime('%d %b %Y %H:%M') }} UTC</div>
-          </div>
-          <span class="badge succeeded">Released</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div class="text-muted" style="font-size:.8125rem;">No settlements yet — your first one lands about 24 hours after your first successful charge.</div>
-      {% endif %}
-    </div>
-
-    <!-- Top-up history -->
-    {% if topups %}
-    <div class="card">
-      <div class="card-header"><h3 class="card-title"><i data-feather="refresh-cw"></i> Top-Up History</h3></div>
-      <div style="display:flex;flex-direction:column;gap:.5rem;">
-        {% for t in topups %}
-        <div style="display:flex;align-items:center;gap:.875rem;padding:.625rem;border:1px solid var(--gray-100);border-radius:10px;">
-          <span style="font-size:1.25rem;">{% if t.method == 'momo' %}📱{% elif t.method == 'bank' %}🏦{% else %}₿{% endif %}</span>
-          <div style="flex:1;">
-            <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">UGX {{ "{:,}".format(t.amount) }}</div>
-            <div style="font-size:.75rem;color:var(--gray-500);">{{ t.method.title() }} · {{ t.created_at.strftime('%d %b %Y') }}</div>
-          </div>
-          <span class="badge {{ 'succeeded' if t.status == 'completed' else 'failed' if t.status == 'rejected' else 'pending' }}">
-            {{ t.status.title() }}
-          </span>
-          {% if t.status == 'pending' and t.method == 'momo' and t.payment_link_id %}
-          <a href="{{ url_for('wallet.topup_qr_page', topup_public_id=t.public_id) }}"
-             class="btn btn-outline" style="padding:.25rem .625rem;font-size:.75rem;">
-            View QR
-          </a>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- Withdrawal request + history -->
-  <div>
+    <!-- Withdraw Funds -->
     <div class="card">
       <div class="card-header">
         <h3 class="card-title"><i data-feather="send"></i> Withdraw Funds</h3>
@@ -438,6 +406,77 @@
       {% endif %}
     </div>
 
+  </div>
+</div>
+
+<!-- ══ TAB: Settlements ══ -->
+<div class="tab-panel" id="tab-settlements">
+
+  <!-- Settlements: every release of pending -> available, on the record -->
+  <div class="card">
+    <div class="card-header">
+      <h3 class="card-title"><i data-feather="clock"></i> Settlements</h3>
+      <a href="{{ url_for('wallet.statement_csv') }}" class="btn btn-outline" style="font-size:.75rem;padding:.3rem .625rem;">
+        <i data-feather="download"></i> Statement (CSV)
+      </a>
+    </div>
+    <p class="text-muted" style="font-size:.8125rem;margin-bottom:.75rem;">
+      Charges become available <strong>24 hours</strong> after they complete; the sweep runs
+      hourly. Every release is recorded below — if one looks more than 2 hours late,
+      contact support. Also via <code>GET /v1/settlements</code>.
+    </p>
+    {% if settlements %}
+    <div style="display:flex;flex-direction:column;gap:.5rem;">
+      {% for s in settlements %}
+      <div style="display:flex;align-items:center;gap:.875rem;padding:.625rem;border:1px solid var(--gray-100);border-radius:10px;">
+        <div style="flex:1;">
+          <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">{{ s.currency }} {{ "{:,}".format(s.amount) }}</div>
+          <div style="font-size:.75rem;color:var(--gray-500);">{{ s.txn_count }} charge{{ 's' if s.txn_count != 1 }} · {{ s.created_at.strftime('%d %b %Y %H:%M') }} UTC</div>
+        </div>
+        <span class="badge succeeded">Released</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-muted" style="font-size:.8125rem;">No settlements yet — your first one lands about 24 hours after your first successful charge.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ══ TAB: History ══ -->
+<div class="tab-panel" id="tab-history">
+  <div class="grid-2">
+
+    <!-- Top-up history -->
+    <div class="card">
+      <div class="card-header"><h3 class="card-title"><i data-feather="refresh-cw"></i> Top-Up History</h3></div>
+      {% if topups %}
+      <div style="display:flex;flex-direction:column;gap:.5rem;">
+        {% for t in topups %}
+        <div style="display:flex;align-items:center;gap:.875rem;padding:.625rem;border:1px solid var(--gray-100);border-radius:10px;">
+          <span style="font-size:1.25rem;">{% if t.method == 'momo' %}📱{% elif t.method == 'bank' %}🏦{% else %}₿{% endif %}</span>
+          <div style="flex:1;">
+            <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">UGX {{ "{:,}".format(t.amount) }}</div>
+            <div style="font-size:.75rem;color:var(--gray-500);">{{ t.method.title() }} · {{ t.created_at.strftime('%d %b %Y') }}</div>
+          </div>
+          <span class="badge {{ 'succeeded' if t.status == 'completed' else 'failed' if t.status == 'rejected' else 'pending' }}">
+            {{ t.status.title() }}
+          </span>
+          {% if t.status == 'pending' and t.method == 'momo' and t.payment_link_id %}
+          <a href="{{ url_for('wallet.topup_qr_page', topup_public_id=t.public_id) }}"
+             class="btn btn-outline" style="padding:.25rem .625rem;font-size:.75rem;">
+            View QR
+          </a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="text-muted" style="font-size:.8125rem;">No top-ups yet.</div>
+      {% endif %}
+    </div>
+
     <!-- Withdrawal history -->
     <div class="card">
       <div class="card-header">
@@ -477,6 +516,7 @@
       </div>
       {% endif %}
     </div>
+
   </div>
 </div>
 
