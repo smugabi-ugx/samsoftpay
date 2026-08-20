@@ -108,6 +108,14 @@ def post(
         raise LedgerError(f"unbalanced posting: sum={total} (must be 0)")
 
     journal_id = str(uuid.uuid4())
+    # Aggregate the cache delta PER ACCOUNT first. Assigning the SQL-expression
+    # increment inside the loop meant that if one Account object appeared in
+    # two legs (or in two post() calls before a flush), the second assignment
+    # REPLACED the first pending expression — the journal stayed right but
+    # cached_balance silently lost an increment (audit-confirmed latent defect;
+    # production only survived because the MTN adapter happens to commit
+    # mid-flow — a future Airtel adapter would re-arm it).
+    cache_delta: dict[int, list] = {}
     for acct, amt in entries:
         if acct.currency != currency:
             raise LedgerError(
@@ -125,11 +133,18 @@ def post(
                 memo=memo,
             )
         )
+        slot = cache_delta.setdefault(acct.id, [acct, 0])
+        slot[1] += amt
+    for acct, delta in cache_delta.values():
         # Relative SQL update, not a Python read-modify-write: `+=` emits an
         # absolute-value UPDATE from a possibly-stale in-memory read, so any
         # posting path that didn't hold the row lock could silently lose a
         # concurrent increment. The DB applies this atomically.
-        acct.cached_balance = Account.cached_balance + amt
+        acct.cached_balance = Account.cached_balance + delta
+    # Flush NOW so the pending expression-UPDATEs are emitted before any later
+    # post() in the same transaction assigns a new expression to the same
+    # attribute (which would silently discard this one).
+    db.session.flush()
     return journal_id
 
 

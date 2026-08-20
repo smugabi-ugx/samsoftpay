@@ -793,6 +793,18 @@ def vending_dispense():
         from ..models import TxnStatus, utcnow
         if txn.status != TxnStatus.SUCCEEDED:
             abort(400, description=f"cannot dispense: charge status is {txn.status.value}, not succeeded")
+
+    # Machine ownership BEFORE consuming the charge: the claim used to come
+    # first, so a typo'd machine id 404'd with the charge already consumed and
+    # never released — permanently burning a PAID charge (audit-confirmed: the
+    # retry with the correct machine then 409'd). Validate everything cheap
+    # first; claim last (guardrail 11 spirit).
+    from ..services import vending as _vending
+    if not _vending.owns_machine(merchant, str(machine)):
+        abort(404, description="machine not registered to this merchant")
+
+    if charge_id:
+        from ..models import utcnow
         claimed = (
             db.session.query(Transaction)
             .filter(Transaction.id == txn.id,
@@ -802,10 +814,6 @@ def vending_dispense():
         db.session.commit()
         if not claimed:
             abort(409, description="this charge has already paid for a dispense")
-
-    from ..services import vending as _vending
-    if not _vending.owns_machine(merchant, str(machine)):
-        abort(404, description="machine not registered to this merchant")
 
     try:
         resp = xy_vending.apply_export_goods(
@@ -884,6 +892,13 @@ def create_bulk_payout():
     merchant = _auth()
     _require_full_scope()   # bulk money out — collections-only keys forbidden
 
+    # Idempotency-Key is REQUIRED (as documented). Without it, items lacking
+    # their own `reference` were deduped against a FRESH random batch id — so a
+    # retried batch double-disbursed every unreferenced row (confirmed by the
+    # gold-standard audit: two identical POSTs created two payouts each).
+    if not request.headers.get("Idempotency-Key"):
+        abort(400, description="Idempotency-Key header required")
+
     items = _parse_bulk_items()
     if not items:
         abort(400, description="no payout items provided (JSON {payouts:[...]} or CSV)")
@@ -892,9 +907,8 @@ def create_bulk_payout():
 
     batch_id = "batch_" + _uuid.uuid4().hex[:16]
     # The caller's Idempotency-Key anchors per-item dedupe for rows WITHOUT
-    # their own reference. The old fallback used the fresh random batch_id —
-    # so a retried CSV upload with no references paid every row AGAIN.
-    client_key = request.headers.get("Idempotency-Key") or batch_id
+    # their own reference (rows with a reference dedupe on it directly).
+    client_key = request.headers.get("Idempotency-Key")
     results = []
     for i, item in enumerate(items):
         try:

@@ -241,14 +241,18 @@ def create_payout(
         raise PayoutError(f"disbursement rail unavailable: {exc}") from exc
 
     if not result.accepted:
-        # Reverse the earmark; payout never left.
+        # Reverse the FULL earmark — amount AND fee. The payout never left, so
+        # keeping the 750 fee here was inconsistent with the async-failure
+        # path, reverse-payout, and the docstring (all refund it) — confirmed
+        # by the gold-standard audit as a live fee leak on every MTN non-202.
         ledger.post(
             [
                 (in_flight, +amount),
-                (avail_acct, -amount),
+                (revenue, +fee),
+                (avail_acct, -(amount + fee)),
             ],
             currency=currency,
-            memo=f"payout {payout.public_id} rejected by rail",
+            memo=f"payout {payout.public_id} rejected by rail, full refund",
         )
         payout.status = PayoutStatus.FAILED
         payout.failure_reason = result.reason or "rail_rejected"

@@ -16,8 +16,10 @@ On disbursement failure:
     DR psp_revenue         +payout_fee
     CR merchant_available  -(net_amount + payout_fee)
 
-The merchant is refunded net_amount = original_amount - original_charge_fee.
-The PSP absorbed the charge fee upfront; the payout fee covers the disbursement cost.
+The CUSTOMER is refunded the FULL original amount. The platform returns its
+charge fee to the merchant (psp_revenue -> merchant_available) so the
+merchant's net cost of a refund is only the payout fee — the platform never
+profits from a refunded sale.
 """
 from __future__ import annotations
 
@@ -84,10 +86,14 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     if has_request_context():
         g.api_mode = txn_mode   # create_payout reads this to pick the ledger
 
-    # Net amount the merchant received after the charge fee was taken.
-    net_amount = txn.amount - (txn.fee_amount or 0)
-    if net_amount <= 0:
-        return {"ok": False, "error": "net_refund_amount_is_zero"}
+    # The customer is refunded IN FULL. They paid txn.amount; the old code
+    # refunded amount − charge_fee, silently shorting every refunded customer
+    # by the fee and making refunds revenue-positive for the platform
+    # (confirmed by the gold-standard audit: paid 100,000 → refunded 98,500).
+    refund_amount = txn.amount
+    fee_back = int(txn.fee_amount or 0)
+    if refund_amount <= 0:
+        return {"ok": False, "error": "refund_amount_is_zero"}
 
     # CLAIM the refund inside the locked window, BEFORE creating the payout.
     # create_payout commits internally (releasing our row lock), so marking
@@ -99,22 +105,48 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     txn.refunded_at = datetime.now(timezone.utc)
     db.session.commit()
 
+    # The platform GIVES BACK its charge fee (psp_revenue → merchant_available,
+    # on the charge's own ledger) so the merchant's net cost of a refund is only
+    # the payout fee — we don't profit from a refunded sale. Posted BEFORE the
+    # payout so the balance check sees the compensated funds; reversed below if
+    # the payout is refused.
+    from ..models import AccountType
+    from . import ledger as _ledger
+    mode = bool(txn.is_test)
+
+    def _fee_return(direction: int) -> None:
+        if fee_back <= 0:
+            return
+        rev = _ledger.get_or_create_account(
+            type=AccountType.PSP_REVENUE, merchant_id=None,
+            currency=txn.currency, is_test=mode)
+        avail = _ledger.get_or_create_account(
+            type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant.id,
+            currency=txn.currency, is_test=mode)
+        _ledger.post(
+            [(rev, +fee_back * direction), (avail, -fee_back * direction)],
+            currency=txn.currency,
+            memo=(f"refund fee return {txn.public_id}" if direction > 0
+                  else f"refund fee return reversal {txn.public_id}"))
+        db.session.commit()
+
+    _fee_return(+1)
+
     try:
         from .payouts import DisbursementUnavailable, PayoutError, create_payout
 
         payout = create_payout(
             merchant=merchant,
-            amount=net_amount,
+            amount=refund_amount,
             currency=txn.currency,
             channel=Channel(txn.channel) if isinstance(txn.channel, str) else txn.channel,
             recipient_phone=txn.customer_phone,
             recipient_name="Customer",
         )
     except (PayoutError, DisbursementUnavailable) as exc:
-        # Payout refused/unavailable with zero writes (guardrail 13) — release
-        # the refund claim so the merchant can retry (incl. the transient
-        # disbursement-config case, which must not leave the charge stuck
-        # REFUNDED with no payout).
+        # Payout refused/unavailable with zero writes (guardrail 13) — reverse
+        # the fee return and release the refund claim so the merchant can retry.
+        _fee_return(-1)
         txn.status = TxnStatus.SUCCEEDED
         txn.refunded_at = None
         db.session.commit()
@@ -125,7 +157,8 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
         txn.refund_payout_id = payout.id
         db.session.commit()
     else:
-        # Rail rejected synchronously — release the claim.
+        # Rail rejected synchronously — reverse the fee return, release claim.
+        _fee_return(-1)
         txn.status = TxnStatus.SUCCEEDED
         txn.refunded_at = None
         db.session.commit()

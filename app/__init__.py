@@ -221,6 +221,13 @@ def create_app(config: dict | None = None) -> Flask:
             else "memory://"
         ),
         RATELIMIT_HEADERS_ENABLED=True,
+        # A Redis blip must NEVER 500 the payment API (audit-confirmed: with
+        # Redis down, every rate-limited endpoint — the whole /v1 surface and
+        # checkout — hard-500'd). Swallow limiter storage errors and fall back
+        # to per-worker in-memory counting until Redis returns: briefly looser
+        # limits beat a total outage.
+        RATELIMIT_SWALLOW_ERRORS=True,
+        RATELIMIT_IN_MEMORY_FALLBACK_ENABLED=True,
     )
     if config:
         app.config.update(config)
