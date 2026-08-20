@@ -306,9 +306,11 @@ def create_app(config: dict | None = None) -> Flask:
 
     @app.get("/favicon.ico")
     def _favicon():
-        # Browsers request /favicon.ico unconditionally — it 404'd in consoles.
+        # Serve the SVG bolt LOGO as the favicon (was the old mismatched PNG).
+        # Every modern browser renders an SVG favicon, so the tab icon now
+        # matches the brand logo. Browsers request /favicon.ico unconditionally.
         from flask import redirect as _redir, url_for as _uf
-        return _redir(_uf("static", filename="img/favicon.png"), 301)
+        return _redir(_uf("static", filename="img/logo.svg"), 301)
 
     from . import cli  # noqa: F401
     cli.register(app)
