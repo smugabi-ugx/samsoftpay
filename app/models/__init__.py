@@ -151,6 +151,15 @@ class Merchant(UserMixin, db.Model):
     # so settlement, payouts and balance reads work for it with no new plumbing.
     parent_merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
     is_managed = Column(Boolean, default=False, nullable=False)
+    # ── Per-merchant money limits + fee override (admin-set, optional) ──
+    # NULL = no limit / standard fee. Enforced BEFORE any write in
+    # orchestrator.create_charge (max_charge_amount) and payouts.create_payout
+    # (max_payout_amount, before the earmark); fee_bps_override (basis points)
+    # feeds fees.calculate_fee and preserves the standard UGX min/cap. Set from
+    # the admin merchant console (/admin/merchants/<id>/limits).
+    max_charge_amount = Column(BigInteger, nullable=True)
+    max_payout_amount = Column(BigInteger, nullable=True)
+    fee_bps_override = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
     accounts = relationship("Account", back_populates="merchant")

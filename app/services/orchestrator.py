@@ -79,6 +79,13 @@ def create_charge(
     max_amount = current_app.config.get("MAX_TXN_AMOUNT", (1 << 63) - 1)
     if amount > max_amount:
         raise OrchestratorError(f"amount exceeds the maximum of {max_amount}")
+    # Per-merchant charge ceiling (admin-set, optional; NULL = no limit).
+    # Tighter than the global technical MAX_TXN_AMOUNT above. Checked BEFORE
+    # any DB write so a rejected amount leaves no transaction and no ledger
+    # entry (same rule as the guards below).
+    if merchant.max_charge_amount is not None and amount > merchant.max_charge_amount:
+        raise OrchestratorError(
+            f"amount exceeds this account's per-charge limit of {merchant.max_charge_amount}")
     if currency != "UGX":
         raise OrchestratorError("demo only supports UGX")
     if not merchant.is_active:
@@ -105,7 +112,8 @@ def create_charge(
             f"{channel.value} is not available for live payments yet"
         )
 
-    fee = calculate_fee(amount=amount, channel=channel, currency=currency)
+    fee = calculate_fee(amount=amount, channel=channel, currency=currency,
+                        bps_override=merchant.fee_bps_override)
     if fee >= amount:
         raise OrchestratorError("fee exceeds amount")
 

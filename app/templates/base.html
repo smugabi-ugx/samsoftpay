@@ -797,6 +797,9 @@
           <a href="{{ url_for('dashboard.reconciliation') }}" class="nav-link {% if request.endpoint == 'dashboard.reconciliation' %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="check-circle"></i><span>Reconciliation</span>
           </a>
+          <a href="{{ url_for('dashboard.admin_flags') }}" class="nav-link {% if request.endpoint == 'dashboard.admin_flags' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="flag"></i><span>Platform Flags</span>
+          </a>
           <a href="{{ url_for('kyc.admin_list') }}" class="nav-link {% if 'kyc.admin' in request.endpoint %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="user-check"></i><span>KYC Review</span>
           </a>
@@ -880,6 +883,13 @@
         </div>
         {% endif %}
       {% endwith %}
+
+      {% if maintenance_mode %}
+      <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);color:#92400e;border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.875rem;display:flex;align-items:center;gap:.5rem;">
+        <span aria-hidden="true">🛠</span>
+        <span><strong>Maintenance in progress.</strong> Some pages may briefly misbehave — payments keep working normally.</span>
+      </div>
+      {% endif %}
 
       {% block breadcrumb %}{% endblock %}
       {% block content %}{% endblock %}

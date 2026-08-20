@@ -1,90 +1,106 @@
 {% extends "base.html" %}
-{% block title %}Admin Dashboard{% endblock %}
+{% block title %}Platform Ops — Admin{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">Admin Dashboard</h1>
-  <p class="page-subtitle">System-wide overview — only visible to admins.</p>
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">Platform Ops</h1>
+    <p class="page-subtitle">Every figure below comes from the ledger — never a spreadsheet.</p>
+  </div>
+  <a href="{{ url_for('dashboard.admin_merchants') }}" class="btn btn-primary" style="font-size:.875rem;"><i data-feather="users"></i> Manage merchants</a>
 </div>
 
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i><div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<!-- Money (live ledger) -->
 <div class="stats-grid">
   <div class="stat-card">
-    <div class="stat-header">
-      <span class="stat-label">Total Merchants</span>
-      <div class="stat-icon primary"><i data-feather="users"></i></div>
-    </div>
-    <div class="stat-value">{{ total_merchants }}</div>
-    <div class="stat-change positive"><i data-feather="trending-up"></i> <span>Registered accounts</span></div>
+    <div class="stat-header"><span class="stat-label">Total Live Volume</span><div class="stat-icon primary"><i data-feather="trending-up"></i></div></div>
+    <div class="stat-value">UGX {{ "{:,}".format(live_volume) }}</div>
+    <div class="stat-change"><span>succeeded live charges, all time</span></div>
   </div>
   <div class="stat-card success">
-    <div class="stat-header">
-      <span class="stat-label">Total Transactions</span>
-      <div class="stat-icon success"><i data-feather="trending-up"></i></div>
-    </div>
-    <div class="stat-value">{{ total_txns }}</div>
-    <div class="stat-change positive"><i data-feather="check-circle"></i> <span>{{ total_succeeded }} succeeded</span></div>
+    <div class="stat-header"><span class="stat-label">Platform Revenue</span><div class="stat-icon success"><i data-feather="dollar-sign"></i></div></div>
+    <div class="stat-value">UGX {{ "{:,}".format(platform_revenue) }}</div>
+    <div class="stat-change"><span>psp_revenue ledger balance</span></div>
   </div>
-  <div class="stat-card info">
-    <div class="stat-header">
-      <span class="stat-label">Total Payouts</span>
-      <div class="stat-icon info"><i data-feather="send"></i></div>
-    </div>
-    <div class="stat-value">{{ total_payouts }}</div>
-    <div class="stat-change"><i data-feather="arrow-right"></i> <span>Disbursements</span></div>
+  <div class="stat-card">
+    <div class="stat-header"><span class="stat-label">Today</span><div class="stat-icon primary"><i data-feather="sunrise"></i></div></div>
+    <div class="stat-value">{{ today_charge_count }} in · {{ today_payout_count }} out</div>
+    <div class="stat-change"><span>UGX {{ "{:,}".format(today_charge_sum) }} charged · UGX {{ "{:,}".format(today_payout_sum) }} paid out</span></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-header"><span class="stat-label">Active Merchants</span><div class="stat-icon info"><i data-feather="users"></i></div></div>
+    <div class="stat-value">{{ active_merchants }}</div>
+    <div class="stat-change"><span>MRR UGX {{ "{:,}".format(mrr) }}</span></div>
   </div>
 </div>
 
-<div class="btn-group mb-3">
-  <a href="{{ url_for('dashboard.list_merchants') }}" class="btn btn-primary">
-    <i data-feather="users"></i> All Merchants
-  </a>
-  <a href="{{ url_for('dashboard.reconciliation') }}" class="btn btn-outline">
-    <i data-feather="check-circle"></i> Reconciliation
-  </a>
+<!-- Pending actions -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="inbox"></i> Needs your action</h3></div>
+  <div class="stats-grid" style="margin-bottom:0;">
+    <a href="{{ url_for('kyc.admin_list') }}" style="text-decoration:none;">
+      <div class="stat-card {% if kyc_pending %}success{% endif %}"><div class="stat-header"><span class="stat-label">KYC to review</span></div>
+      <div class="stat-value">{{ kyc_pending }}</div></div></a>
+    <a href="{{ url_for('wallet.admin_withdrawals') }}" style="text-decoration:none;">
+      <div class="stat-card {% if withdrawals_pending %}success{% endif %}"><div class="stat-header"><span class="stat-label">Withdrawals pending</span></div>
+      <div class="stat-value">{{ withdrawals_pending }}</div></div></a>
+    <a href="{{ url_for('dashboard.reconciliation') }}" style="text-decoration:none;">
+      <div class="stat-card {% if recon_open %}success{% endif %}"><div class="stat-header"><span class="stat-label">Recon exceptions</span></div>
+      <div class="stat-value">{{ recon_open }}</div></div></a>
+    <div class="stat-card {% if disputes_open %}success{% endif %}"><div class="stat-header"><span class="stat-label">Disputes open</span></div>
+      <div class="stat-value">{{ disputes_open }}</div></div>
+  </div>
 </div>
 
+<!-- System health -->
 <div class="card">
   <div class="card-header">
-    <h3 class="card-title"><i data-feather="activity"></i> Recent Audit Log</h3>
-    <span class="badge succeeded">Live</span>
+    <h3 class="card-title"><i data-feather="activity"></i> System health</h3>
+    <span class="badge {% if heartbeat_state == 'ok' and not recon_open_critical and not stranded_payouts and not stuck_charges %}succeeded{% else %}pending{% endif %}">
+      {% if heartbeat_state == 'ok' and not recon_open_critical and not stranded_payouts and not stuck_charges %}Healthy{% else %}Attention{% endif %}
+    </span>
   </div>
+  <div class="table-container"><table><tbody>
+    <tr><td>Worker heartbeat</td>
+        <td>{% if heartbeat_state == 'ok' %}<span class="badge succeeded">ok</span> {{ heartbeat_age }}s ago
+            {% elif heartbeat_state == 'stale' %}<span class="badge failed">stale</span> {{ heartbeat_age }}s (limit {{ heartbeat_stale_after }}s) — worker/beat may be down
+            {% else %}<span class="badge pending">unknown</span> no heartbeat recorded (Redis or worker not running){% endif %}</td></tr>
+    <tr><td>Open critical recon exceptions</td>
+        <td>{% if recon_open_critical %}<span class="badge failed">{{ recon_open_critical }}</span> — affected merchants' payouts are paused{% else %}<span class="badge succeeded">0</span>{% endif %}</td></tr>
+    <tr><td>Payouts stuck &gt; 6h</td>
+        <td>{% if stranded_payouts %}<span class="badge failed">{{ stranded_payouts }}</span> — run <code>flask stranded-payouts</code>{% else %}<span class="badge succeeded">0</span>{% endif %}</td></tr>
+    <tr><td>Charges stuck &gt; 6h</td>
+        <td>{% if stuck_charges %}<span class="badge failed">{{ stuck_charges }}</span> — resolver skips unknown outcomes; investigate{% else %}<span class="badge succeeded">0</span>{% endif %}</td></tr>
+    <tr><td>Platform float (live)</td><td>UGX {{ "{:,}".format(platform_float) }}</td></tr>
+    <tr><td>Suspense held (live)</td><td>UGX {{ "{:,}".format(platform_suspense) }}</td></tr>
+  </tbody></table></div>
+</div>
 
-  {% if recent_audits %}
-  <div class="table-container">
-    <table>
-      <thead>
-        <tr>
-          <th>Event</th>
-          <th>Merchant</th>
-          <th>Resource</th>
-          <th>IP</th>
-          <th>Time</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in recent_audits %}
-        <tr>
-          <td>
-            <span class="badge {% if 'failed' in log.event %}failed{% elif 'created' in log.event %}succeeded{% else %}pending{% endif %}">
-              {{ log.event }}
-            </span>
-          </td>
-          <td>{{ log.merchant_id or '—' }}</td>
-          <td><code style="font-size:0.8rem;">{{ log.resource_id or '—' }}</code></td>
-          <td><code style="font-size:0.8rem;">{{ log.actor_ip or '—' }}</code></td>
-          <td style="font-size:0.875rem;color:var(--gray-500);">{{ log.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <div style="text-align:center;padding:2rem;color:var(--gray-500);">
-    <i data-feather="inbox" style="width:40px;height:40px;margin-bottom:0.75rem;"></i>
-    <p>No audit events yet.</p>
-  </div>
-  {% endif %}
+<!-- Recent admin/audit activity -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="list"></i> Recent activity</h3></div>
+  <div class="table-container"><table>
+    <thead><tr><th>Event</th><th>Merchant</th><th>Detail</th><th>When</th></tr></thead>
+    <tbody>
+      {% for a in recent_audits %}
+      <tr>
+        <td><code style="font-size:.75rem;">{{ a.event }}</code></td>
+        <td>{{ a.merchant_id or '—' }}</td>
+        <td class="text-muted" style="font-size:.75rem;max-width:320px;overflow-wrap:anywhere;">{{ (a.detail or '')[:160] }}</td>
+        <td class="text-muted" style="font-size:.8125rem;white-space:nowrap;">{{ a.created_at.strftime('%d %b %H:%M') if a.created_at else '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="text-muted">No events yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
 </div>
 {% endblock %}
-
-{% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}

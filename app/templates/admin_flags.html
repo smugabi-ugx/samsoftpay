@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Platform Flags — Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Platform Flags</h1>
+  <p class="page-subtitle">Platform-wide operational switches. Every toggle is audit-logged.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i><div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="flag"></i> Switches</h3></div>
+  <div style="display:flex;flex-direction:column;gap:.875rem;">
+    {% for f in flags %}
+    <div style="border:1px solid {{ 'rgba(239,68,68,.35)' if f.danger and f.on else 'var(--gray-100)' }};border-radius:12px;padding:1rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <strong style="font-size:.9375rem;">{{ f.label }}</strong>
+          <span class="badge {{ 'failed' if f.on and f.danger else 'succeeded' if f.on else 'pending' }}">{{ 'ON' if f.on else 'OFF' }}</span>
+          <div class="text-muted" style="font-size:.8125rem;margin-top:.25rem;">{{ f.description }}</div>
+          <div class="text-muted" style="font-size:.7rem;margin-top:.25rem;">
+            Enforced: {{ f.enforced }}{% if f.updated_by %} · last set by {{ f.updated_by }}{% if f.updated_at %} on {{ f.updated_at.strftime('%d %b %Y %H:%M') }} UTC{% endif %}{% endif %}
+          </div>
+        </div>
+        <form method="POST" action="{{ url_for('dashboard.admin_set_flag') }}"
+              {% if f.danger and not f.on %}onsubmit="return confirm('Turn ON {{ f.label }}? This affects the whole platform.')"{% endif %}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="key" value="{{ f.key }}">
+          <input type="hidden" name="value" value="{{ 'off' if f.on else 'on' }}">
+          <button class="btn {{ 'btn-outline' if f.on else 'btn-primary' }}" style="{{ 'color:var(--danger);border-color:var(--danger);' if f.danger and not f.on }}">
+            Turn {{ 'OFF' if f.on else 'ON' }}
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

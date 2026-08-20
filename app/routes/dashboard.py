@@ -23,6 +23,17 @@ bp = Blueprint("dashboard", __name__)
 _ACTIVITY_PAGE = 5
 
 
+@bp.app_context_processor
+def _inject_maintenance_banner():
+    """Expose maintenance_mode to all templates for the global banner. Reads a
+    single PK-indexed flag; fails safe to False so no page can break on it."""
+    try:
+        from ..services.platform_flags import maintenance_on
+        return {"maintenance_mode": maintenance_on()}
+    except Exception:
+        return {"maintenance_mode": False}
+
+
 @bp.get("/")
 def index():
     """Landing page — always visible to everyone."""
@@ -238,6 +249,57 @@ def admin_toggle_feature(merchant_id: int):
     return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
 
 
+@bp.post("/admin/merchants/<int:merchant_id>/limits")
+@login_required
+@admin_required
+def admin_set_limits(merchant_id: int):
+    """Set per-merchant money limits and an optional fee override.
+
+    Blank field = clear (NULL = no limit / standard fee). The three are
+    independent. max_charge_amount is enforced in orchestrator.create_charge,
+    max_payout_amount in payouts.create_payout (both before any write), and
+    fee_bps_override feeds fees.calculate_fee (standard UGX min/cap preserved).
+    """
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    MAXCAP = (1 << 63) - 1
+
+    def _opt_int(field, *, lo, hi, label):
+        # Returns (value_or_None, error_or_None). Blank -> (None, None) = cleared.
+        raw = (request.form.get(field) or "").strip().replace(",", "")
+        if raw == "":
+            return None, None
+        try:
+            val = int(raw)
+        except ValueError:
+            return None, f"{label} must be a whole number."
+        if val < lo or val > hi:
+            return None, f"{label} must be between {lo:,} and {hi:,}."
+        return val, None
+
+    max_charge, e1 = _opt_int("max_charge_amount", lo=1, hi=MAXCAP,
+                              label="Max charge amount")
+    max_payout, e2 = _opt_int("max_payout_amount", lo=1, hi=MAXCAP,
+                              label="Max payout amount")
+    fee_bps, e3 = _opt_int("fee_bps_override", lo=0, hi=10000,
+                           label="Fee override (bps)")
+    err = e1 or e2 or e3
+    if err:
+        flash(err, "error")
+        return redirect(url_for("dashboard.admin_merchant_console",
+                                merchant_id=merchant_id) + "#actions")
+
+    m.max_charge_amount = max_charge
+    m.max_payout_amount = max_payout
+    m.fee_bps_override = fee_bps
+    db.session.commit()
+    _admin_log("merchant.limits_updated", merchant_id, by=current_user.email,
+               max_charge_amount=max_charge, max_payout_amount=max_payout,
+               fee_bps_override=fee_bps)
+    flash("Limits & fee override updated.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console",
+                            merchant_id=merchant_id) + "#actions")
+
+
 @bp.post("/admin/merchants/create")
 @login_required
 @admin_required
@@ -396,22 +458,143 @@ def admin_delete_merchant(merchant_id: int):
 @login_required
 @admin_required
 def admin_home():
-    from ..models import AuditLog, Payout, TxnStatus
-    total_merchants = Merchant.query.count()
-    total_txns      = Transaction.query.count()
-    total_succeeded = Transaction.query.filter_by(status=TxnStatus.SUCCEEDED).count()
-    total_payouts   = Payout.query.count()
-    recent_audits   = (
-        AuditLog.query.order_by(AuditLog.created_at.desc()).limit(20).all()
+    """Platform-ops metrics console — every figure derived from the LEDGER.
+
+    Read-only. All money is LIVE-scoped (is_test=False) and, for ledger
+    Account balances, sign-flipped because psp/suspense accounts are stored
+    credit-normal (guardrail 6). Each block is ONE aggregate query — no N+1.
+    """
+    from datetime import datetime, time, timedelta, timezone
+    from flask import current_app
+    from sqlalchemy import func as safunc
+    from ..models import (
+        Account, AccountType, AuditLog, Dispute, KYCApplication, Payout,
+        PayoutStatus, ReconException, Subscription, SubscriptionPlan,
+        Transaction, TxnStatus, WithdrawalRequest, utcnow,
     )
+    from ..services.alerts import heartbeat_age_seconds
+
+    now = utcnow()
+    today_start = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+    stuck_cutoff = now - timedelta(hours=6)
+
+    live_volume = (db.session.query(
+        safunc.coalesce(safunc.sum(Transaction.amount), 0))
+        .filter(Transaction.status == TxnStatus.SUCCEEDED,
+                Transaction.is_test.is_(False)).scalar() or 0)
+    active_merchants = (Merchant.query
+        .filter(Merchant.is_active.is_(True),
+                (Merchant.is_managed.is_(False)) | (Merchant.is_managed.is_(None)))
+        .count())
+    today_charge_count, today_charge_sum = (db.session.query(
+        safunc.count(Transaction.id),
+        safunc.coalesce(safunc.sum(Transaction.amount), 0))
+        .filter(Transaction.is_test.is_(False),
+                Transaction.created_at >= today_start).one())
+    today_payout_count, today_payout_sum = (db.session.query(
+        safunc.count(Payout.id),
+        safunc.coalesce(safunc.sum(Payout.amount), 0))
+        .filter(Payout.is_test.is_(False),
+                Payout.created_at >= today_start).one())
+    float_rows = dict(db.session.query(
+        Account.type, safunc.coalesce(safunc.sum(Account.cached_balance), 0))
+        .filter(Account.is_test.is_(False),
+                Account.type.in_([AccountType.PSP_FLOAT, AccountType.SUSPENSE,
+                                  AccountType.PSP_REVENUE]))
+        .group_by(Account.type).all())
+    platform_float    = -(float_rows.get(AccountType.PSP_FLOAT, 0) or 0)
+    platform_suspense = -(float_rows.get(AccountType.SUSPENSE, 0) or 0)
+    platform_revenue  = -(float_rows.get(AccountType.PSP_REVENUE, 0) or 0)
+
+    mrr_rows = (db.session.query(
+        SubscriptionPlan.interval,
+        safunc.coalesce(safunc.sum(SubscriptionPlan.amount), 0))
+        .join(Subscription, Subscription.plan_id == SubscriptionPlan.id)
+        .filter(Subscription.status == "active",
+                SubscriptionPlan.is_active.is_(True))
+        .group_by(SubscriptionPlan.interval).all())
+    _MONTHLY = {"weekly": 52.0 / 12.0, "monthly": 1.0, "yearly": 1.0 / 12.0}
+    mrr = int(sum((amt or 0) * _MONTHLY.get((interval or "").lower(), 1.0)
+                  for interval, amt in mrr_rows))
+
+    recon_open_critical = (ReconException.query
+        .filter_by(status="open", severity="critical").count())
+    stranded_payouts = (Payout.query
+        .filter(Payout.status == PayoutStatus.AUTHORIZED,
+                Payout.created_at <= stuck_cutoff).count())
+    stuck_charges = (Transaction.query
+        .filter(Transaction.status == TxnStatus.AUTHORIZED,
+                Transaction.created_at <= stuck_cutoff).count())
+    hb_age = heartbeat_age_seconds()
+    hb_stale_after = int(current_app.config.get("HEARTBEAT_STALE_SECONDS", 300))
+    hb_state = ("unknown" if hb_age is None
+                else "ok" if hb_age <= hb_stale_after else "stale")
+
+    kyc_pending = (KYCApplication.query
+        .filter(KYCApplication.status.in_(["submitted", "under_review"])).count())
+    withdrawals_pending = WithdrawalRequest.query.filter_by(status="pending").count()
+    disputes_open = Dispute.query.filter_by(status="open").count()
+    recon_open = ReconException.query.filter_by(status="open").count()
+    recent_audits = (AuditLog.query
+        .order_by(AuditLog.created_at.desc()).limit(20).all())
+
     return render_template(
         "admin.html",
-        total_merchants=total_merchants,
-        total_txns=total_txns,
-        total_succeeded=total_succeeded,
-        total_payouts=total_payouts,
+        live_volume=live_volume,
+        active_merchants=active_merchants,
+        today_charge_count=today_charge_count, today_charge_sum=today_charge_sum,
+        today_payout_count=today_payout_count, today_payout_sum=today_payout_sum,
+        platform_float=platform_float, platform_suspense=platform_suspense,
+        platform_revenue=platform_revenue, mrr=mrr,
+        recon_open_critical=recon_open_critical,
+        stranded_payouts=stranded_payouts, stuck_charges=stuck_charges,
+        heartbeat_age=hb_age, heartbeat_state=hb_state,
+        heartbeat_stale_after=hb_stale_after,
+        kyc_pending=kyc_pending, withdrawals_pending=withdrawals_pending,
+        disputes_open=disputes_open, recon_open=recon_open,
         recent_audits=recent_audits,
     )
+
+
+@bp.get("/admin/flags")
+@login_required
+@admin_required
+def admin_flags():
+    """Platform-wide operational switchboard (freeze payouts, maintenance).
+
+    Read-only view of every whitelisted PlatformFlag: current state plus who
+    flipped it and when. Flag reads fail safe so this page always renders."""
+    from ..services import platform_flags as pf
+    flags = []
+    for key, meta in pf.FLAG_META.items():
+        row = pf.get_flag_row(key)
+        flags.append({
+            "key": key,
+            "label": meta["label"],
+            "description": meta["description"],
+            "danger": meta["danger"],
+            "enforced": meta["enforced"],
+            "on": bool(row and row.value == "on"),
+            "updated_by": row.updated_by if row else None,
+            "updated_at": row.updated_at if row else None,
+        })
+    return render_template("admin_flags.html", flags=flags)
+
+
+@bp.post("/admin/flags/set")
+@login_required
+@admin_required
+def admin_set_flag():
+    """Toggle one platform flag. Whitelisted keys only; value coerced on/off."""
+    from ..services import platform_flags as pf
+    key = request.form.get("key")
+    if key not in pf.FLAG_META:
+        abort(400)
+    value = "on" if request.form.get("value") == "on" else "off"
+    pf.set_flag(key, value, updated_by=current_user.email)
+    _admin_log("platform.flag_set", None, by=current_user.email, flag=key, value=value)
+    flash(f"{pf.FLAG_META[key]['label']} is now {value.upper()}.", "success")
+    return redirect(url_for("dashboard.admin_flags"))
 
 
 @bp.get("/dashboard/<int:merchant_id>")

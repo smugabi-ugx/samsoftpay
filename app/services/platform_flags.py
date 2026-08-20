@@ -13,6 +13,40 @@ from ..extensions import db
 from ..models import PlatformFlag, utcnow
 
 FREEZE_PAYOUTS = "freeze_payouts"
+MAINTENANCE_MODE = "maintenance_mode"
+
+# Whitelisted, admin-togglable flags (the /admin/flags switchboard). `enforced`
+# says where the flag actually bites; maintenance_mode is DELIBERATELY
+# informational-only (a banner) — it must never block money.
+FLAG_META = {
+    FREEZE_PAYOUTS: {
+        "label": "Freeze payouts",
+        "description": "Instantly halts every LIVE payout platform-wide "
+                       "(create_payout refuses with zero writes). Test mode "
+                       "keeps working. The incident kill switch.",
+        "danger": True,
+        "enforced": "payouts.create_payout (live only)",
+    },
+    MAINTENANCE_MODE: {
+        "label": "Maintenance banner",
+        "description": "Shows a site-wide banner telling users maintenance is "
+                       "in progress. Informational only — money keeps moving.",
+        "danger": False,
+        "enforced": "banner only (never blocks money)",
+    },
+}
+
+
+def get_flag_row(key: str):
+    """The full PlatformFlag row (or None) — fails safe to None on DB errors."""
+    try:
+        return db.session.get(PlatformFlag, key)
+    except Exception:
+        return None
+
+
+def maintenance_on() -> bool:
+    return get_flag(MAINTENANCE_MODE) == "on"
 
 
 def get_flag(key: str) -> str | None:

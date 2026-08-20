@@ -81,6 +81,13 @@ def create_payout(
     max_amount = current_app.config.get("MAX_TXN_AMOUNT", (1 << 63) - 1)
     if amount > max_amount:
         raise PayoutError(f"amount exceeds the maximum of {max_amount}")
+    # Per-merchant payout ceiling (admin-set, optional; NULL = no limit).
+    # Checked BEFORE the rail is resolved and BEFORE any account is created or
+    # earmarked, so a rejected amount moves no money and writes no rows
+    # (guardrail 13).
+    if merchant.max_payout_amount is not None and amount > merchant.max_payout_amount:
+        raise PayoutError(
+            f"amount exceeds this account's per-payout limit of {merchant.max_payout_amount}")
     if currency != "UGX":
         raise PayoutError("demo only supports UGX")
     if not merchant.is_active:
