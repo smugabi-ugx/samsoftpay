@@ -104,7 +104,7 @@ def create_app(config: dict | None = None) -> Flask:
         # each), which is what made page-to-page movement feel sticky.
         SEND_FILE_MAX_AGE_DEFAULT=86400,
         # ── Secure session cookies ──────────────────────────────────────────
-        SESSION_COOKIE_NAME="ssp_sid",
+        SESSION_COOKIE_NAME="ssp_session",
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),  # True on Render, False locally
@@ -251,13 +251,35 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(bills_bp)
 
     # CSRF protection for authenticated browser forms
-    from flask_wtf.csrf import CSRFProtect
+    from flask_wtf.csrf import CSRFError, CSRFProtect
     csrf = CSRFProtect(app)
     # Exempt blueprints that are public (no session) or use Bearer tokens
     csrf.exempt(api_bp)
     csrf.exempt(inbound_bp)
     csrf.exempt(xy_inbound_bp)   # supplier callback — signed, not session-based
     csrf.exempt(checkout_bp)   # public payment pages — no login session
+
+    @app.errorhandler(CSRFError)
+    def _csrf_error(e):
+        # A stale/expired session used to surface as a bare "Bad Request — The
+        # CSRF session token is missing" page (users read it as "the site is
+        # down"). Recover gracefully: bounce back to the form with a message.
+        from flask import flash as _flash, jsonify as _js
+        from flask import redirect as _redir, request as _rq
+        if _rq.path.startswith("/v1"):
+            return _js(error="session token invalid — retry the request"), 400
+        _flash("Your session expired — please try again.", "warning")
+        return _redir(_rq.referrer or url_for_login()), 303
+
+    def url_for_login():
+        from flask import url_for as _uf
+        return _uf("auth.login_page")
+
+    @app.get("/favicon.ico")
+    def _favicon():
+        # Browsers request /favicon.ico unconditionally — it 404'd in consoles.
+        from flask import redirect as _redir, url_for as _uf
+        return _redir(_uf("static", filename="img/favicon.png"), 301)
 
     from . import cli  # noqa: F401
     cli.register(app)
