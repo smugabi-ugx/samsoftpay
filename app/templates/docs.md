@@ -278,20 +278,126 @@ A successful charge's `charge.succeeded` data is identical in shape with
 - For vending: money and delivery are separate facts. `charge.succeeded` = paid;
   `vending.dispensed` = the machine actually released the product.
 
-## Errors
+## Error catalog
 
-All `/v1` errors are JSON: `{"error": "..."}`.
+All `/v1` errors are JSON with a single `error` field: `{"error": "..."}`. Every error the
+API returns is listed here verbatim (dynamic parts shown as `…`). The **Retry?** column is
+the contract: *yes, same key* = retry with the **same** `Idempotency-Key`; *no — fix
+request* = change something first; *no — permanent* = retrying will never help.
 
-| Status | Meaning | What to do |
+### Authentication & headers
+
+| Error | HTTP | Cause | Retry? |
+|---|---|---|---|
+| `missing bearer token` | 401 | No `Authorization: Bearer <key>` header | no — fix request |
+| `invalid api key` | 401 | Unknown, rotated or revoked key | no — fix request |
+| `this endpoint requires a full secret key; collections-only keys cannot move money out` | 403 | An `sk_*_col_` key on `POST /v1/payouts`, `/v1/payouts/bulk` or `/v1/charges/<id>/refund`; fires on scope before any resource lookup | no — call from your server with a full key |
+| `X-Timestamp header required. …` | 400 | Missing `X-Timestamp` on a POST | no — fix request |
+| `X-Timestamp must be an integer Unix timestamp` | 400 | Non-integer value | no — fix request |
+| `request timestamp is …s old — max allowed skew is 300s` | 400 | Timestamp older than 5 minutes (replay protection) | yes — with a fresh timestamp |
+| `request timestamp is too far in the future — check your system clock` | 400 | More than 60 s ahead of our clock | yes — after fixing your clock |
+
+### Idempotency & rate limits
+
+| Error | HTTP | Cause | Retry? |
+|---|---|---|---|
+| `Idempotency-Key header required` | 400 | Missing on a money POST (charges, payouts, bulk, refund) | no — fix request |
+| `idempotency key reused with different request body` | 409 | Same key, different payload — a key names one logical operation | no — new key for new work |
+| `a request with this Idempotency-Key is still in flight — retry shortly` | 409 | The original request has not finished (keys are reserved before execution; concurrent duplicates never both run) | yes, same key — shortly |
+| rate limit message | 429 | Too many requests. Defaults: charges 120/min, payouts 30/min, refunds 10/min (configurable per deployment) | yes — back off; honour `Retry-After` |
+
+### Charges
+
+| Error | HTTP | Cause | Retry? |
+|---|---|---|---|
+| `invalid request: …` | 400 | Malformed body (missing `amount`, bad `channel`, `split` not a list, …) | no — fix request |
+| `amount must be positive` | 400 | Zero or negative amount | no — fix request |
+| `amount exceeds the maximum of …` | 400 | Amount above the per-transaction ceiling | no — fix request |
+| `demo only supports UGX` | 400 | Currency other than `UGX` | no — fix request |
+| `merchant is not active` | 400 | Account deactivated | no — permanent until support reactivates |
+| `live charges require a verified business — complete verification on your dashboard (test keys work immediately)` | 400 | `sk_live_` key before KYC verification; zero writes | no — verify first; test keys work now |
+| `… is not available for live payments yet` | 400 | Channel with no real rail (`airtel_money`, `card`) on a live key — a simulated rail must never settle live money; zero writes | no — `mtn_momo` live, or a test key |
+| `fee exceeds amount` | 400 | Amount too small to cover the minimum fee (UGX 200) | no — fix request |
+| `invalid split: …` | 400 | Bad `split` array — unknown/inactive/duplicate subaccount, shares exceeding the net, bad `amount`/`bps`; zero writes | no — fix request |
+| `payment rail temporarily unavailable — retry with the same Idempotency-Key` | 502 | Transient rail/network failure before anything was recorded; deliberately **not** cached against your key | **yes, same key** |
+
+### Payouts & refunds
+
+| Error | HTTP | Cause | Retry? |
+|---|---|---|---|
+| `live payouts require a verified business — complete verification on your dashboard (test keys work immediately)` | 400 | `sk_live_` key before KYC verification; zero writes | no — verify first |
+| `insufficient available balance: have …, need … (amount … + fee …)` | 400 | Available (settled) balance below amount + fee; pending money does not count until it settles | no — top up or wait for settlement, then a new key |
+| `no disbursement adapter for channel …` | 400 | Payout channel with no disbursement rail (e.g. `airtel_money`); rejected before any money moves | no — use `mtn_momo` |
+| `payouts are temporarily paused platform-wide for a safety review — no action needed on your side; money in is unaffected` | 400 | Platform payout freeze during a safety event; zero writes | no — wait; money in unaffected |
+| `payouts are paused on this account while a payment reconciliation issue is investigated — support has been notified; your balance is safe and money in is unaffected` | 400 | An open critical reconciliation exception on your account pauses your live payouts until resolved | no — wait for support |
+| `disbursement rail unavailable: …` | 400 | The rail failed cleanly before the transfer was sent — nothing left our side | yes — after the outage, with a **new** key (this response is cached against the old one) |
+| `no payout items provided (JSON {payouts:[...]} or CSV)` / `batch too large (max 1000 items per call)` | 400 | Bulk payout body empty or over 1000 items | no — fix request |
+| `already_refunded` | 400 | The charge was already refunded — refunds happen once | no — permanent |
+| `cannot_refund_…_transaction` | 400 | Refund on a charge that is not `succeeded` | no — only succeeded charges refund |
+| `split_charge_refunds_not_yet_supported` | 400 | The charge was created with a `split`; split refunds are deliberately not enabled yet — contact support to reverse one; zero writes | no — permanent (for now) |
+| `mode_mismatch: this is a … charge — use your … key to refund it` | 400 | Refunding a test charge with a live key or vice versa; zero writes | no — use the key of the matching mode |
+
+### Vending
+
+| Error | HTTP | Cause | Retry? |
+|---|---|---|---|
+| `vending is not enabled for this merchant` | 403 | Dashboard → Vending is switched off | no — enable it first |
+| `machine not registered to this merchant` | 404 | Unknown machine number for your account | no — fix request |
+| `cannot dispense: charge status is …, not succeeded` | 400 | Dispense attempted against a charge that has not succeeded | no — wait for `succeeded` |
+| `this charge has already paid for a dispense` | 409 | One succeeded charge pays for exactly one dispense | no — permanent |
+
+### Asynchronous failures (not HTTP errors)
+
+A charge or payout that is *accepted* (HTTP 201) can still fail later on the rail. That
+outcome arrives as `"status": "failed"` with a `failure_reason` — via webhook
+(`charge.failed` / `payout.failed`) or polling. Reproduce each one deterministically in
+the sandbox with a magic number (see Testing above):
+
+| `failure_reason` | Where | Test number that reproduces it |
 |---|---|---|
-| `400` | Bad request — missing/invalid field, stale `X-Timestamp`, or `mode_mismatch` (e.g. refunding a test charge with a live key — use the key of the matching mode). | Fix the request; do not blind-retry. |
-| `400` | Unsupported channel / simulated rail refused in production — `airtel_money` and `card` have no live rail yet and are rejected on live keys before any write. | Use `mtn_momo` live, or a test key. |
-| `401` | Missing or invalid Bearer token. | Check the key. |
-| `403` | Key lacks permission — a collections-only key on a payout/refund endpoint. | Use a full-scope key from a secure server. |
-| `404` | Resource not found or belongs to a different merchant/mode. | Check the id and key mode. |
-| `409` | Idempotency conflict: same key with a different body, or the original request is still in flight. | New key for new work; same key retried shortly for in-flight. |
-| `429` | Rate limit exceeded (charges 30/min, payouts 10/min). | Back off and retry; honour the `Retry-After` header when present. |
-| `5xx` / network error | Outcome unknown. | Retry with the **same** `Idempotency-Key`. |
+| `insufficient_funds` | charge | customer phone `256700000001` |
+| `user_cancelled` | charge | customer phone `256700000002` |
+| `timeout` | charge | customer phone `256700000003` |
+| `recipient_not_found` | payout | recipient phone `256700000001` |
+| `wallet_locked` | payout | recipient phone `256700000002` |
+| `timeout` | payout | recipient phone `256700000003` |
+
+A `404` anywhere means the resource does not exist, belongs to a different merchant, or
+belongs to the other mode (test vs live) than your key. On any `5xx` or network error the
+outcome is unknown — retry with the **same** `Idempotency-Key`.
+
+## Go-live checklist
+
+The path from first sandbox charge to real money, in order. Do not skip the config-drift
+checks — they catch the classic "worked in test, silently broken in live" failures.
+
+1. **Build in the sandbox** with your `sk_test_` key. Sandbox money lives on a separate
+   ledger — nothing you do here can touch real balances.
+2. **Test failure paths in both directions with the magic numbers.** Charges: customer
+   phones `256700000001/2/3` fail with `insufficient_funds` / `user_cancelled` /
+   `timeout`. Payouts: the same numbers as the **recipient** fail with
+   `recipient_not_found` / `wallet_locked` / `timeout`. Confirm your `charge.failed` and
+   `payout.failed` handlers, your webhook signature verification, and your dedupe on the
+   envelope `id`.
+3. **Verify your business (KYC)** on the dashboard. Live charges and payouts are refused
+   with `400` until verified — test keys keep working throughout.
+4. **Config-drift checks before switching keys:**
+   - Live webhook URL set and verified — use the **Send test event** button on
+     Account → Webhooks, which POSTs a signed `test.ping` event to your endpoint;
+     confirm your handler verifies the signature and returns 2xx.
+   - Live key issued and stored **server-side only** (environment variable — never in
+     client code, mobile apps or repos).
+   - Kiosk and vending devices carry `sk_live_col_` **collections-only** keys, never
+     full keys — a key pulled off a device must not be able to move money out.
+5. **First live charge, small amount.** Verify it via `GET /v1/charges/<id>` **and**
+   confirm the `charge.succeeded` webhook arrived and verified — both paths must work
+   before volume.
+6. **First live settlement confirmed on `GET /v1/settlements`** — after the 24h hold
+   (hourly sweep), the release appears as a settlement record and your `available`
+   balance on `GET /v1/balance` moves.
+7. **Watch the changelog** (https://api.samsoftpay.com/docs/changelog — raw markdown at
+   /docs/changelog.md). Response shapes are additive-only and webhook events are only
+   ever added, so reading it is maintenance, not firefighting.
 
 ## Test vs live
 
@@ -304,4 +410,9 @@ All `/v1` errors are JSON: `{"error": "..."}`.
 ---
 
 HTML docs: https://api.samsoftpay.com/docs · Index: https://api.samsoftpay.com/docs/llms.txt ·
+Changelog: https://api.samsoftpay.com/docs/changelog (raw: /docs/changelog.md) ·
 Status: https://api.samsoftpay.com/status
+
+**Stability promise:** response shapes are additive-only — we add fields, we do not rename
+or remove them. Webhook events are only ever added. Every API-visible change is announced
+on the changelog.

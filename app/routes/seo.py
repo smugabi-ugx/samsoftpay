@@ -46,19 +46,56 @@ def status_page():
         "unknown" if hb is None else "degraded")
 
     momo_real = bool(current_app.config.get("MOMO_USE_REAL"))
+
+    # Per-rail components fed from OUR OWN data (Paystack lesson: show the
+    # ugly number honestly; M-Pesa counter-lesson: silence during an outage is
+    # what merchants actually punish). An MTN disagreement our reconciliation
+    # found is OUR incident to declare, even when the root cause is the telco.
+    from datetime import timedelta
+    from ..models import ReconException, WebhookDelivery, utcnow
+    hour_ago = utcnow() - timedelta(hours=1)
+
+    try:
+        open_recon = (ReconException.query
+                      .filter_by(status="open", severity="critical").count())
+    except Exception:
+        open_recon = 0
+    mtn_status = "operational" if momo_real else "sandbox"
+    mtn_note = ("Collections and disbursements." if momo_real
+                else "Running against the MTN sandbox while production onboarding completes.")
+    if open_recon:
+        mtn_status = "degraded"
+        mtn_note = (f"{open_recon} payment record(s) under reconciliation review "
+                    "with MTN — affected accounts' payouts are paused while we "
+                    "resolve them. Charges park safely during rail issues; they "
+                    "do not fail.")
+
+    try:
+        wh_failing = (WebhookDelivery.query
+                      .filter(WebhookDelivery.status == "failed",
+                              WebhookDelivery.attempts >= 3,
+                              WebhookDelivery.next_attempt_at >= hour_ago)
+                      .count())
+    except Exception:
+        wh_failing = 0
+    wh_status = "operational" if wh_failing < 10 else "degraded"
+    wh_note = ("Signed event delivery with automatic retries (~2 days)."
+               if wh_status == "operational" else
+               f"{wh_failing} deliveries retrying — if your endpoint was down, "
+               "use the Resend button on Account → Webhooks once it recovers.")
+
     components = [
         ("API & database", "operational" if api_ok else "degraded",
          "Core API, hosted checkout and the transaction ledger."),
         ("Background processing", worker,
-         "Settlement sweeps, webhook delivery, reconciliation and payment polling."),
-        ("MTN Mobile Money", "operational" if momo_real else "sandbox",
-         "Collections and disbursements." if momo_real
-         else "Running against the MTN sandbox while production onboarding completes."),
+         "Settlement sweeps, reconciliation and payment polling."),
+        ("Webhook delivery", wh_status, wh_note),
+        ("MTN Mobile Money (UG)", mtn_status, mtn_note),
         ("Crypto (via ChangeNow)", "operational", "BTC / ETH / USDT settlement to UGX."),
         ("Airtel Money", "in development", "Rail under construction — not yet accepting live payments."),
         ("Cards (Visa / Mastercard)", "in development", "Rail under construction — not yet accepting live payments."),
     ]
-    all_ok = api_ok and worker == "operational"
+    all_ok = api_ok and worker == "operational" and mtn_status != "degraded" and wh_status == "operational"
     return render_template("status.html", components=components, all_ok=all_ok)
 
 

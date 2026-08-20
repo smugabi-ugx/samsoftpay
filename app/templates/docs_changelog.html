@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}API Changelog{% endblock %}
+
+{% block extra_head %}
+<style>
+  .changelog-wrap { max-width: 860px; }
+  .changelog-body h1 { font-size: 1.75rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.75rem; }
+  .changelog-body h2 { font-size: 1.35rem; font-weight: 700; color: var(--gray-900); margin: 2.25rem 0 0.75rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--gray-200); }
+  .changelog-body h3 { font-size: 1rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gray-600); margin: 1.25rem 0 0.5rem; }
+  .changelog-body p { color: var(--gray-600); line-height: 1.75; margin-bottom: 0.75rem; }
+  .changelog-body ul { margin: 0 0 1rem 1.25rem; }
+  .changelog-body li { color: var(--gray-700); line-height: 1.7; margin-bottom: 0.5rem; }
+  .changelog-body code { background: var(--gray-100); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.875em; }
+  .changelog-body blockquote { border-left: 3px solid var(--primary); background: rgba(99,102,241,0.05); padding: 1rem 1.25rem; border-radius: 0 8px 8px 0; margin: 1rem 0; }
+  .changelog-body blockquote p { margin: 0; color: var(--gray-700); }
+  .changelog-body hr { border: none; border-top: 1px solid var(--gray-200); margin: 2rem 0; }
+  .changelog-body a { color: var(--primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="changelog-wrap">
+  <div class="page-header">
+    <h1 class="page-title">API Changelog</h1>
+    <p class="page-subtitle">Every API-visible change, newest first — the one canonical place to learn about changes before anything breaks.</p>
+  </div>
+
+  <div class="callout" style="border-left:3px solid var(--primary);background:rgba(99,102,241,0.05);padding:1rem 1.25rem;border-radius:0 8px 8px 0;margin:0 0 1.5rem;color:var(--gray-700);font-size:.9375rem;">
+    <strong>Stability promise:</strong> response shapes are additive-only — we add fields,
+    we do not rename or remove them. Webhook events are only ever added.
+  </div>
+
+  <p style="color:var(--gray-500);font-size:.85rem;margin-bottom:1.5rem;">
+    Back to the <a href="/docs" style="color:var(--primary);">API documentation</a> &middot;
+    raw markdown: <a href="/docs/changelog.md" style="color:var(--primary);">/docs/changelog.md</a>
+  </p>
+
+  <div class="changelog-body card" style="padding:2rem;">
+    {{ changelog_body }}
+  </div>
+</div>
+{% endblock %}

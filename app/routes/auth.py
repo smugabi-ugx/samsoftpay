@@ -398,13 +398,61 @@ def account():
             "code": wh.last_response_code,
             "created_at": wh.created_at,
         })
+    # Go-live checklist (Flutterwave integration-journey lesson): machine-check
+    # the config-drift items that actually break launch days, instead of
+    # letting the merchant discover them with real money.
+    from ..models import Settlement, WebhookDelivery as _WD
+    webhook_verified = (_WD.query.filter_by(
+        merchant_id=current_user.id, status="sent").first() is not None)
+    first_live_charge = (Transaction.query.filter_by(
+        merchant_id=current_user.id, is_test=False,
+        status=TxnStatus.SUCCEEDED).first() is not None)
+    first_live_settlement = (Settlement.query.filter_by(
+        merchant_id=current_user.id, is_test=False).first() is not None)
+    golive = [
+        ("Business verified (KYC)", current_user.kyc_status == "verified",
+         "Live keys only work once verification is approved."),
+        ("Webhook endpoint set", bool(current_user.webhook_url),
+         "Events like charge.succeeded and payout.failed need somewhere to go."),
+        ("Webhook delivery confirmed", webhook_verified,
+         "Use 'Send test event' below — a signed test.ping your endpoint must 200."),
+        ("First live charge succeeded", first_live_charge,
+         "Verify it via GET /v1/charges/<id> and its webhook."),
+        ("First live settlement released", first_live_settlement,
+         "Lands ~24h after your first live charge — check GET /v1/settlements."),
+    ]
+
     return render_template(
         "account.html",
         txn_count=txn_count,
         succeeded=succeeded,
         payout_count=payout_count,
         deliveries=deliveries,
+        golive=golive,
     )
+
+
+@bp.post("/account/webhooks/test")
+@limiter.limit("10 per minute")
+@login_required
+@verified_required
+def send_test_webhook():
+    """Fire a signed test.ping at the merchant's endpoint — the go-live
+    checklist's 'prove your receiver verifies our signature and 200s' step."""
+    m = db.session.get(Merchant, current_user.id)
+    if not m.webhook_url:
+        flash("Set a webhook endpoint first.", "danger")
+        return redirect(url_for("auth.account") + "#webhooks")
+    from ..services.webhooks import enqueue
+    from ..models import utcnow as _now
+    enqueue(m, "test.ping", {
+        "message": "If you can verify this signature and return 200, "
+                   "your webhook integration is live-ready.",
+        "sent_at": _now().isoformat(),
+    })
+    flash("Test event queued — it appears in Recent deliveries below within seconds. "
+          "Status 'sent' means your endpoint answered 2xx.", "success")
+    return redirect(url_for("auth.account") + "#webhooks")
 
 
 @bp.post("/account/webhooks/<int:delivery_id>/resend")

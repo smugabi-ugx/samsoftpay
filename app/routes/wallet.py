@@ -48,12 +48,34 @@ def wallet_home():
                    .order_by(Settlement.id.desc())
                    .limit(15).all())
 
+    # NO SILENT HOLDS (Flutterwave counterexample: a merchant who discovers a
+    # frozen balance without warning never leaves money in again). If this
+    # merchant's payouts are paused, say so HERE, with the reason, before they
+    # hit the error on submit.
+    payouts_paused_reason = None
+    from ..models import ReconException
+    from ..services import platform_flags
+    if platform_flags.payouts_frozen():
+        payouts_paused_reason = (
+            "Payouts are temporarily paused platform-wide for a safety review. "
+            "Money in is unaffected and your balance is safe.")
+    else:
+        n_open = ReconException.query.filter_by(
+            merchant_id=current_user.id, status="open", severity="critical").count()
+        if n_open:
+            payouts_paused_reason = (
+                f"Payouts on your account are paused while {n_open} payment "
+                f"record{'s are' if n_open != 1 else ' is'} reconciled with MTN. "
+                "Support has been notified; your balance is safe and money in "
+                "is unaffected.")
+
     return render_template("wallet.html",
         accounts=accounts, withdrawals=withdrawals,
         available=available, pending=pending,
         withdrawal_fee=_WITHDRAWAL_FEE,
         topups=topups,
         settlements=settlements,
+        payouts_paused_reason=payouts_paused_reason,
     )
 
 

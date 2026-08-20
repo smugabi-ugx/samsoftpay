@@ -11,6 +11,13 @@
 
 {% block content %}
 
+{% if payouts_paused_reason %}
+<div class="alert alert-warning" style="margin-bottom:1rem;">
+  <i data-feather="pause-circle" class="alert-icon"></i>
+  <div><strong>Payouts paused.</strong> {{ payouts_paused_reason }}</div>
+</div>
+{% endif %}
+
 {% with messages = get_flashed_messages(with_categories=true) %}
   {% for cat, msg in messages %}
   <div class="alert alert-{{ 'success' if cat == 'success' else 'info' if cat == 'info' else 'danger' }}" style="margin-bottom:1rem;">

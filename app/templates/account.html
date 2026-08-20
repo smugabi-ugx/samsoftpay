@@ -231,6 +231,16 @@
     <div class="form-hint">Yours alone — never shared across merchants, and safe to put in your server's env.</div>
   </div>
 
+  {% if current_user.webhook_url %}
+  <form method="POST" action="{{ url_for('auth.send_test_webhook') }}" style="margin-top:1rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-outline" style="font-size:.8125rem;">
+      <i data-feather="send"></i> Send test event
+    </button>
+    <span class="form-hint" style="margin-left:.5rem;">Fires a signed <code>test.ping</code> at your endpoint — prove your receiver verifies and 200s before going live.</span>
+  </form>
+  {% endif %}
+
   {% if deliveries %}
   <div style="margin-top:1.25rem;">
     <label class="form-label">Recent deliveries</label>
@@ -263,6 +273,30 @@
     <div class="form-hint">A resend delivers the original signed event to your current endpoint — receivers dedupe on the event id, so it's always safe. Also available as <code>POST /v1/webhooks/&lt;event_id&gt;/resend</code>.</div>
   </div>
   {% endif %}
+</div>
+
+<!-- Go-live checklist -->
+{% set done_count = golive|selectattr(1)|list|length %}
+<div class="card" id="golive">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="flag"></i> Ready to go live?</h3>
+    <span class="badge {% if done_count == golive|length %}succeeded{% else %}pending{% endif %}">{{ done_count }}/{{ golive|length }}</span>
+  </div>
+  <p class="text-muted mb-3" style="font-size:.875rem;">
+    The config-drift items that actually break launch days — checked against your account,
+    not self-reported. Full walkthrough in the <a href="{{ url_for('docs.docs') }}#go-live">docs</a>.
+  </p>
+  <div style="display:flex;flex-direction:column;gap:.5rem;">
+    {% for label, ok, hint in golive %}
+    <div style="display:flex;align-items:flex-start;gap:.625rem;padding:.5rem .625rem;border:1px solid var(--gray-100);border-radius:10px;">
+      <i data-feather="{{ 'check-circle' if ok else 'circle' }}" style="width:18px;height:18px;flex-shrink:0;margin-top:.1rem;color:{{ 'var(--success, #16a34a)' if ok else 'var(--gray-400)' }};"></i>
+      <div>
+        <div style="font-size:.875rem;font-weight:600;color:var(--gray-900);">{{ label }}</div>
+        <div style="font-size:.75rem;color:var(--gray-500);">{{ hint }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
 </div>
 
 <!-- Business Logo Upload -->
