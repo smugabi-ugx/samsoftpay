@@ -11,7 +11,7 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --p:#6366f1;--green:#10b981;--mtn:#ffcb05;--mtn-t:#003566;
+      --p:#4f46e5;--green:#059669;--mtn:#ffcb05;--mtn-t:#003566;
       --airtel:#e60000;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;
       --ease:cubic-bezier(.4,0,.2,1);
     }
@@ -46,11 +46,11 @@
     }
     .topnav-btn:hover{background:rgba(255,255,255,.14);color:white;}
     .topnav-btn svg{width:13px;height:13px;}
-    .topnav-btn.primary{background:linear-gradient(135deg,#667eea,#764ba2);border-color:transparent;color:white;}
+    .topnav-btn.primary{background:#4f46e5;border-color:transparent;color:white;}
 
     /* ── HERO ── */
     .hero{
-      background:linear-gradient(160deg,#0f0c29 0%,#1a0533 45%,#2d1060 100%);
+      background:#1e1b4b;
       padding:2.5rem 1.5rem 3rem;text-align:center;position:relative;overflow:hidden;
     }
     .hero::before{content:'';position:absolute;inset:0;
@@ -67,7 +67,7 @@
     }
     .merchant-logo img{width:100%;height:100%;object-fit:cover;}
     .merchant-logo.letter{
-      background:linear-gradient(135deg,#667eea,#764ba2);
+      background:#4f46e5;
       display:flex;align-items:center;justify-content:center;
       font-family:'Urbanist',sans-serif;font-size:2.5rem;font-weight:900;color:white;
     }
@@ -129,7 +129,7 @@
     .product-card:active{transform:scale(.98);background:var(--bg);}
     .product-card:hover{border-color:rgba(99,102,241,.25);box-shadow:0 4px 16px rgba(99,102,241,.08);}
     .product-icon{width:48px;height:48px;border-radius:12px;
-      background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.1));
+      background:rgba(79,70,229,.08);
       display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;}
     .product-info{flex:1;min-width:0;}
     .product-name{font-weight:600;font-size:.9375rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -156,7 +156,7 @@
     .amt-input::placeholder{color:#cbd5e1;font-weight:400;font-size:1rem;font-family:'Inter',sans-serif;}
     .pay-btn{display:flex;align-items:center;justify-content:center;gap:.5rem;
       width:100%;padding:.9375rem;
-      background:linear-gradient(135deg,#667eea,#764ba2);
+      background:#4f46e5;
       color:white;border:none;border-radius:10px;
       font-size:1rem;font-weight:700;font-family:inherit;
       cursor:pointer;transition:all .2s var(--ease);-webkit-tap-highlight-color:transparent;}

@@ -17,11 +17,11 @@
       --muted: #64748b;
       --line: #e2e8f0;
       --bg: #f8fafc;
-      --primary: #6366f1;
+      --primary: #4f46e5;
       --mtn: #ffcb05;
       --mtn-text: #003566;
       --airtel: #e60000;
-      --success: #10b981;
+      --success: #059669;
       --danger: #ef4444;
     }
 
@@ -64,7 +64,7 @@
 
     /* ── Summary band ── */
     .summary {
-      background: linear-gradient(135deg, #1a0533 0%, #2d1060 100%);
+      background: #1e1b4b;
       padding: 1.5rem 1.25rem;
       color: white; text-align: center;
     }
@@ -222,13 +222,14 @@
       display: flex; align-items: center; justify-content: center; gap: 0.5rem;
       width: 100%; height: 56px;
       /* Same brand family as the summary band — one purple, not two. */
-      background: linear-gradient(135deg, #2d1060 0%, #6b21a8 100%);
+      background: #4f46e5;
       color: white; border: none; border-radius: 12px;
       font-size: 1.0625rem; font-weight: 700; font-family: inherit;
       cursor: pointer; transition: all .2s;
       -webkit-tap-highlight-color: transparent;
       max-width: 480px; margin: 0 auto; display: flex;
     }
+    .pay-btn:hover { background: #4338ca; }
     .pay-btn:active { transform: scale(0.99); }
     .pay-btn:disabled { opacity: .45; cursor: not-allowed; }
     .pay-reassure {
@@ -334,7 +335,7 @@
                id="lbl-{{ ch_key }}">
           <input type="radio" name="channel" value="{{ ch_key }}"
                  {% if selected_channel == ch_key %}checked{% endif %} required>
-          <div class="ch-dot"><div class="ch-dot-inner"></div></div>
+          {% if channels|length > 1 %}<div class="ch-dot"><div class="ch-dot-inner"></div></div>{% endif %}
           {% if ch_key == 'mtn_momo' %}
             <div class="ch-logo mtn">MTN</div>
             <div class="ch-info">

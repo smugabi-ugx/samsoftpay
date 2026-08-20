@@ -106,11 +106,16 @@ def checkout_page(public_id: str):
     g.api_mode = "test" if link.is_test else "live"
     voucher_data = session.get(f"voucher_{public_id}", {})
     prefill = session.pop(f"checkout_prefill_{public_id}", {})
+    channels = _channel_options(include_crypto=True)
     return render_template(
         "checkout.html",
         link=link,
         merchant=merchant,
-        channels=_channel_options(include_crypto=True),
+        channels=channels,
+        # Pre-select the first method so the phone field is visible on load
+        # instead of a dead form until the customer taps a radio (esp. the
+        # MTN-only case, which should read as a plain "enter your number").
+        selected_channel=channels[0][0] if channels else None,
         crypto_url=url_for("checkout.crypto_checkout", public_id=link.public_id),
         voucher_applied=bool(voucher_data),
         voucher_discount=voucher_data.get("discount", 0),

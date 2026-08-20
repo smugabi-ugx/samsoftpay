@@ -147,12 +147,19 @@
     .step.active .label { color: var(--ink); font-weight: 600; }
     .step.fail .dot { border-color: var(--fail); background: var(--fail); color: white; }
 
+    .merchant-chip {
+      width: 52px; height: 52px; margin: 1.75rem auto 0;
+      border-radius: 14px; border: 1px solid var(--line); overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg); color: var(--ink); font-weight: 700; font-size: 1.25rem;
+    }
+    .merchant-chip img { width: 100%; height: 100%; object-fit: cover; }
     .amount {
       font-family: 'Inter', sans-serif;
       font-size: 1.9rem;
       color: var(--ink);
       font-weight: 500;
-      margin: 1.75rem 0 0.3rem;
+      margin: 0.75rem 0 0.3rem;
     }
     .merchant-name { color: var(--muted); font-size: 0.9rem; }
     .detail {
@@ -199,6 +206,11 @@
       <div class="step" id="step3"><div class="dot">3</div><div class="label">Confirmed</div></div>
     </div>
 
+    <div class="merchant-chip" aria-hidden="true">
+      {% if merchant.logo_filename %}
+      <img src="{{ url_for('auth.serve_logo', merchant_id=merchant.id) }}" alt="">
+      {% else %}{{ merchant.name[0]|upper }}{% endif %}
+    </div>
     <div class="amount">{{ txn.currency }} {{ "{:,}".format(txn.amount) }}</div>
     <div class="merchant-name">to {{ merchant.name }}</div>
 
