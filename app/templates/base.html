@@ -368,28 +368,38 @@
 
     /* Mobile table cards */
     @media(max-width:640px){
-      .table-container table thead{display:none;}
-      .table-container table,
-      .table-container tbody,
-      .table-container tr,
-      .table-container td{display:block;width:100%;}
-      .table-container tr{
+      /* The card transform ONLY applies to tables whose <td>s carry
+         data-label (the left-hand label comes from attr(data-label)). No
+         template actually sets data-label, so the old unconditional rule hid
+         every header and rendered blank labels. Gate it on :has(td[data-label])
+         so UNLABELLED tables simply scroll horizontally WITH their header
+         intact (readable) via .table-container's overflow-x:auto. */
+      .table-container table:has(td[data-label]) thead{display:none;}
+      .table-container table:has(td[data-label]),
+      .table-container table:has(td[data-label]) tbody,
+      .table-container table:has(td[data-label]) tr,
+      .table-container table:has(td[data-label]) td{display:block;width:100%;}
+      .table-container table:has(td[data-label]) tr{
         border-bottom:1px solid var(--gray-200);
         padding:.875rem 1rem;
         background:white;
       }
-      .table-container tr:last-child{border-bottom:none;}
-      .table-container td{
+      .table-container table:has(td[data-label]) tr:last-child{border-bottom:none;}
+      .table-container table:has(td[data-label]) td{
         padding:.25rem 0;border-bottom:none;
         display:flex;justify-content:space-between;align-items:center;
         font-size:.875rem;
       }
-      .table-container td::before{
+      .table-container td[data-label]::before{
         content:attr(data-label);
         font-weight:600;font-size:.75rem;color:var(--gray-500);
         text-transform:uppercase;letter-spacing:.04em;
         flex-shrink:0;margin-right:.75rem;
       }
+      /* Unlabelled tables: ensure the scroll container actually scrolls and
+         the table keeps a sensible min width so columns don't crush. */
+      .table-container{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+      .table-container table:not(:has(td[data-label])){min-width:520px;}
     }
 
     /* ─────────────────────────────────────────────
@@ -614,15 +624,22 @@
       #scroll-top{bottom:calc(var(--bottom-nav-h) + 16px);}
       .stats-grid{grid-template-columns:repeat(2,1fr);}
       .page-title{font-size:1.5rem;}
-      /* Forms fill naturally on mobile: 16px stops iOS auto-zooming on focus */
-      .form-input,.form-select,.form-textarea,input,select,textarea{font-size:16px;}
+      /* Forms fill naturally on mobile: 16px stops iOS auto-zooming on focus.
+         !important because several templates set inline sub-16px font-size on
+         inputs, which defeats the guard and makes iOS zoom on tap. */
+      .form-input,.form-select,.form-textarea,input,select,textarea{font-size:16px !important;}
       /* Comfortable tap targets (Apple/Google minimum is 44px) */
       .btn{min-height:44px;}
       .nav-link,.bn-item{min-height:44px;}
+      /* Card headers with a title + action button must wrap, not overflow. */
+      .card-header{flex-wrap:wrap;gap:.5rem;}
+      /* Large UGX amounts were overflowing the stat cards. */
+      .stat-value{font-size:1.5rem;overflow-wrap:anywhere;}
     }
     @media(max-width:400px){
       .stats-grid{grid-template-columns:1fr;}
       .btn{padding:.625rem .875rem;font-size:.875rem;}
+      .stat-value{font-size:1.375rem;}
     }
 
     /* ─────────────────────────────────────────────
