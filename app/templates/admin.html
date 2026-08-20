@@ -14,6 +14,26 @@
    template that extends it. Do NOT re-add a per-page block here:
    get_flashed_messages() caches on the request context, so a second call in
    the same render returns the same messages again and they appear TWICE. #}
+{% if rail_mocked %}
+<div class="alert alert-danger" style="margin-bottom:1.5rem;">
+  <i data-feather="alert-octagon" class="alert-icon"></i>
+  <div>
+    <strong>MTN Mobile Money is MOCKED — customers cannot pay by MoMo.</strong>
+    Checkout hides MTN, subscription plans cannot be created, and wallet top-ups
+    credit the sandbox ledger. <code>MOMO_USE_REAL</code> is currently
+    <code>{{ rail_raw }}</code> — set it to <code>1</code> on the web, worker and
+    beat services, then redeploy and run <code>flask preflight</code>.
+  </div>
+</div>
+{% elif rail_env_mismatch %}
+<div class="alert alert-warning" style="margin-bottom:1.5rem;">
+  <i data-feather="alert-triangle" class="alert-icon"></i>
+  <div><strong>MTN rail configuration mismatch.</strong> {{ rail_env_mismatch }}.
+    Every MTN call will fail until the base URL, target environment and currency
+    all come from the same environment.</div>
+</div>
+{% endif %}
+
 <!-- Money (live ledger) -->
 <div class="stats-grid">
   <div class="stat-card">

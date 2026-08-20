@@ -619,6 +619,26 @@ def admin_home():
     hb_state = ("unknown" if hb_age is None
                 else "ok" if hb_age <= hb_stale_after else "stale")
 
+    # Rail configuration — a mocked MTN rail in production is a TOTAL outage of
+    # mobile money (checkout hides it, plans cannot be created, top-ups land in
+    # the sandbox ledger) yet nothing used to say so. Surface it, with the raw
+    # value, so the cause is obvious instead of taking an hour to find.
+    import os as _os
+    rail_mocked = bool(_os.environ.get("RENDER")) and not current_app.config.get("MOMO_USE_REAL")
+    rail_raw = _os.environ.get("MOMO_USE_REAL", "(not set)")
+    rail_env_mismatch = None
+    if current_app.config.get("MOMO_USE_REAL"):
+        _base = str(current_app.config.get("MOMO_BASE_URL") or "")
+        _tgt = str(current_app.config.get("MOMO_TARGET_ENV") or "")
+        _cur = str(current_app.config.get("MOMO_CURRENCY") or "")
+        _is_sandbox_url = "sandbox.momodeveloper" in _base
+        if _is_sandbox_url and (_tgt != "sandbox" or _cur.upper() != "EUR"):
+            rail_env_mismatch = (f"sandbox base URL with MOMO_TARGET_ENV={_tgt} / "
+                                 f"MOMO_CURRENCY={_cur} — sandbox needs sandbox/EUR")
+        elif not _is_sandbox_url and _tgt == "sandbox":
+            rail_env_mismatch = (f"production base URL with MOMO_TARGET_ENV=sandbox "
+                                 f"— production needs mtnuganda")
+
     kyc_pending = (KYCApplication.query
         .filter(KYCApplication.status.in_(["submitted", "under_review"])).count())
     withdrawals_pending = WithdrawalRequest.query.filter_by(status="pending").count()
@@ -642,6 +662,8 @@ def admin_home():
         kyc_pending=kyc_pending, withdrawals_pending=withdrawals_pending,
         disputes_open=disputes_open, recon_open=recon_open,
         recent_audits=recent_audits,
+        rail_mocked=rail_mocked, rail_raw=rail_raw,
+        rail_env_mismatch=rail_env_mismatch,
     )
 
 
