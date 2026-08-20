@@ -704,6 +704,36 @@ def report_problem_submit(public_id: str):
     # lands on the confirmation (no error surface to farm, no duplicates).
     existing = Dispute.query.filter_by(
         transaction_id=txn.id, status="open").first()
+
+    # Flood ceiling (sovereign-audit finding): the per-IP limit doesn't stop a
+    # drive-by page auto-submitting from many visitors' browsers across many
+    # links. Past the daily per-merchant cap we stop WRITING rows, page a
+    # human once, and still show the confirmation — a flooder learns nothing.
+    if existing is None:
+        from datetime import timedelta
+        from flask import current_app
+        from ..models import utcnow as _now
+        cap = int(current_app.config.get("DISPUTE_MERCHANT_DAILY_CAP", 50))
+        recent = Dispute.query.filter(
+            Dispute.merchant_id == link.merchant_id,
+            Dispute.created_at >= _now() - timedelta(hours=24)).count()
+        if recent >= cap:
+            try:
+                from ..services.alerts import send_alert
+                send_alert(
+                    "Dispute flood ceiling hit",
+                    f"merchant={link.merchant_id} received {recent} disputes in "
+                    f"24h (cap {cap}) — further reports are being acknowledged "
+                    f"but NOT recorded. Investigate for abuse.",
+                    severity="critical",
+                    key=f"dispute-flood-{link.merchant_id}",
+                    dedupe_seconds=86400,
+                )
+            except Exception:
+                pass
+            return render_template("report_problem.html", link=link, txn=txn,
+                                   merchant=merchant, submitted=True)
+
     if existing is None:
         import uuid as _uuid
         d = Dispute(public_id=f"dsp_{_uuid.uuid4().hex[:16]}",

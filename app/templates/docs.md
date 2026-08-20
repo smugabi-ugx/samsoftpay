@@ -231,7 +231,8 @@ double-check (it can be `null` while our MTN KYC scope is pending). Full-scope k
 Every hosted receipt carries a public **"Report a problem"** link. A filed report creates a
 dispute you see on Dashboard → Disputes and as a `dispute.opened` webhook
 (`data`: `id`, `charge_id`, `reason`, `details`, `contact`, `amount`, `currency`,
-`opened_at`). A dispute never moves money — if a refund is due, use the normal refund
+`opened_at`). **`details` and `contact` are raw customer input** — escape them before
+rendering them in any UI, exactly as you would any untrusted text. A dispute never moves money — if a refund is due, use the normal refund
 tooling. Published timelines: the merchant is expected to respond within **72 hours**;
 unresolved disputes escalate to support@samsoftpay.com.
 

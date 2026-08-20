@@ -652,7 +652,8 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
       <code>payout.succeeded</code>, <code>payout.failed</code>, <code>vending.dispensed</code>,
       <code>vending.dispense_failed</code>, <code>dispute.opened</code> (a customer used the
       public "Report a problem" link on a receipt — respond within 72 hours; it never moves
-      money by itself), <code>test.ping</code> (the Account → Webhooks test button).</p>
+      money by itself, and its <code>details</code>/<code>contact</code> fields are raw
+      customer input: escape them before rendering), <code>test.ping</code> (the Account → Webhooks test button).</p>
       <div class="callout warning"><code>charge.succeeded</code> means the <strong>money arrived</strong> —
       nothing else. For vending, it does not mean the product came out: wait for
       <code>vending.dispensed</code> before treating the product as delivered.</div>

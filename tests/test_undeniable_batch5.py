@@ -194,12 +194,89 @@ def main():
               and any(f["kind"] == "platform_panic" for f in findings))
         platform_flags.set_flag(platform_flags.FREEZE_PAYOUTS, "off")
 
+    batch7_checks()
     failed = [lbl for lbl, ok in CHECKS if not ok]
     print()
     if failed:
         print(f"FAILED {len(failed)}/{len(CHECKS)}: " + "; ".join(failed))
         sys.exit(1)
     print(f"ALL UNDENIABLE-BATCH-5 TESTS PASSED ({len(CHECKS)}/{len(CHECKS)})")
+
+
+
+
+def batch7_checks():
+    """Audit-#3 fixes: real client IP resolution + dispute flood ceiling."""
+    import tempfile as _tf
+    fd, p2 = _tf.mkstemp(suffix=".db", prefix="batch7_")
+    os.close(fd)
+    os.environ["DATABASE_URL"] = "sqlite:///" + p2.replace("\\", "/")
+    app = create_app({"WTF_CSRF_ENABLED": False,
+                      "DISPUTE_MERCHANT_DAILY_CAP": 3})
+    import app.tasks.webhooks_task as _wt
+    _wt.deliver_webhook.delay = lambda *a, **k: None
+    alerts = []
+    import app.services.alerts as _alerts
+    _alerts.send_alert = lambda title, *a, **k: alerts.append(title) or True
+
+    # ── real_client_ip resolution order ──
+    from app.services.client_ip import real_client_ip
+    with app.test_request_context(headers={
+            "CF-Connecting-IP": "203.0.113.9",
+            "X-Forwarded-For": "6.6.6.6, 198.51.100.2"}):
+        check("CF-Connecting-IP wins when present", real_client_ip() == "203.0.113.9")
+    with app.test_request_context(headers={
+            "X-Forwarded-For": "6.6.6.6, 198.51.100.2"}):
+        check("rightmost XFF used (client-controlled first entry ignored)",
+              real_client_ip() == "198.51.100.2")
+    with app.test_request_context():
+        check("no proxy headers -> remote_addr fallback",
+              real_client_ip() not in ("6.6.6.6", None, ""))
+    check("worker context (no request) -> 'worker'", real_client_ip() == "worker")
+
+    # rate-limit key uses it too
+    from app.extensions import _rate_limit_key
+    with app.test_request_context(headers={"CF-Connecting-IP": "203.0.113.9"}):
+        check("rate-limit key = real client ip when unauthenticated",
+              _rate_limit_key() == "203.0.113.9")
+
+    # ── dispute flood ceiling ──
+    from werkzeug.security import generate_password_hash
+    with app.app_context():
+        db.create_all()
+        m = Merchant(name="B7", email="b7@x.com", public_key="pk7", secret_key="sk7",
+                     kyc_status="verified", handle="b7",
+                     webhook_url="https://ex.example/h",
+                     password_hash=generate_password_hash("x"))
+        db.session.add(m); db.session.commit()
+        mid = m.id
+        for i in range(4):
+            t = Transaction(public_id=f"txn_f{i}", merchant_id=mid, amount=1000,
+                            fee_amount=0, currency="UGX", channel=Channel.MTN_MOMO,
+                            status=TxnStatus.SUCCEEDED, is_test=False,
+                            customer_phone="256780000009", completed_at=utcnow())
+            db.session.add(t); db.session.flush()
+            db.session.add(PaymentLink(public_id=f"plink_f{i}", merchant_id=mid,
+                                       amount=1000, currency="UGX",
+                                       transaction_id=t.id))
+        db.session.commit()
+
+    c = app.test_client()
+    for i in range(3):
+        r = c.post(f"/pay/plink_f{i}/report", data={"reason": "other"})
+        assert r.status_code == 200
+    with app.app_context():
+        check("first 3 disputes recorded (cap=3)",
+              Dispute.query.filter_by(merchant_id=mid).count() == 3)
+    r = c.post("/pay/plink_f3/report", data={"reason": "other"})
+    with app.app_context():
+        check("4th dispute over the cap: acknowledged but NOT recorded, alert paged",
+              r.status_code == 200 and b"Report received" in r.data
+              and Dispute.query.filter_by(merchant_id=mid).count() == 3
+              and any("flood" in a.lower() for a in alerts))
+
+    try: os.unlink(p2)
+    except OSError: pass
 
 
 if __name__ == "__main__":

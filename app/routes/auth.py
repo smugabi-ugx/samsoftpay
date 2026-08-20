@@ -214,8 +214,11 @@ def _is_locked(m) -> bool:
 
 
 def _client_ip_auth() -> str:
-    fwd = request.headers.get("X-Forwarded-For")
-    return (fwd.split(",")[0].strip() if fwd else request.remote_addr) or "unknown"
+    # First-XFF-entry was CLIENT-CONTROLLED (an attacker could frame any IP in
+    # lockout keys and new-device checks). The shared helper prefers
+    # Cloudflare's own header, then the rightmost proxy-appended entry.
+    from ..services.client_ip import real_client_ip
+    return real_client_ip()
 
 
 @bp.post("/login")

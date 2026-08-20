@@ -43,9 +43,7 @@ def log_event(
 def _client_ip() -> str:
     # Also called from Celery tasks (settlement, polling, auto-dispense) where
     # there is no request context at all — those entries are still worth writing.
-    if not has_request_context():
-        return "worker"
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.remote_addr or "unknown"
+    # Uses the shared spoof-resistant resolver: first-XFF-entry was client-
+    # controlled, letting an attacker launder their IP in the audit trail.
+    from .client_ip import real_client_ip
+    return real_client_ip()
