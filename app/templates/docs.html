@@ -88,7 +88,7 @@
 {% if current_user.is_authenticated %}
 <div class="live-key-note">
   <i data-feather="zap" style="color:var(--primary);flex-shrink:0;"></i>
-  <span>You're signed in as <strong>{{ current_user.name }}</strong> — your TEST API key is pre-filled in every example below. Building works the same in test and live: swap in your live key from the Account page when you go live &mdash; nothing else changes.</span>
+  <span>You're signed in as <strong>{{ current_user.name }}</strong> — your TEST API key is pre-filled in every example below. Building works the same in test and live: swap in your live key from the Account page when you go live. Nothing else changes.</span>
 </div>
 {% else %}
 <div class="live-key-note">
@@ -99,8 +99,8 @@
 
 <p style="color:var(--gray-500);font-size:.85rem;margin:-0.75rem 0 1.5rem;">
   These docs are machine-readable: <a href="/docs/llms.txt">/docs/llms.txt</a> &middot; <a href="/docs.md">/docs.md</a>
-  &middot; API changes are announced on the <a href="/docs/changelog">changelog</a> —
-  response shapes are additive-only, webhook events are only ever added.
+  &middot; API changes are announced on the <a href="/docs/changelog">changelog</a>.
+  Response shapes are additive-only, webhook events are only ever added.
 </p>
 
 <div class="docs-layout">
@@ -146,10 +146,10 @@
         To integrate with Samsoftpay you need exactly <strong>two things</strong>:
       </p>
       <ol style="margin:0 0 1.25rem 1.25rem;line-height:2;">
-        <li><strong>Base URL:</strong> <code>https://api.samsoftpay.com</code> — same for test and live.</li>
+        <li><strong>Base URL:</strong> <code>https://api.samsoftpay.com</code> (same for test and live).</li>
         <li><strong>Your API key:</strong> <code>sk_test_…</code> from
-          {% if current_user.is_authenticated %}your <a href="{{ url_for('auth.account') }}">Account page</a>{% else %}<a href="{{ url_for('auth.signup_page') }}">a free account</a> (instant, no approval){% endif %}
-          — sent as <code>Authorization: Bearer &lt;key&gt;</code>.</li>
+          {% if current_user.is_authenticated %}your <a href="{{ url_for('auth.account') }}">Account page</a>{% else %}<a href="{{ url_for('auth.signup_page') }}">a free account</a> (instant, no approval){% endif %},
+          sent as <code>Authorization: Bearer &lt;key&gt;</code>.</li>
       </ol>
       <p style="margin-bottom:.75rem;">
         No IPN registration, no IP whitelisting, no token exchange. This first charge works in
@@ -180,10 +180,10 @@
 }</code></pre>
       <p style="margin-top:.75rem;">
         Poll <code>GET /v1/charges/&lt;id&gt;</code> until <code>status</code> is
-        <code>succeeded</code> — the test number <code>256700000000</code> always succeeds
+        <code>succeeded</code>. The test number <code>256700000000</code> always succeeds
         (see <a href="#testing">Testing</a> for numbers that fail on demand). Prefer push?
-        Add a webhook URL on your Account page and we deliver signed events instead —
-        it's optional, polling is fully supported.
+        Add a webhook URL on your Account page and we deliver signed events instead.
+        Webhooks are optional, and polling is fully supported.
       </p>
       <p style="color:var(--gray-500);font-size:.9rem;">
         Going live later is a one-line change: swap in your <code>sk_live_</code> key.
@@ -198,7 +198,7 @@
       <p><strong>Kiosk-safe keys:</strong> for code that ships on a public device (a vending
       machine, a kiosk app), use a <em>collections-only</em> key (<code>sk_test_col_…</code> /
       <code>sk_live_col_…</code>, generated on your Account page). It can create charges, orders
-      and payment links but is refused with <code>403</code> on payouts and refunds — so a key
+      and payment links but is refused with <code>403</code> on payouts and refunds, so a key
       pulled off a device can never move money out. Never embed your full secret key on a device.</p>
       <div class="tab-group">
         <div class="tabs">
@@ -254,12 +254,12 @@ headers = {
     "Content-Type": "application/json",
 }</code></pre>
       <h3>Idempotency semantics</h3>
-      <p>Keys are <strong>reserved before execution</strong> — two concurrent requests with the
+      <p>Keys are <strong>reserved before execution</strong>: two concurrent requests with the
       same key can never both run; the loser gets <code>409</code> and should retry shortly.
       Replaying a key returns the <strong>original response</strong>, unchanged, plus the header
       <code>Idempotent-Replayed: true</code> so you can tell a replay from a fresh execution.
       Keys are retained for <strong>30 days</strong>. On a network error, timeout or <code>5xx</code>,
-      retry with the <strong>same</strong> key — that is the whole point. <code>Idempotency-Key</code>
+      retry with the <strong>same</strong> key. That is the whole point. <code>Idempotency-Key</code>
       is required on the money POSTs and optional-but-honored on payment links and vending orders.</p>
     </div>
 
@@ -353,20 +353,20 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
     <!-- Testing -->
     <div class="docs-section" id="testing">
       <h2><i data-feather="check-circle" style="width:22px;height:22px;color:var(--primary);"></i> Testing</h2>
-      <p>With an <code>sk_test_</code> key, MTN Mobile Money and Airtel Money never touch a real network — a charge settles a few seconds after you request it, using the phone number as the signal for what should happen. An ordinary phone number always succeeds. Use one of these to test a specific outcome on purpose:</p>
+      <p>With an <code>sk_test_</code> key, MTN Mobile Money and Airtel Money never touch a real network. A charge settles a few seconds after you request it, using the phone number as the signal for what should happen. An ordinary phone number always succeeds. Use one of these to test a specific outcome on purpose:</p>
       <table class="param-table">
         <thead><tr><th>Phone number</th><th>Result</th></tr></thead>
         <tbody>
-          <tr><td><code>256700000000</code></td><td>Always succeeds (same as any ordinary number — documented for clarity)</td></tr>
+          <tr><td><code>256700000000</code></td><td>Always succeeds (same as any ordinary number, documented for clarity)</td></tr>
           <tr><td><code>256700000001</code></td><td>Fails with <code>insufficient_funds</code></td></tr>
           <tr><td><code>256700000002</code></td><td>Fails with <code>user_cancelled</code></td></tr>
           <tr><td><code>256700000003</code></td><td>Fails with <code>timeout</code></td></tr>
         </tbody>
       </table>
-      <div class="callout">Matched on the last 9 digits, so <code>0700000001</code>, <code>256700000001</code> and <code>256 700 000 001</code> all trigger the same outcome. Any other number succeeds — a sandbox should never make an ordinary test transaction randomly fail.</div>
+      <div class="callout">Matched on the last 9 digits, so <code>0700000001</code>, <code>256700000001</code> and <code>256 700 000 001</code> all trigger the same outcome. Any other number succeeds. A sandbox should never make an ordinary test transaction randomly fail.</div>
 
       <h3>Payout failure simulation</h3>
-      <p>Payouts have their own deterministic scenarios, matched on the <strong>recipient</strong> number's last 9 digits — rehearse your <code>payout.failed</code> handling before it can happen with real money. A failed payout refunds the amount <em>and</em> the fee to your available balance.</p>
+      <p>Payouts have their own deterministic scenarios, matched on the <strong>recipient</strong> number's last 9 digits. Rehearse your <code>payout.failed</code> handling before it can happen with real money. A failed payout refunds the amount <em>and</em> the fee to your available balance.</p>
       <table class="param-table">
         <thead><tr><th>Recipient number</th><th>Result</th></tr></thead>
         <tbody>
@@ -379,8 +379,8 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
 
       <h3>Exact <code>charge.failed</code> payloads</h3>
       <p>Each failure number produces a <code>charge.failed</code> webhook whose <code>data</code>
-      is exactly this shape (identical to <code>GET /v1/charges/&lt;id&gt;</code>) — build your
-      error handling against these, not against guesses:</p>
+      is exactly this shape (identical to <code>GET /v1/charges/&lt;id&gt;</code>). Build your
+      error handling against these exact payloads:</p>
       <p style="margin-bottom:.25rem;"><code>256700000001</code>:</p>
 <pre><code>{
   "id": "txn_9f2c41d8a3b7e615",
@@ -405,7 +405,7 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
     <!-- Balance -->
     <div class="docs-section" id="balance">
       <h2><i data-feather="pie-chart" style="width:22px;height:22px;color:var(--primary);"></i> Balance</h2>
-      <p>What Samsoftpay is currently holding for you, per currency. Use this to reconcile your own records against ours — if you run a platform with its own user wallets, this is the figure your internal balances must add up to.</p>
+      <p>What Samsoftpay is currently holding for you, per currency. Use this to reconcile your own records against ours. If you run a platform with its own user wallets, this is the figure your internal balances must add up to.</p>
       <div class="callout">The key you use decides which ledger you see. An <code>sk_test_</code> key returns your <strong>sandbox</strong> balance, which is not real money. Never reconcile real liabilities against a sandbox figure.</div>
 
       <h3>Retrieve your balance</h3>
@@ -428,9 +428,9 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
         <tbody>
           <tr><td><code>available</code></td><td>integer</td><td>Settled funds you can pay out right now.</td></tr>
           <tr><td><code>pending</code></td><td>integer</td><td>Collected but not yet available for payout.</td></tr>
-          <tr><td><code>total</code></td><td>integer</td><td><code>available + pending</code> — what we hold for you in this currency.</td></tr>
+          <tr><td><code>total</code></td><td>integer</td><td><code>available + pending</code>: what we hold for you in this currency.</td></tr>
           <tr><td><code>cached</code></td><td>integer</td><td>Our cached figure. Normally identical to <code>total</code>.</td></tr>
-          <tr><td><code>consistent</code></td><td>boolean</td><td><code>false</code> means our cached balance disagrees with our journal. The figures above are still the journal totals and remain authoritative — but tell us if you see this.</td></tr>
+          <tr><td><code>consistent</code></td><td>boolean</td><td><code>false</code> means our cached balance disagrees with our journal. The figures above are still the journal totals and remain authoritative. Tell us if you see this.</td></tr>
         </tbody>
       </table>
       <p>Amounts are in minor units, like everywhere else in this API. Currencies are always reported separately and never summed together.</p>
@@ -501,7 +501,7 @@ print(resp.json())
     <!-- Payment Links -->
     <div class="docs-section" id="payment-links">
       <h2><i data-feather="link" style="width:22px;height:22px;color:var(--primary);"></i> Payment Links</h2>
-      <p>Generate a shareable URL your customers open to pay — no integration required on their end. Perfect for WhatsApp, SMS, and email.</p>
+      <p>Generate a shareable URL your customers open to pay. No integration required on their end. Perfect for WhatsApp, SMS, and email.</p>
 
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/payment-links</div>
       <table class="param-table">
@@ -548,8 +548,8 @@ print(data["url"])  # Share this link with your customer</code></pre>
   "refund": { "id": "pout_...", "amount": 4800, "status": "pending" }
 }</code></pre>
       <p>Refunding twice returns <code>400 {"error": "already_refunded"}</code>. A charge that was
-      created with a <code>split</code> cannot be refunded through this endpoint yet —
-      you will receive <code>400 {"error": "split_charge_refunds_not_yet_supported"}</code>;
+      created with a <code>split</code> cannot be refunded through this endpoint yet.
+      You will receive <code>400 {"error": "split_charge_refunds_not_yet_supported"}</code>;
       contact support to reverse a split charge.</p>
     </div>
 
@@ -559,7 +559,7 @@ print(data["url"])  # Share this link with your customer</code></pre>
       <span class="endpoint-badge get">GET</span> <code>/v1/charges</code> &nbsp;·&nbsp;
       <span class="endpoint-badge get">GET</span> <code>/v1/payouts</code>
       <p style="margin-top:.75rem;">Newest first, cursor pagination. Use this to reconcile after a
-      missed webhook — you never need to have stored an id to find a payment again.</p>
+      missed webhook. You never need to have stored an id to find a payment again.</p>
       <pre><code>GET /v1/charges?limit=20&amp;status=succeeded&amp;created_after=2026-08-01T00:00:00Z
 
 {
@@ -570,7 +570,7 @@ print(data["url"])  # Share this link with your customer</code></pre>
 }</code></pre>
       <p>Filters: <code>status</code>, <code>reference</code> (charges only),
       <code>created_after</code> / <code>created_before</code> (ISO&nbsp;8601),
-      <code>limit</code> (1–100). Lists are scoped to your key's mode — a test key
+      <code>limit</code> (1–100). Lists are scoped to your key's mode: a test key
       only ever sees test data. Failed charges carry <code>failure_reason</code>
       (e.g. <code>insufficient_funds</code>) on every charge object.</p>
     </div>
@@ -583,7 +583,7 @@ print(data["url"])  # Share this link with your customer</code></pre>
       <span class="endpoint-badge post">POST</span> <code>/v1/subaccounts</code>
       <pre><code>{ "name": "Shop A", "payout_phone": "256772123456", "external_ref": "your-id-42" }
 -&gt; 201 { "id": "sub_...", "name": "Shop A", "status": "active" }</code></pre>
-      <p style="margin-top:.75rem;">Then add <code>split</code> to a charge — shares are fixed
+      <p style="margin-top:.75rem;">Then add <code>split</code> to a charge. Shares are fixed
       amounts or basis points of the <strong>net</strong> (amount minus our fee). Whatever the
       shares don't consume stays with you (the platform):</p>
       <pre><code>POST /v1/charges
@@ -595,15 +595,15 @@ print(data["url"])  # Share this link with your customer</code></pre>
     {"subaccount": "sub_b", "bps": 2000}
   ]
 }</code></pre>
-      <p>Each share settles into its subaccount's own balance after the standard hold —
-      see it on <code>GET /v1/charges/&lt;id&gt;</code> (a <code>split</code> array) and
+      <p>Each share settles into its subaccount's own balance after the standard hold.
+      See it on <code>GET /v1/charges/&lt;id&gt;</code> (a <code>split</code> array) and
       <code>GET /v1/subaccounts/&lt;id&gt;</code> (per-currency balances). An over-allocated
       split (shares exceeding the net) is rejected with <code>400</code> and nothing is created.</p>
     </div>
 
     <div class="docs-section" id="vending">
       <h2><i data-feather="grid" style="width:22px;height:22px;color:var(--primary);"></i> Vending Machines</h2>
-      <p>Take Mobile Money on an unattended machine. You create an order, the machine shows the QR we return, the customer scans and pays on their phone — and we tell the machine to release the product the moment the payment succeeds. Your machine software never handles money.</p>
+      <p>Take Mobile Money on an unattended machine. You create an order, the machine shows the QR we return, the customer scans and pays on their phone, and we tell the machine to release the product the moment the payment succeeds. Your machine software never handles money.</p>
       <p><strong>Enable it first:</strong> Dashboard → Vending. While it is off, no order can be created and no machine will be told to dispense.</p>
 
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/vending/orders</div>
@@ -640,11 +640,11 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
       <p>Poll an order if you would rather drive the screen yourself. Returns <code>payment_status</code> (<code>unpaid</code>, <code>pending</code>, <code>succeeded</code>, <code>failed</code>) and <code>vending_status</code> (<code>pending</code>, <code>dispensing</code>, <code>dispensed</code>, <code>failed</code>).</p>
 
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/vending/orders/{order_id}/dispense</div>
-      <p>Retry a dispense that failed — for example the machine was offline when the payment landed. The customer's money is never at risk: a retry only works on an order whose charge actually succeeded, and an order can never dispense twice.</p>
+      <p>Retry a dispense that failed, for example because the machine was offline when the payment landed. The customer's money is never at risk: a retry only works on an order whose charge actually succeeded, and an order can never dispense twice.</p>
 
       <div class="endpoint-badge"><span class="method get">GET</span> /v1/vending/machines</div>
       <div class="endpoint-badge"><span class="method get">GET</span> /v1/vending/machines/{machine}/goods</div>
-      <p>Your machines, and the live tray contents and prices of one machine — build your on-screen menu from this rather than hard-coding slots.</p>
+      <p>Your machines, and the live tray contents and prices of one machine. Build your on-screen menu from this rather than hard-coding slots.</p>
     </div>
 
     <!-- Webhooks -->
@@ -672,15 +672,15 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
     "completed_at": "2026-08-20T10:30:00+00:00"
   }
 }</code></pre>
-      <p>The envelope <code>id</code> is unique per event and <strong>retries share it</strong> —
+      <p>The envelope <code>id</code> is unique per event and <strong>retries share it</strong>, so
       dedupe on it. <code>timestamp</code> is Unix seconds; use it to enforce a replay window.</p>
       <p>Event catalogue: <code>charge.succeeded</code>, <code>charge.failed</code>,
       <code>payout.succeeded</code>, <code>payout.failed</code>, <code>vending.dispensed</code>,
       <code>vending.dispense_failed</code>, <code>dispute.opened</code> (a customer used the
-      public "Report a problem" link on a receipt — respond within 72 hours; it never moves
+      public "Report a problem" link on a receipt. Respond within 72 hours; it never moves
       money by itself, and its <code>details</code>/<code>contact</code> fields are raw
       customer input: escape them before rendering), <code>test.ping</code> (the Account → Webhooks test button).</p>
-      <div class="callout warning"><code>charge.succeeded</code> means the <strong>money arrived</strong> —
+      <div class="callout warning"><code>charge.succeeded</code> means the <strong>money arrived</strong>, and
       nothing else. For vending, it does not mean the product came out: wait for
       <code>vending.dispensed</code> before treating the product as delivered.</div>
     </div>
@@ -688,7 +688,7 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
     <!-- Webhook Verification -->
     <div class="docs-section" id="webhook-verify">
       <h2><i data-feather="shield" style="width:22px;height:22px;color:var(--primary);"></i> Verifying Webhooks</h2>
-      <p>Every request includes an <code>X-Samsoftpay-Signature</code> header — an HMAC-SHA256 of the raw request body, signed with <strong>your webhook signing secret</strong> (<code>whsec_…</code>), shown in <a href="{{ url_for('auth.account') }}#webhooks">Account → Webhooks</a>. It is unique to your account. Always verify before processing.</p>
+      <p>Every request includes an <code>X-Samsoftpay-Signature</code> header: an HMAC-SHA256 of the raw request body, signed with <strong>your webhook signing secret</strong> (<code>whsec_…</code>), shown in <a href="{{ url_for('auth.account') }}#webhooks">Account → Webhooks</a>. It is unique to your account. Always verify before processing.</p>
 
       <div class="tab-group">
         <div class="tabs">
@@ -743,8 +743,8 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
 });</code></pre>
         </div>
       </div>
-      <div class="callout">Verify over the <strong>raw request body</strong> exactly as received —
-      never parse and re-serialize the JSON first. Any change in key order or whitespace breaks
+      <div class="callout">Verify over the <strong>raw request body</strong> exactly as received.
+      Never parse and re-serialize the JSON first. Any change in key order or whitespace breaks
       the digest.</div>
     </div>
 
@@ -752,7 +752,7 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
     <div class="docs-section" id="webhook-ops">
       <h2><i data-feather="refresh-cw" style="width:22px;height:22px;color:var(--primary);"></i> Webhook Operations &amp; Retries</h2>
       <p>Respond with any <strong>2xx within 5 seconds</strong>. Return 200 immediately and process
-      asynchronously — a slow handler is indistinguishable from a dead one and will be retried.
+      asynchronously. A slow handler is indistinguishable from a dead one and will be retried.
       Retries carry the <strong>same envelope <code>id</code></strong>, so dedupe on it, not on
       receipt count.</p>
 
@@ -777,27 +777,27 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
 
       <h3>Inspect &amp; resend deliveries</h3>
       <div class="endpoint-badge"><span class="method get">GET</span> /v1/webhooks</div>
-      <p>Lists your most recent webhook deliveries — each with its event id (<code>evt_…</code>),
+      <p>Lists your most recent webhook deliveries, each with its event id (<code>evt_…</code>),
       <code>event</code>, <code>status</code>, <code>attempts</code> and
-      <code>last_response_code</code> — so you can see exactly what we sent and how your endpoint
+      <code>last_response_code</code>, so you can see exactly what we sent and how your endpoint
       answered.</p>
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/webhooks/{event_id}/resend</div>
       <p>Re-queues one delivery by its <code>evt_…</code> id and returns <code>202</code>. The
-      resent delivery carries the same envelope (same <code>id</code>) — your dedupe logic handles
+      resent delivery carries the same envelope (same <code>id</code>), so your dedupe logic handles
       it like any retry.</p>
 
       <h3>Pre-flight a payout destination</h3>
       <div class="endpoint-badge"><span class="method get">GET</span> /v1/resolve-account?phone=0771234567</div>
-      <p>MTN's own answer about a wallet <strong>before any money is earmarked</strong> —
-      returns <code>msisdn</code>, <code>active</code> and <code>registered_name</code>.
+      <p>MTN's own answer about a wallet <strong>before any money is earmarked</strong>.
+      Returns <code>msisdn</code>, <code>active</code> and <code>registered_name</code>.
       Treat <code>active: false</code> as the hard stop; the name is the double-check (it can be
       <code>null</code> while our MTN KYC scope is pending). Sandbox is deterministic:
       <code>256700000001</code> resolves inactive, every other number is an active
-      <code>SANDBOX HOLDER</code>. Full-scope keys only — a kiosk credential must not be able to
+      <code>SANDBOX HOLDER</code>. Full-scope keys only: a kiosk credential must not be able to
       enumerate wallet owners.</p>
 
       <h3>Egress IPs</h3>
-      <p>Webhook deliveries originate from these static ranges — allowlist them if your endpoint
+      <p>Webhook deliveries originate from these static ranges. Allowlist them if your endpoint
       is firewalled:</p>
       <table class="param-table">
         <thead><tr><th>Range</th></tr></thead>
@@ -816,13 +816,13 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
         <tbody>
           <tr>
             <td><strong>Give value only on a definite outcome.</strong></td>
-            <td><code>pending</code> / <code>authorized</code> is <em>not</em> failed — an ambiguous
+            <td><code>pending</code> / <code>authorized</code> is <em>not</em> failed. An ambiguous
             network answer parks a charge, it never fails it. Release goods or credit a wallet only
             when <code>status</code> is <code>succeeded</code>.</td>
           </tr>
           <tr>
             <td><strong>Confirm before fulfilling.</strong></td>
-            <td>Via the <code>charge.succeeded</code> webhook or <code>GET /v1/charges/&lt;id&gt;</code> —
+            <td>Via the <code>charge.succeeded</code> webhook or <code>GET /v1/charges/&lt;id&gt;</code>,
             never from a client-side signal alone.</td>
           </tr>
           <tr>
@@ -837,7 +837,7 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
           </tr>
           <tr>
             <td><strong>Dedupe on the envelope <code>id</code>.</strong></td>
-            <td>Retries and resends share it — process each event once.</td>
+            <td>Retries and resends share it, so process each event once.</td>
           </tr>
           <tr>
             <td><strong>Never embed a full <code>sk_</code> key on a device.</strong></td>
@@ -859,8 +859,8 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <p>Every error the API returns is JSON with a single <code>error</code> field, listed
       here verbatim (dynamic parts shown as <code>…</code>). The <strong>Retry?</strong>
       column is the contract: <em>yes, same key</em> means retry with the <strong>same</strong>
-      <code>Idempotency-Key</code>; <em>no — fix request</em> means change something first;
-      <em>no — permanent</em> means retrying will never help.</p>
+      <code>Idempotency-Key</code>; <em>no, fix request</em> means change something first;
+      <em>no, permanent</em> means retrying will never help.</p>
 <pre><code># Error response shape
 {"error": "insufficient available balance: have 5000, need 50750 (amount 50000 + fee 750)"}</code></pre>
 
@@ -868,13 +868,13 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <table class="param-table">
         <thead><tr><th>Error</th><th>HTTP</th><th>Cause</th><th>Retry?</th></tr></thead>
         <tbody>
-          <tr><td><code>missing bearer token</code></td><td>401</td><td>No <code>Authorization: Bearer &lt;key&gt;</code> header.</td><td>no — fix request</td></tr>
-          <tr><td><code>invalid api key</code></td><td>401</td><td>Unknown, rotated or revoked key.</td><td>no — fix request</td></tr>
-          <tr><td><code>this endpoint requires a full secret key; collections-only keys cannot move money out</code></td><td>403</td><td>An <code>sk_*_col_</code> key on <code>POST /v1/payouts</code>, <code>/v1/payouts/bulk</code> or <code>/v1/charges/&lt;id&gt;/refund</code>. Fires on scope before any lookup.</td><td>no — call from your server with a full key</td></tr>
-          <tr><td><code>X-Timestamp header required. …</code></td><td>400</td><td>Missing <code>X-Timestamp</code> on a POST.</td><td>no — fix request</td></tr>
-          <tr><td><code>X-Timestamp must be an integer Unix timestamp</code></td><td>400</td><td>Non-integer value (e.g. milliseconds with a decimal point, or ISO text).</td><td>no — fix request</td></tr>
-          <tr><td><code>request timestamp is …s old — max allowed skew is 300s</code></td><td>400</td><td>Timestamp older than 5 minutes (replay protection).</td><td>yes — with a fresh timestamp</td></tr>
-          <tr><td><code>request timestamp is too far in the future — check your system clock</code></td><td>400</td><td>More than 60s ahead of our clock.</td><td>yes — after fixing your clock</td></tr>
+          <tr><td><code>missing bearer token</code></td><td>401</td><td>No <code>Authorization: Bearer &lt;key&gt;</code> header.</td><td>no, fix request</td></tr>
+          <tr><td><code>invalid api key</code></td><td>401</td><td>Unknown, rotated or revoked key.</td><td>no, fix request</td></tr>
+          <tr><td><code>this endpoint requires a full secret key; collections-only keys cannot move money out</code></td><td>403</td><td>An <code>sk_*_col_</code> key on <code>POST /v1/payouts</code>, <code>/v1/payouts/bulk</code> or <code>/v1/charges/&lt;id&gt;/refund</code>. Fires on scope before any lookup.</td><td>no, call from your server with a full key</td></tr>
+          <tr><td><code>X-Timestamp header required. …</code></td><td>400</td><td>Missing <code>X-Timestamp</code> on a POST.</td><td>no, fix request</td></tr>
+          <tr><td><code>X-Timestamp must be an integer Unix timestamp</code></td><td>400</td><td>Non-integer value (e.g. milliseconds with a decimal point, or ISO text).</td><td>no, fix request</td></tr>
+          <tr><td><code>request timestamp is …s old — max allowed skew is 300s</code></td><td>400</td><td>Timestamp older than 5 minutes (replay protection).</td><td>yes, with a fresh timestamp</td></tr>
+          <tr><td><code>request timestamp is too far in the future — check your system clock</code></td><td>400</td><td>More than 60s ahead of our clock.</td><td>yes, after fixing your clock</td></tr>
         </tbody>
       </table>
 
@@ -882,10 +882,10 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <table class="param-table">
         <thead><tr><th>Error</th><th>HTTP</th><th>Cause</th><th>Retry?</th></tr></thead>
         <tbody>
-          <tr><td><code>Idempotency-Key header required</code></td><td>400</td><td>Missing on a money POST (charges, payouts, bulk, refund).</td><td>no — fix request</td></tr>
-          <tr><td><code>idempotency key reused with different request body</code></td><td>409</td><td>Same key, different payload. A key names one logical operation.</td><td>no — use a new key for new work</td></tr>
-          <tr><td><code>a request with this Idempotency-Key is still in flight — retry shortly</code></td><td>409</td><td>The original request with this key has not finished yet (keys are reserved before execution — concurrent duplicates can never both run).</td><td>yes, same key — shortly</td></tr>
-          <tr><td>rate limit message</td><td>429</td><td>Too many requests. Defaults: charges 120/min, payouts 30/min, refunds 10/min (all configurable per deployment).</td><td>yes — back off and honour the <code>Retry-After</code> header</td></tr>
+          <tr><td><code>Idempotency-Key header required</code></td><td>400</td><td>Missing on a money POST (charges, payouts, bulk, refund).</td><td>no, fix request</td></tr>
+          <tr><td><code>idempotency key reused with different request body</code></td><td>409</td><td>Same key, different payload. A key names one logical operation.</td><td>no, use a new key for new work</td></tr>
+          <tr><td><code>a request with this Idempotency-Key is still in flight — retry shortly</code></td><td>409</td><td>The original request with this key has not finished yet (keys are reserved before execution, so concurrent duplicates can never both run).</td><td>yes, same key, shortly</td></tr>
+          <tr><td>rate limit message</td><td>429</td><td>Too many requests. Defaults: charges 120/min, payouts 30/min, refunds 10/min (all configurable per deployment).</td><td>yes, back off and honour the <code>Retry-After</code> header</td></tr>
         </tbody>
       </table>
 
@@ -893,15 +893,15 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <table class="param-table">
         <thead><tr><th>Error</th><th>HTTP</th><th>Cause</th><th>Retry?</th></tr></thead>
         <tbody>
-          <tr><td><code>invalid request: …</code></td><td>400</td><td>Malformed body — missing <code>amount</code>, bad <code>channel</code>, <code>split</code> not a list, etc.</td><td>no — fix request</td></tr>
-          <tr><td><code>amount must be positive</code></td><td>400</td><td>Zero or negative amount.</td><td>no — fix request</td></tr>
-          <tr><td><code>amount exceeds the maximum of …</code></td><td>400</td><td>Amount above the configured per-transaction ceiling.</td><td>no — fix request</td></tr>
-          <tr><td><code>demo only supports UGX</code></td><td>400</td><td>A currency other than <code>UGX</code>.</td><td>no — fix request</td></tr>
-          <tr><td><code>merchant is not active</code></td><td>400</td><td>Your account is deactivated.</td><td>no — permanent until support reactivates</td></tr>
-          <tr><td><code>live charges require a verified business — complete verification on your dashboard (test keys work immediately)</code></td><td>400</td><td>An <code>sk_live_</code> key before KYC verification. Zero writes.</td><td>no — verify first; test keys work now</td></tr>
-          <tr><td><code>…&nbsp;is not available for live payments yet</code></td><td>400</td><td>A channel with no real rail (<code>airtel_money</code>, <code>card</code>) on a live key — a simulated rail must never settle live money. Zero writes.</td><td>no — use <code>mtn_momo</code> live, or a test key</td></tr>
-          <tr><td><code>fee exceeds amount</code></td><td>400</td><td>Amount too small to cover the minimum fee (UGX 200).</td><td>no — fix request</td></tr>
-          <tr><td><code>invalid split: …</code></td><td>400</td><td>Bad <code>split</code> array — unknown/inactive/duplicate subaccount, shares exceeding the net, bad <code>amount</code>/<code>bps</code>. Zero writes.</td><td>no — fix request</td></tr>
+          <tr><td><code>invalid request: …</code></td><td>400</td><td>Malformed body: missing <code>amount</code>, bad <code>channel</code>, <code>split</code> not a list, etc.</td><td>no, fix request</td></tr>
+          <tr><td><code>amount must be positive</code></td><td>400</td><td>Zero or negative amount.</td><td>no, fix request</td></tr>
+          <tr><td><code>amount exceeds the maximum of …</code></td><td>400</td><td>Amount above the configured per-transaction ceiling.</td><td>no, fix request</td></tr>
+          <tr><td><code>demo only supports UGX</code></td><td>400</td><td>A currency other than <code>UGX</code>.</td><td>no, fix request</td></tr>
+          <tr><td><code>merchant is not active</code></td><td>400</td><td>Your account is deactivated.</td><td>no, permanent until support reactivates</td></tr>
+          <tr><td><code>live charges require a verified business — complete verification on your dashboard (test keys work immediately)</code></td><td>400</td><td>An <code>sk_live_</code> key before KYC verification. Zero writes.</td><td>no, verify first; test keys work now</td></tr>
+          <tr><td><code>…&nbsp;is not available for live payments yet</code></td><td>400</td><td>A channel with no real rail (<code>airtel_money</code>, <code>card</code>) on a live key. A simulated rail must never settle live money. Zero writes.</td><td>no, use <code>mtn_momo</code> live, or a test key</td></tr>
+          <tr><td><code>fee exceeds amount</code></td><td>400</td><td>Amount too small to cover the minimum fee (UGX 200).</td><td>no, fix request</td></tr>
+          <tr><td><code>invalid split: …</code></td><td>400</td><td>Bad <code>split</code> array: unknown/inactive/duplicate subaccount, shares exceeding the net, bad <code>amount</code>/<code>bps</code>. Zero writes.</td><td>no, fix request</td></tr>
           <tr><td><code>payment rail temporarily unavailable — retry with the same Idempotency-Key</code></td><td>502</td><td>Transient rail/network failure before anything was recorded. Deliberately not cached against your key.</td><td><strong>yes, same key</strong></td></tr>
         </tbody>
       </table>
@@ -910,17 +910,17 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <table class="param-table">
         <thead><tr><th>Error</th><th>HTTP</th><th>Cause</th><th>Retry?</th></tr></thead>
         <tbody>
-          <tr><td><code>live payouts require a verified business — complete verification on your dashboard (test keys work immediately)</code></td><td>400</td><td>An <code>sk_live_</code> key before KYC verification. Zero writes.</td><td>no — verify first</td></tr>
-          <tr><td><code>insufficient available balance: have …, need … (amount … + fee …)</code></td><td>400</td><td>Available (settled) balance below amount + fee. Pending money does not count until it settles.</td><td>no — top up or wait for settlement, then a new key</td></tr>
-          <tr><td><code>no disbursement adapter for channel …</code></td><td>400</td><td>Payout channel with no disbursement rail (e.g. <code>airtel_money</code>). Rejected before any money moves.</td><td>no — use <code>mtn_momo</code></td></tr>
-          <tr><td><code>payouts are temporarily paused platform-wide for a safety review — no action needed on your side; money in is unaffected</code></td><td>400</td><td>Platform payout freeze during a security/safety event. Zero writes.</td><td>no — wait; money in unaffected</td></tr>
-          <tr><td><code>payouts are paused on this account while a payment reconciliation issue is investigated — support has been notified; your balance is safe and money in is unaffected</code></td><td>400</td><td>An open critical reconciliation exception on your account pauses your live payouts until resolved.</td><td>no — wait for support</td></tr>
-          <tr><td><code>disbursement rail unavailable: …</code></td><td>400</td><td>The rail failed cleanly before the transfer was sent — nothing left our side.</td><td>yes — after the outage, with a <strong>new</strong> key (this response is cached against the old one)</td></tr>
-          <tr><td><code>no payout items provided (JSON {payouts:[...]} or CSV)</code> / <code>batch too large (max 1000 items per call)</code></td><td>400</td><td>Bulk payout body empty or over 1000 items.</td><td>no — fix request</td></tr>
-          <tr><td><code>already_refunded</code></td><td>400</td><td>The charge was already refunded — refunds happen once.</td><td>no — permanent</td></tr>
-          <tr><td><code>cannot_refund_…_transaction</code></td><td>400</td><td>Refund on a charge that is not <code>succeeded</code> (e.g. <code>cannot_refund_pending_transaction</code>).</td><td>no — only succeeded charges refund</td></tr>
-          <tr><td><code>split_charge_refunds_not_yet_supported</code></td><td>400</td><td>The charge was created with a <code>split</code>. Split refunds are deliberately not enabled yet; contact support to reverse one. Zero writes.</td><td>no — permanent (for now)</td></tr>
-          <tr><td><code>mode_mismatch: this is a … charge — use your … key to refund it</code></td><td>400</td><td>Refunding a test charge with a live key or vice versa. Zero writes.</td><td>no — use the key of the matching mode</td></tr>
+          <tr><td><code>live payouts require a verified business — complete verification on your dashboard (test keys work immediately)</code></td><td>400</td><td>An <code>sk_live_</code> key before KYC verification. Zero writes.</td><td>no, verify first</td></tr>
+          <tr><td><code>insufficient available balance: have …, need … (amount … + fee …)</code></td><td>400</td><td>Available (settled) balance below amount + fee. Pending money does not count until it settles.</td><td>no, top up or wait for settlement, then a new key</td></tr>
+          <tr><td><code>no disbursement adapter for channel …</code></td><td>400</td><td>Payout channel with no disbursement rail (e.g. <code>airtel_money</code>). Rejected before any money moves.</td><td>no, use <code>mtn_momo</code></td></tr>
+          <tr><td><code>payouts are temporarily paused platform-wide for a safety review — no action needed on your side; money in is unaffected</code></td><td>400</td><td>Platform payout freeze during a security/safety event. Zero writes.</td><td>no, wait; money in unaffected</td></tr>
+          <tr><td><code>payouts are paused on this account while a payment reconciliation issue is investigated — support has been notified; your balance is safe and money in is unaffected</code></td><td>400</td><td>An open critical reconciliation exception on your account pauses your live payouts until resolved.</td><td>no, wait for support</td></tr>
+          <tr><td><code>disbursement rail unavailable: …</code></td><td>400</td><td>The rail failed cleanly before the transfer was sent. Nothing left our side.</td><td>yes, after the outage, with a <strong>new</strong> key (this response is cached against the old one)</td></tr>
+          <tr><td><code>no payout items provided (JSON {payouts:[...]} or CSV)</code> / <code>batch too large (max 1000 items per call)</code></td><td>400</td><td>Bulk payout body empty or over 1000 items.</td><td>no, fix request</td></tr>
+          <tr><td><code>already_refunded</code></td><td>400</td><td>The charge was already refunded; refunds happen once.</td><td>no, permanent</td></tr>
+          <tr><td><code>cannot_refund_…_transaction</code></td><td>400</td><td>Refund on a charge that is not <code>succeeded</code> (e.g. <code>cannot_refund_pending_transaction</code>).</td><td>no, only succeeded charges refund</td></tr>
+          <tr><td><code>split_charge_refunds_not_yet_supported</code></td><td>400</td><td>The charge was created with a <code>split</code>. Split refunds are deliberately not enabled yet; contact support to reverse one. Zero writes.</td><td>no, permanent (for now)</td></tr>
+          <tr><td><code>mode_mismatch: this is a … charge — use your … key to refund it</code></td><td>400</td><td>Refunding a test charge with a live key or vice versa. Zero writes.</td><td>no, use the key of the matching mode</td></tr>
         </tbody>
       </table>
 
@@ -928,17 +928,17 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <table class="param-table">
         <thead><tr><th>Error</th><th>HTTP</th><th>Cause</th><th>Retry?</th></tr></thead>
         <tbody>
-          <tr><td><code>vending is not enabled for this merchant</code></td><td>403</td><td>Dashboard → Vending is switched off.</td><td>no — enable it first</td></tr>
-          <tr><td><code>machine not registered to this merchant</code></td><td>404</td><td>Unknown machine number for your account.</td><td>no — fix request</td></tr>
-          <tr><td><code>cannot dispense: charge status is …, not succeeded</code></td><td>400</td><td>Dispense attempted against a charge that has not succeeded. A machine dispenses only against collected money.</td><td>no — wait for <code>succeeded</code></td></tr>
-          <tr><td><code>this charge has already paid for a dispense</code></td><td>409</td><td>One succeeded charge pays for exactly one dispense.</td><td>no — permanent</td></tr>
+          <tr><td><code>vending is not enabled for this merchant</code></td><td>403</td><td>Dashboard → Vending is switched off.</td><td>no, enable it first</td></tr>
+          <tr><td><code>machine not registered to this merchant</code></td><td>404</td><td>Unknown machine number for your account.</td><td>no, fix request</td></tr>
+          <tr><td><code>cannot dispense: charge status is …, not succeeded</code></td><td>400</td><td>Dispense attempted against a charge that has not succeeded. A machine dispenses only against collected money.</td><td>no, wait for <code>succeeded</code></td></tr>
+          <tr><td><code>this charge has already paid for a dispense</code></td><td>409</td><td>One succeeded charge pays for exactly one dispense.</td><td>no, permanent</td></tr>
         </tbody>
       </table>
 
       <h3>Asynchronous failures (not HTTP errors)</h3>
       <p>A charge or payout that is <em>accepted</em> (HTTP 201) can still fail later on the
       rail. That outcome arrives as <code>"status": "failed"</code> with a
-      <code>failure_reason</code> — via webhook (<code>charge.failed</code> /
+      <code>failure_reason</code>, via webhook (<code>charge.failed</code> /
       <code>payout.failed</code>) or polling. Reproduce each one deterministically in the
       sandbox with a magic number (see <a href="#testing">Testing</a>):</p>
       <table class="param-table">
@@ -960,12 +960,12 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
     <!-- Go-live checklist -->
     <div class="docs-section" id="go-live">
       <h2><i data-feather="flag" style="width:22px;height:22px;color:var(--primary);"></i> Go-Live Checklist</h2>
-      <p>The path from first sandbox charge to real money, in order. Every step is checkable —
-      do not skip the config-drift checks: they catch the classic "worked in test, silently
+      <p>The path from first sandbox charge to real money, in order. Every step is checkable.
+      Do not skip the config-drift checks: they catch the classic "worked in test, silently
       broken in live" failures.</p>
       <ol style="margin:0 0 1.25rem 1.25rem;line-height:2;">
         <li><strong>Build in the sandbox.</strong> Integrate with your <code>sk_test_</code> key.
-          Sandbox money lives on a separate ledger — nothing you do here can touch real balances.</li>
+          Sandbox money lives on a separate ledger. Nothing you do here can touch real balances.</li>
         <li><strong>Test failure paths in both directions with the magic numbers.</strong>
           Charges: customer phones <code>256700000001/2/3</code> fail with
           <code>insufficient_funds</code> / <code>user_cancelled</code> / <code>timeout</code>.
@@ -974,30 +974,30 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
           Confirm your handlers for <code>charge.failed</code> and <code>payout.failed</code>,
           your webhook signature verification, and your dedupe on the envelope <code>id</code>.</li>
         <li><strong>Verify your business (KYC)</strong> on the dashboard. Live charges and
-          payouts are refused with <code>400</code> until your account is verified — test keys
+          payouts are refused with <code>400</code> until your account is verified. Test keys
           keep working throughout.</li>
         <li><strong>Config-drift checks before switching keys:</strong>
           <ul style="margin:0.25rem 0 0.25rem 1.25rem;line-height:1.9;">
-            <li>Live webhook URL set and verified — use the <strong>Send test event</strong>
+            <li>Live webhook URL set and verified. Use the <strong>Send test event</strong>
               button on Account → Webhooks, which POSTs a signed <code>test.ping</code> event to
               your endpoint; confirm your handler verifies the signature and returns 2xx.</li>
             <li>Live key issued and stored <strong>server-side only</strong> (an environment
-              variable — never in client code, mobile apps or repos).</li>
+              variable, never in client code, mobile apps or repos).</li>
             <li>Kiosk and vending devices carry <code>sk_live_col_</code>
-              <strong>collections-only</strong> keys, never full keys — a key pulled off a
+              <strong>collections-only</strong> keys, never full keys. A key pulled off a
               device must not be able to move money out.</li>
           </ul></li>
         <li><strong>First live charge, small amount.</strong> Verify it via
           <code>GET /v1/charges/&lt;id&gt;</code> <em>and</em> confirm the
-          <code>charge.succeeded</code> webhook arrived and verified — both paths must work
+          <code>charge.succeeded</code> webhook arrived and verified. Both paths must work
           before volume.</li>
-        <li><strong>First live settlement confirmed on <code>GET /v1/settlements</code></strong>
-          — after the 24h hold (hourly sweep), the release appears as a settlement record and
+        <li><strong>First live settlement confirmed on <code>GET /v1/settlements</code></strong>.
+          After the 24h hold (hourly sweep), the release appears as a settlement record and
           your <code>available</code> balance on <code>GET /v1/balance</code> moves. Now you
           know money in, money held and money withdrawable all agree.</li>
         <li><strong>Subscribe to the <a href="/docs/changelog">changelog</a>.</strong> API
           changes land there first; response shapes are additive-only and webhook events are
-          only ever added, so reading it is maintenance, not firefighting.</li>
+          only ever added, so reading it is routine maintenance.</li>
       </ol>
     </div>
 

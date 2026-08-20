@@ -18,14 +18,9 @@
 </div>
 {% endif %}
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-  <div class="alert alert-{{ 'success' if cat == 'success' else 'info' if cat == 'info' else 'danger' }}" style="margin-bottom:1rem;">
-    <i data-feather="{{ 'check-circle' if cat == 'success' else 'info' if cat == 'info' else 'alert-triangle' }}" class="alert-icon"></i>
-    <div>{{ msg }}</div>
-  </div>
-  {% endfor %}
-{% endwith %}
+{# Flash messages are rendered ONCE by base.html, above this block. This page
+   used to render its own copy too, so withdrawal/top-up messages appeared twice
+   in two different styles. Do not re-add a block here. #}
 
 <div class="page-header">
   <h1 class="page-title">Wallet</h1>
@@ -266,7 +261,7 @@
       {% if accounts %}
       <div style="display:flex;flex-direction:column;gap:.625rem;margin-bottom:1.25rem;">
         {% for a in accounts %}
-        <div style="display:flex;align-items:center;gap:.875rem;padding:.875rem;border:1px solid var(--gray-200);border-radius:12px;{% if a.is_primary %}border-color:rgba(99,102,241,.3);background:rgba(99,102,241,.03);{% endif %}">
+        <div style="display:flex;align-items:center;gap:.875rem;padding:.875rem;border:1px solid var(--gray-200);border-radius:12px;{% if a.is_primary %}border-color:rgba(79,70,229,.3);background:rgba(79,70,229,.03);{% endif %}">
           <div style="width:40px;height:40px;border-radius:10px;background:{% if 'mtn' in a.account_type %}#fff7ed{% elif 'airtel' in a.account_type %}#fff1f2{% else %}#f0fdf4{% endif %};display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
             {% if 'mtn' in a.account_type %}📱{% elif 'airtel' in a.account_type %}📲{% else %}🏦{% endif %}
           </div>

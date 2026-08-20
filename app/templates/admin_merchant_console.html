@@ -17,15 +17,10 @@
   </div>
 </div>
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for cat, msg in messages %}
-  <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' }}" style="margin-bottom:1rem;">
-    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
-    <div>{{ msg }}</div>
-  </div>
-  {% endfor %}
-{% endwith %}
-
+{# Flash messages are rendered by base.html -- the ONE flash block for every
+   template that extends it. Do NOT re-add a per-page block here:
+   get_flashed_messages() caches on the request context, so a second call in
+   the same render returns the same messages again and they appear TWICE. #}
 {% if not m.is_active %}
 <div class="alert alert-danger" style="margin-bottom:1rem;">
   <i data-feather="slash" class="alert-icon"></i>

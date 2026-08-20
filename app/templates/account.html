@@ -40,15 +40,10 @@
 
 {% block content %}
 
-{# Flash messages from key rotation etc. #}
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for category, msg in messages %}
-  <div class="alert alert-{{ 'success' if category == 'success' else 'warning' }}" style="margin-bottom:1rem;">
-    <i data-feather="{{ 'check-circle' if category == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
-    <div>{{ msg }}</div>
-  </div>
-  {% endfor %}
-{% endwith %}
+{# Flash messages (key rotation etc.) are rendered ONCE by base.html, above this
+   block. This page used to render its own copy too, so every message appeared
+   twice in two different styles — and it mislabelled every non-success category
+   (error/danger/info) as a "warning". Do not re-add a block here. #}
 
 <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
   <div>

@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Samsoftpay — Uganda Payment Gateway</title>
-  <meta name="description" content="Accept MTN Mobile Money and crypto payments in Uganda — powering shops and scan-to-pay vending machines. One API, one dashboard. 1.5% fee, no monthly charges.">
+  <title>Samsoftpay: Uganda Payment Gateway</title>
+  <meta name="description" content="Accept MTN Mobile Money and crypto payments in Uganda, powering shops and scan-to-pay vending machines. One API, one dashboard. 1.5% fee, no monthly charges.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="{{ request.host_url }}">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Samsoftpay — Uganda Payment Gateway">
+  <meta property="og:title" content="Samsoftpay: Uganda Payment Gateway">
   <meta property="og:description" content="MTN Mobile Money and crypto for Uganda. One API, real products live on it. No monthly fees.">
   <meta property="og:url" content="{{ request.host_url }}">
   <meta property="og:image" content="{{ url_for('static', filename='img/logo.png', _external=True) }}">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","description":"Payment gateway for Uganda — MTN Mobile Money, crypto and bill collection, powering shops and scan-to-pay vending machines.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG"]}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Samsoftpay","description":"Payment gateway for Uganda: MTN Mobile Money, crypto and bill collection, powering shops and scan-to-pay vending machines.","applicationCategory":"FinanceApplication","offers":{"@type":"Offer","price":"0","priceCurrency":"UGX"},"provider":{"@type":"Organization","name":"Samsoftpay","areaServed":["UG"]}}</script>
 
   <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
@@ -27,7 +27,8 @@
       --line:  #e8e9f0;
       --bg:    #ffffff;
       --soft:  #f7f7fb;
-      --brand: #5759a8;
+      --brand: #4f46e5;   /* the one Samsoftpay purple — same value as tokens.css --primary
+                             and the dashboard shell. Was a third competing purple. */
       --green: #10b981;
       --green-lt: #d1fae5;
       --r: 16px;
@@ -252,7 +253,7 @@
     .testi-who{display:flex;align-items:center;gap:10px;}
     .testi-av{
       width:36px;height:36px;border-radius:50%;flex-shrink:0;
-      background:linear-gradient(135deg,var(--brand),#764ba2);
+      background:linear-gradient(135deg,var(--brand),#4338ca);
       display:flex;align-items:center;justify-content:center;
       font-family:'Urbanist',sans-serif;font-weight:700;font-size:.875rem;color:white;
     }
@@ -403,9 +404,9 @@
 <section class="hero">
   <div class="hero-pill"><span class="hero-pill-dot"></span> Now live in Uganda</div>
 
-  <h1>Accept payments<br>in <b>Uganda</b> — one API</h1>
+  <h1>One API for<br>payments in <b>Uganda</b></h1>
 
-  <p class="hero-sub">Your customer approves on their own phone. You get a signed webhook and money on a double-entry ledger. Live today in Kampala shops and vending machines — more rails on the way.</p>
+  <p class="hero-sub">Your customer approves on their own phone. You get a signed webhook and money on a double-entry ledger. Live today in Kampala shops and vending machines. More rails on the way.</p>
 
   <div class="hero-ctas">
     <a href="{{ url_for('auth.signup_page') }}" class="btn-dark">
@@ -440,7 +441,7 @@
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#b45309" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>
       </div>
       <div style="font-weight:700;color:var(--ink);font-size:.9375rem;margin-bottom:4px;">Approve on your phone</div>
-      <div style="font-size:.8125rem;color:var(--ink3);line-height:1.6;">Your customer gets the prompt and enters their Mobile&nbsp;Money PIN — on their own phone, never on a website.</div>
+      <div style="font-size:.8125rem;color:var(--ink3);line-height:1.6;">Your customer gets the prompt and enters their Mobile&nbsp;Money PIN on their own phone, never on a website.</div>
       <div style="margin-top:14px;display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:700;color:#065f46;background:var(--green-lt);padding:4px 12px;border-radius:99px;">
         <span style="width:6px;height:6px;border-radius:50%;background:var(--green);"></span> Payment confirmed
       </div>
@@ -453,8 +454,8 @@
     <span class="ch"><span class="ch-dot" style="background:#ffcb05;"></span>MTN MoMo</span>
     <span class="ch"><span class="ch-dot" style="background:#f7931a;"></span>Crypto</span>
     <span class="ch"><span class="ch-dot" style="background:#10b981;"></span>Bill Collection</span>
-    <span class="ch" style="opacity:.55;"><span class="ch-dot" style="background:#e60000;"></span>Airtel Money — soon</span>
-    <span class="ch" style="opacity:.55;"><span class="ch-dot" style="background:#1a1f71;"></span>Visa / MC — soon</span>
+    <span class="ch" style="opacity:.55;"><span class="ch-dot" style="background:#e60000;"></span>Airtel Money (soon)</span>
+    <span class="ch" style="opacity:.55;"><span class="ch-dot" style="background:#1a1f71;"></span>Visa / MC (soon)</span>
   </div>
 </section>
 
@@ -472,7 +473,7 @@
     <div class="sh anim">
       <div class="eyebrow">Platform</div>
       <h2>Everything you need</h2>
-      <p>Collections, payouts, subscriptions, bill collection, gift cards — production-ready for East Africa.</p>
+      <p>Collections, payouts, subscriptions, bill collection, gift cards. Production-ready for East Africa.</p>
     </div>
     <div class="feat-grid">
       {# Every claim here must be TRUE today. A payment company caught
@@ -482,7 +483,7 @@
       <div class="feat">
         <div class="feat-ico" style="background:#eef2ff;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
         <h3>MTN Mobile Money</h3>
-        <p>Live today. Customers receive a USSD prompt on their phone and approve with their PIN — no app needed. Airtel Money is coming next.</p>
+        <p>Live today. Customers receive a USSD prompt on their phone and approve with their PIN. No app needed. Airtel Money is coming next.</p>
       </div>
       <div class="feat">
         <div class="feat-ico" style="background:#eef2ff;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg></div>
@@ -492,7 +493,7 @@
       <div class="feat">
         <div class="feat-ico" style="background:#eef2ff;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
         <h3>Crypto Payments</h3>
-        <p>Accept BTC, ETH, USDT via ChangeNow. Instant UGX conversion — we never hold volatile assets.</p>
+        <p>Accept BTC, ETH, USDT via ChangeNow. Instant UGX conversion. We never hold volatile assets.</p>
       </div>
       <div class="feat">
         <div class="feat-ico" style="background:#eef2ff;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
@@ -507,7 +508,7 @@
       <div class="feat">
         <div class="feat-ico" style="background:#eef2ff;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
         <h3>Payment Links</h3>
-        <p>Share one URL on TikTok or WhatsApp. Customer scans or taps and pays — no code.</p>
+        <p>Share one URL on TikTok or WhatsApp. Customer scans or taps and pays. No code.</p>
       </div>
     </div>
   </div>
@@ -522,13 +523,13 @@
     <div class="sh anim">
       <div class="eyebrow">In production</div>
       <h2>Real products run on these rails</h2>
-      <p>Not case studies written for a landing page — live systems taking real payments on Samsoftpay today.</p>
+      <p>These are live systems taking real payments on Samsoftpay today.</p>
     </div>
     <div class="testi-row">
       {% for av, nm, rl, q in [
-        ('cpu','Vending machines','Scan-to-pay, Kampala','A customer taps a product on the machine, scans the QR with their own phone, approves the MTN prompt — and the machine dispenses automatically. Payment, dispense confirmation and refund-safety all run through this API.'),
-        ('cart','Point of sale','KarlPOS retail platform','Wallet deposits, withdrawals and batch payouts for a multi-merchant POS platform — reconciled daily against the Samsoftpay balance API, with webhook-driven settlement into merchant wallets.'),
-        ('terminal','Your integration','Sandbox first, then flip','Every ordinary test number succeeds deterministically; documented test numbers trigger exact failures on demand — the way Stripe test cards work. Build against test keys, switch to live keys, nothing else changes.'),
+        ('cpu','Vending machines','Scan-to-pay, Kampala','A customer taps a product on the machine, scans the QR with their own phone, approves the MTN prompt, and the machine dispenses automatically. Payment, dispense confirmation and refund-safety all run through this API.'),
+        ('cart','Point of sale','KarlPOS retail platform','Wallet deposits, withdrawals and batch payouts for a multi-merchant POS platform. Reconciled daily against the Samsoftpay balance API, with webhook-driven settlement into merchant wallets.'),
+        ('terminal','Your integration','Sandbox first, then flip','Every ordinary test number succeeds deterministically; documented test numbers trigger exact failures on demand, the way Stripe test cards work. Build against test keys, switch to live keys, nothing else changes.'),
       ] %}
       <div class="testi">
         <div class="testi-q" style="font-style:normal;">{{ q }}</div>
@@ -548,13 +549,13 @@
   <div class="wrap">
     <div class="sh anim">
       <div class="eyebrow">How money is kept safe</div>
-      <h2>Built like a bank ledger, not a wrapper</h2>
-      <p>The guarantees a partner's compliance review asks about first — all live in production today.</p>
+      <h2>A double-entry ledger, reconciled hourly</h2>
+      <p>The guarantees a partner's compliance review asks about first. All live in production today.</p>
     </div>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:880px;margin:0 auto;">
       {% for icon, title, desc in [
         ('ledger','Double-entry, zero-sum','Every transaction posts to a double-entry ledger that must sum to exactly zero. Money cannot be minted or lost by a bug going unnoticed.'),
-        ('recon','Reconciled against the network','Every hour we match our records against the mobile money network itself, not just our own books.'),
+        ('recon','Reconciled against the network','Every hour we check our own books against the record the mobile money network itself holds for each payment.'),
         ('sign','Signed webhooks, retried 48h','Every event is HMAC-signed with your own secret and retried with backoff for 48 hours. You can verify every byte we send you.'),
         ('split','Test money is not real money','Sandbox and live run on physically separate ledgers. No amount of integration testing can ever move a withdrawable balance.'),
       ] %}
@@ -593,13 +594,13 @@
         <div class="price-tag">Platform fee</div>
         <div class="price-num">UGX 0</div>
         <div class="price-lbl">every month, forever</div>
-        <div class="price-note">No setup fee. No minimum volume. Sandbox is always free — go live when ready.</div>
+        <div class="price-note">No setup fee. No minimum volume. Sandbox is always free. Go live when you are ready.</div>
       </div>
       <div class="price anim">
         <div class="price-tag">Payouts</div>
         <div class="price-num">750 <span class="price-unit">UGX</span></div>
         <div class="price-lbl">flat fee per payout</div>
-        <div class="price-note">Fully refunded if the payout fails. No percentage on the amount — ever.</div>
+        <div class="price-note">Fully refunded if the payout fails. No percentage on the amount, ever.</div>
       </div>
     </div>
   </div>
@@ -630,7 +631,7 @@
           <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
           <span>Samsoftpay</span>
         </div>
-        <p class="foot-desc">Uganda's developer-first payment gateway. MTN Mobile Money and crypto live today via one clean API — Airtel and cards next.</p>
+        <p class="foot-desc">Uganda's developer-first payment gateway. MTN Mobile Money and crypto live today via one clean API. Airtel and cards next.</p>
         <p class="foot-desc" style="margin-top:.75rem;">Operated by <strong>Sam Software Co Ltd</strong><br>Registered in Uganda (URSB) · Kampala</p>
         <p class="foot-desc" style="margin-top:.5rem;"><a href="mailto:samsoftware75@gmail.com" style="color:inherit;">samsoftware75@gmail.com</a><br><a href="tel:+256783647260" style="color:inherit;">+256 783 647260</a> · <a href="https://wa.me/256783647260" style="color:inherit;">WhatsApp</a></p>
       </div>

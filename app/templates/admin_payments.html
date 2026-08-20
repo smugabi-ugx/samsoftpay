@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Payment search — Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Payment search</h1>
+  <p class="page-subtitle">Find any charge on the platform — by charge id, merchant reference, rail reference or customer phone.</p>
+</div>
+
+{# Flash messages are rendered by base.html -- the ONE flash block for every
+   template that extends it. Do NOT re-add a per-page block here:
+   get_flashed_messages() caches on the request context, so a second call in
+   the same render returns the same messages again and they appear TWICE. #}
+<div class="card">
+  <form method="GET" action="{{ url_for('dashboard.admin_payments') }}"
+        style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+    <input class="form-input" type="search" name="q" value="{{ q }}"
+           placeholder="ch_… · merchant reference · rail reference · 0700 000 001"
+           style="flex:1;min-width:240px;">
+    <select class="form-select" name="status" style="width:auto;">
+      <option value="">Any status</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <select class="form-select" name="mode" style="width:auto;">
+      <option value="" {{ 'selected' if not mode }}>Live + sandbox</option>
+      <option value="live" {{ 'selected' if mode == 'live' }}>Live only</option>
+      <option value="test" {{ 'selected' if mode == 'test' }}>Sandbox only</option>
+    </select>
+    <button type="submit" class="btn btn-primary" style="font-size:.875rem;"><i data-feather="search"></i> Search</button>
+  </form>
+
+  <div class="text-muted" style="font-size:.8125rem;margin-bottom:.5rem;">
+    {{ pag.total }} charge{{ 's' if pag.total != 1 }}
+    {%- if not q %} · showing the most recent {{ 'live ' if mode == 'live' }}charges{% endif %}
+    · phone search matches the last 9 digits
+  </div>
+
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Charge</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Channel</th><th>Created</th><th></th></tr></thead>
+      <tbody>
+        {% for t, m in rows %}
+        <tr>
+          <td>
+            <code style="font-size:.75rem;">{{ t.public_id }}</code>
+            {% if t.is_test %} <span class="badge pending">test</span>{% endif %}
+            <div class="text-muted" style="font-size:.6875rem;">
+              {{ t.customer_phone or '—' }}{% if t.merchant_reference %} · ref {{ t.merchant_reference }}{% endif %}
+            </div>
+          </td>
+          <td>
+            <strong>{{ m.name }}</strong>
+            <div class="text-muted" style="font-size:.6875rem;">{{ m.email }}</div>
+          </td>
+          <td>{{ t.currency }} {{ "{:,}".format(t.amount) }}</td>
+          <td>
+            <span class="badge {% if t.status.value == 'succeeded' %}succeeded{% elif t.status.value in ('failed',) %}failed{% elif t.status.value == 'refunded' %}failed{% else %}pending{% endif %}">{{ t.status.value }}</span>
+          </td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ t.channel.value }}</td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ t.created_at.strftime('%d %b %Y %H:%M') if t.created_at else '—' }}</td>
+          <td><a href="{{ url_for('dashboard.admin_payment_detail', public_id=t.public_id) }}" class="btn btn-outline" style="padding:.3rem .7rem;font-size:.8125rem;">Inspect</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center;padding:1.5rem;">No charge matched that search.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pag.pages > 1 %}
+  <div style="display:flex;gap:.5rem;justify-content:center;align-items:center;margin-top:1rem;">
+    {% if pag.has_prev %}<a class="btn btn-outline" style="font-size:.8125rem;" href="{{ url_for('dashboard.admin_payments', q=q, status=status, mode=mode, page=pag.prev_num) }}">Prev</a>{% endif %}
+    <span class="text-muted" style="font-size:.8125rem;">Page {{ pag.page }} of {{ pag.pages }}</span>
+    {% if pag.has_next %}<a class="btn btn-outline" style="font-size:.8125rem;" href="{{ url_for('dashboard.admin_payments', q=q, status=status, mode=mode, page=pag.next_num) }}">Next</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

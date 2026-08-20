@@ -300,7 +300,13 @@ def _parse_list_params(default_limit=20, max_limit=100):
 @bp.get("/charges/<public_id>")
 def get_charge(public_id: str):
     merchant = _auth()
-    txn = Transaction.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
+    # Mode-scoped, exactly like the list endpoint below: a live key must not be
+    # able to read a sandbox object (and vice versa). 404 is the documented
+    # answer for "belongs to the other mode" (guardrail 12).
+    txn = Transaction.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id,
+        is_test=(g.api_mode == "test"),
+    ).one_or_none()
     if txn is None:
         abort(404)
     out = _charge_public(txn)
@@ -529,7 +535,11 @@ def _payout_public(p) -> dict:
 def get_payout(public_id: str):
     from ..models import Payout
     merchant = _auth()
-    p = Payout.query.filter_by(public_id=public_id, merchant_id=merchant.id).one_or_none()
+    # Mode-scoped like the payout list endpoint — see get_charge.
+    p = Payout.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id,
+        is_test=(g.api_mode == "test"),
+    ).one_or_none()
     if p is None:
         abort(404)
     return jsonify(_payout_public(p))
@@ -1142,8 +1152,11 @@ def get_payment_link(public_id: str):
     from flask import url_for
     from ..models import PaymentLink, Transaction
     merchant = _auth()
+    # Mode-scoped: PaymentLink.is_test is stamped at creation from the key that
+    # made it (guardrail 15), so a live key retrieving an sk_test_ link gets 404.
     link = PaymentLink.query.filter_by(
-        public_id=public_id, merchant_id=merchant.id
+        public_id=public_id, merchant_id=merchant.id,
+        is_test=(g.api_mode == "test"),
     ).one_or_none()
     if link is None:
         abort(404)

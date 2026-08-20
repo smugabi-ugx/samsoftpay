@@ -732,3 +732,99 @@ def register(app: Flask) -> None:
             print("=" * 60)
             print("  Store the secret keys securely. They are shown only once here.")
             print("=" * 60)
+
+
+    @app.cli.command("repair-balances")
+    @click.option("--dry-run", is_flag=True, default=False,
+                  help="Report drift only — write nothing.")
+    @click.option("--account-id", type=int, default=None,
+                  help="Repair a single account instead of every account.")
+    def repair_balances(dry_run, account_id):
+        """Recompute every Account.cached_balance from the journal and repair drift.
+
+        Nightly reconciliation DETECTS a cached_balance that disagrees with the
+        journal but there was no tool to fix one, so remediation meant hand-written
+        UPDATE statements against a live money database. This is that tool.
+
+        The journal is the source of truth and is NEVER touched here: entries are
+        append-only (a correction is a reversing posting, not an edit). The only
+        column this command can write is the derived cache. Each repair takes the
+        same row lock the payout path takes (ledger.lock_account_for_update) so a
+        concurrent posting cannot be overwritten, re-reads the truth under that
+        lock, and is written to the audit trail with the old and new values.
+
+        Usage:
+            flask repair-balances --dry-run          # report only
+            flask repair-balances                    # repair every drifted account
+            flask repair-balances --account-id 42    # repair just one
+        """
+        from .models import Account
+        from .services import ledger
+        from .services.audit import log_event
+
+        with app.app_context():
+            query = Account.query
+            if account_id is not None:
+                query = query.filter(Account.id == account_id)
+            accounts = query.order_by(Account.id).all()
+            if not accounts:
+                if account_id is not None:
+                    print(f"No account with id={account_id}.")
+                else:
+                    print("No accounts exist yet — nothing to check.")
+                return
+
+            def _label(a):
+                type_name = a.type.value if hasattr(a.type, "value") else str(a.type)
+                who = f"merchant#{a.merchant_id}" if a.merchant_id else "platform"
+                return (f"account#{a.id} {type_name} {who} {a.currency} "
+                        f"[{'test' if a.is_test else 'live'}]")
+
+            drifted = []
+            for acct in accounts:
+                cached = int(acct.cached_balance or 0)
+                truth = ledger.recompute_balance(acct)
+                if truth != cached:
+                    drifted.append(acct.id)
+                    print(f"  DRIFT {_label(acct)}: cached={cached:,} "
+                          f"journal={truth:,} delta={truth - cached:,}")
+
+            print("-" * 64)
+            print(f"Checked {len(accounts)} account(s); {len(drifted)} drifted.")
+            if not drifted:
+                print("Ledger cache agrees with the journal. Nothing to repair.")
+                return
+            if dry_run:
+                print("--dry-run: nothing written. Re-run without --dry-run to repair.")
+                return
+
+            repaired = 0
+            for acct_id in drifted:
+                acct = db.session.get(Account, acct_id)
+                if acct is None:
+                    continue
+                # Lock first, THEN re-read the truth: between the scan above and
+                # now a real posting may have landed, and it must not be clobbered.
+                ledger.lock_account_for_update(acct)
+                old = int(acct.cached_balance or 0)
+                new = ledger.recompute_balance(acct)
+                if new == old:
+                    db.session.rollback()
+                    print(f"  SKIP  {_label(acct)}: drift resolved itself before the lock.")
+                    continue
+                acct.cached_balance = new
+                db.session.commit()
+                log_event(
+                    "ledger.balance_repaired",
+                    merchant_id=acct.merchant_id,
+                    resource_id=f"account:{acct.id}",
+                    detail={"old": old, "new": new, "delta": new - old,
+                            "currency": acct.currency,
+                            "is_test": bool(acct.is_test),
+                            "source": "flask repair-balances"},
+                )
+                repaired += 1
+                print(f"  FIXED {_label(acct)}: {old:,} -> {new:,}")
+
+            print("-" * 64)
+            print(f"Repaired {repaired} account(s). The journal was not modified.")

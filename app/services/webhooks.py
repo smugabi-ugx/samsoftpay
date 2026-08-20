@@ -33,7 +33,12 @@ def charge_event_data(txn) -> dict:
         "currency": txn.currency,
         "channel": txn.channel.value,
         "status": txn.status.value,
+        # `reference` is the name GET /v1/charges/<id> uses; `merchant_reference`
+        # is the original webhook name. BOTH are emitted, with the same value —
+        # integrators already parse `merchant_reference`, so it is never removed.
+        "reference": txn.merchant_reference,
         "merchant_reference": txn.merchant_reference,
+        "mode": "test" if txn.is_test else "live",
         "failure_reason": txn.failure_reason,
         "completed_at": txn.completed_at.isoformat() if txn.completed_at else None,
     }

@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Create Account | Samsoftpay</title>
-  <meta name="theme-color" content="#6366f1">
+  <meta name="theme-color" content="#4f46e5">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --p:#6366f1;--pd:#4f46e5;
+      /* One brand purple across checkout, dashboard and auth: #4f46e5. */
+      --p:#4f46e5;--pd:#4338ca;
       --ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;
       --success:#10b981;--danger:#ef4444;
       --ease:cubic-bezier(.4,0,.2,1);
@@ -53,6 +54,19 @@
       display:flex;align-items:center;gap:.5rem;
     }
 
+    /* Flash messages. This page does NOT extend base.html, so it had no flash
+       block at all and every flashed message was silently swallowed — including
+       the CSRF error handler's session-expired notice (category "warning"). */
+    .flash{
+      border-radius:10px;padding:.75rem 1rem;
+      font-size:.875rem;font-weight:500;margin-bottom:.75rem;
+      display:flex;align-items:center;gap:.5rem;
+    }
+    .flash-error  {background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2); color:#b91c1c;}
+    .flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#047857;}
+    .flash-warning{background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); color:#92400e;}
+    .flash-info   {background:rgba(79,70,229,.07); border:1px solid rgba(79,70,229,.2);  color:#4338ca;}
+
     /* Fields */
     .field{margin-bottom:1rem;}
     .field label{display:block;font-size:.8125rem;font-weight:600;color:#334155;margin-bottom:.375rem;}
@@ -63,13 +77,13 @@
       transition:border-color .2s var(--ease),box-shadow .2s var(--ease);
       -webkit-appearance:none;
     }
-    .field input:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 3px rgba(99,102,241,.1);}
+    .field input:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 3px rgba(79,70,229,.12);}
     .field input::placeholder{color:#cbd5e1;}
 
     /* Submit */
     .submit{
       width:100%;padding:.8125rem;margin-top:1.25rem;
-      background:linear-gradient(135deg,#667eea,#764ba2);
+      background:var(--p);
       color:white;border:none;border-radius:10px;
       font-size:.9375rem;font-weight:600;font-family:inherit;cursor:pointer;
       transition:all .2s var(--ease);
@@ -82,7 +96,7 @@
       opacity:0;transition:opacity .3s;
     }
     .submit:hover::after{opacity:1;}
-    .submit:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(99,102,241,.35);}
+    .submit:hover{transform:translateY(-1px);background:var(--pd);box-shadow:0 8px 24px rgba(79,70,229,.35);}
     .submit:active{transform:scale(.98);}
 
     /* Terms */
@@ -117,6 +131,18 @@
 
   <h1 class="title">Create your account</h1>
   <p class="subtitle">Get API keys instantly. Sandbox always free.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    {%- set tone = 'error' if category in ('error', 'danger')
+              else ('success' if category == 'success'
+              else ('warning' if category == 'warning' else 'info')) -%}
+    <div role="status" class="flash flash-{{ tone }}">
+      <span aria-hidden="true">{% if tone == 'error' %}✕{% elif tone == 'success' %}✓{% elif tone == 'warning' %}⚠{% else %}ℹ{% endif %}</span>
+      {{ message }}
+    </div>
+    {% endfor %}
+  {% endwith %}
 
   {% if error %}
   <div class="error">

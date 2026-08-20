@@ -1406,3 +1406,138 @@ def close_dispute(merchant_id: int, dispute_id: int):
     db.session.commit()
     flash(f"Dispute {d.public_id} marked {outcome}.", "success")
     return redirect(url_for("dashboard.disputes_page", merchant_id=merchant_id))
+
+
+# ── Global payment search + support detail ───────────────────────────────────
+# The audit persona test: an admin gets a call saying "the customer paid but I
+# don't see the money" and must answer it in five minutes. Before this the only
+# way in was the merchant's own dashboard — you had to already KNOW which
+# merchant it was. These two read-only screens search every charge on the
+# platform and then show, on ONE page, everything that decides where the money
+# went: the charge row, its journal entries, its webhook deliveries, the link
+# it came from and the refund payout if there is one.
+
+_PAYMENT_STATUSES = ("pending", "authorized", "succeeded", "failed", "refunded")
+
+
+def _phone_search_key(q: str) -> str:
+    """Last 9 digits of a typed number — the app's canonical phone key.
+
+    Same convention as rails._phone_key, so 0700…, 256700… and spaced/dashed
+    forms all resolve to the one stored number.
+    """
+    import re as _re
+    digits = _re.sub(r"\D", "", q or "")
+    return digits[-9:] if len(digits) >= 9 else digits
+
+
+@bp.get("/admin/payments")
+@login_required
+@admin_required
+def admin_payments():
+    """Search every charge on the platform (all merchants)."""
+    from sqlalchemy import or_
+    from ..models import TxnStatus
+
+    q = (request.args.get("q") or "").strip()
+    status = (request.args.get("status") or "").strip().lower()
+    # Support usually cares about real money, so an empty search shows the live
+    # ledger only. A deliberate search spans both modes (a sandbox charge is
+    # exactly the kind of thing an integrator calls about) unless narrowed.
+    mode = request.args.get("mode")
+    if mode is None:
+        mode = "" if q else "live"
+    mode = mode if mode in ("live", "test") else ""
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    query = db.session.query(Transaction, Merchant).join(
+        Merchant, Transaction.merchant_id == Merchant.id
+    )
+    if q:
+        like = f"%{q}%"
+        conds = [
+            Transaction.public_id.ilike(like),
+            Transaction.merchant_reference.ilike(like),
+            Transaction.rail_reference.ilike(like),
+        ]
+        key = _phone_search_key(q)
+        if key:
+            # Suffix match on the last-9 key: the stored number may carry a
+            # country code the caller didn't read out.
+            conds.append(Transaction.customer_phone.ilike(f"%{key}"))
+        else:
+            conds.append(Transaction.customer_phone.ilike(like))
+        query = query.filter(or_(*conds))
+    if status in _PAYMENT_STATUSES:
+        query = query.filter(Transaction.status == TxnStatus(status))
+    if mode == "live":
+        query = query.filter(Transaction.is_test.is_(False))
+    elif mode == "test":
+        query = query.filter(Transaction.is_test.is_(True))
+
+    pag = query.order_by(Transaction.id.desc()).paginate(
+        page=page, per_page=50, error_out=False
+    )
+    return render_template(
+        "admin_payments.html",
+        pag=pag, rows=pag.items, q=q, status=status, mode=mode,
+        statuses=_PAYMENT_STATUSES,
+    )
+
+
+@bp.get("/admin/payments/<public_id>")
+@login_required
+@admin_required
+def admin_payment_detail(public_id: str):
+    """Read-only support view of ONE charge — the page that answers the call.
+
+    Strictly read-only: it never moves money and never mutates a row. Every
+    remediation stays behind the existing (audited) merchant/admin tooling.
+    """
+    import json as _json
+    from ..models import JournalEntry, Payout
+
+    txn = Transaction.query.filter_by(public_id=public_id).first() or abort(404)
+    merchant = db.session.get(Merchant, txn.merchant_id)
+
+    entries = (
+        db.session.query(JournalEntry, Account)
+        .join(Account, JournalEntry.account_id == Account.id)
+        .filter(JournalEntry.transaction_id == txn.id)
+        .order_by(JournalEntry.id.asc())
+        .all()
+    )
+    journal_total = sum(je.amount for je, _ in entries)
+
+    deliveries = []
+    for wh in (WebhookDelivery.query.filter_by(transaction_id=txn.id)
+               .order_by(WebhookDelivery.id.desc()).limit(50).all()):
+        try:
+            env = _json.loads(wh.payload)
+        except ValueError:
+            env = {}
+        deliveries.append({
+            "row_id": wh.id,
+            "event_id": env.get("id") or "—",
+            "event": env.get("event") or "—",
+            "status": wh.status,
+            "attempts": wh.attempts,
+            "code": wh.last_response_code,
+            "url": wh.url,
+            "created_at": wh.created_at,
+        })
+
+    link = PaymentLink.query.filter_by(transaction_id=txn.id).first()
+    refund_payout = (
+        db.session.get(Payout, txn.refund_payout_id)
+        if txn.refund_payout_id else None
+    )
+    return render_template(
+        "admin_payment_detail.html",
+        txn=txn, merchant=merchant, entries=entries,
+        journal_total=journal_total, deliveries=deliveries,
+        link=link, refund_payout=refund_payout,
+    )

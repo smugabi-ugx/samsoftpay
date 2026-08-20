@@ -50,7 +50,12 @@
 }
 
 :root {
-  /* color — exactly two purples; slate neutrals; AA-safe semantic pairs */
+  /* color — exactly two purples; slate neutrals; AA-safe semantic pairs.
+     --primary here is THE single Samsoftpay brand color. base.html (dashboard
+     shell) and landing.html deliberately do NOT redefine it any more — they
+     used to ship #6366f1 and #5759a8 respectively, so one merchant's checkout,
+     dashboard and marketing page each wore a different purple. Change it here
+     and it changes everywhere; do not re-add a per-template override. */
   --primary: #4f46e5;
   --primary-deep: #312e81;
   --ink: #0f172a;

@@ -6,7 +6,7 @@
   <title>{% block title %}Samsoftpay{% endblock %} | Uganda Payment Gateway</title>
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <meta name="theme-color" content="#6366f1">
+  <meta name="theme-color" content="#4f46e5">
 
   <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
@@ -21,7 +21,12 @@
        TOKENS
     ───────────────────────────────────────────── */
     :root {
-      --primary:#6366f1; --primary-dark:#4f46e5; --primary-light:#818cf8;
+      /* --primary is deliberately NOT redefined here: tokens.css owns the ONE
+         brand color. This shell used to override it with a lighter indigo, so a
+         merchant's checkout (tokens.css) and their dashboard (this file) wore
+         two different purples. Only the darker/lighter steps of that SAME
+         indigo ramp are declared locally. Do not re-add a --primary line. */
+      --primary-dark:#4338ca; --primary-light:#6366f1;
       --secondary:#8b5cf6; --success:#10b981; --warning:#f59e0b;
       --danger:#ef4444; --info:#3b82f6;
       --dark:#0f172a;
@@ -29,7 +34,9 @@
       --gray-300:#cbd5e1; --gray-400:#94a3b8; --gray-500:#64748b;
       --gray-600:#475569; --gray-700:#334155; --gray-800:#1e293b;
       --gray-900:#0f172a;
-      --gradient-primary:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+      /* Flattened: was a 2019-era periwinkle-to-violet ramp that matched
+         neither tokens.css nor the landing page. One brand hue now. */
+      --gradient-primary:linear-gradient(135deg,#4f46e5 0%,#4338ca 100%);
       --gradient-success:linear-gradient(135deg,#10b981 0%,#059669 100%);
       --gradient-info:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);
       --shadow-sm:0 1px 2px rgba(0,0,0,.05);
@@ -62,7 +69,7 @@
       z-index:9999;transform-origin:left;transform:scaleX(0);
       transition:transform .25s var(--ease),opacity .4s;
       border-radius:0 3px 3px 0;
-      box-shadow:0 0 8px rgba(99,102,241,.5);
+      box-shadow:0 0 8px rgba(79,70,229,.5);
     }
     #nprogress.loading{transform:scaleX(.85);}
     #nprogress.done{transform:scaleX(1);opacity:0;}
@@ -88,7 +95,7 @@
     .toast-icon svg{width:16px;height:16px;}
     .toast.success .toast-icon{background:rgba(16,185,129,.12);color:var(--success);}
     .toast.error   .toast-icon{background:rgba(239,68,68,.12);color:var(--danger);}
-    .toast.info    .toast-icon{background:rgba(99,102,241,.12);color:var(--primary);}
+    .toast.info    .toast-icon{background:rgba(79,70,229,.12);color:var(--primary);}
     .toast.warning .toast-icon{background:rgba(245,158,11,.12);color:var(--warning);}
     .toast-msg{flex:1;line-height:1.45;}
     .toast-close{background:none;border:none;cursor:pointer;color:var(--gray-400);padding:0;line-height:1;font-size:1.125rem;transition:color .15s;}
@@ -171,11 +178,11 @@
       position:relative;overflow:hidden;
     }
     .nav-link svg{width:17px;height:17px;flex-shrink:0;transition:transform .2s var(--ease);}
-    .nav-link:hover{color:var(--primary);background:rgba(99,102,241,.06);}
+    .nav-link:hover{color:var(--primary);background:rgba(79,70,229,.06);}
     .nav-link:hover svg{transform:scale(1.1);}
     .nav-link:active{transform:scale(.98);}
     .nav-link.active{
-      color:var(--primary);background:rgba(99,102,241,.08);font-weight:600;
+      color:var(--primary);background:rgba(79,70,229,.08);font-weight:600;
     }
     .nav-link.active::after{
       content:'';position:absolute;left:0;top:20%;bottom:20%;
@@ -274,7 +281,7 @@
       width:50px;height:50px;border-radius:15px;
       background:var(--gradient-primary);
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 4px 16px rgba(99,102,241,.4);
+      box-shadow:0 4px 16px rgba(79,70,229,.4);
       transition:all .2s var(--ease);
       text-decoration:none;flex-shrink:0;
     }
@@ -344,7 +351,7 @@
       background:var(--gray-50);
     }
     .stat-icon svg{width:18px;height:18px;}
-    .stat-icon.primary{background:rgba(99,102,241,.1);color:var(--primary);}
+    .stat-icon.primary{background:rgba(79,70,229,.1);color:var(--primary);}
     .stat-icon.success{background:rgba(16,185,129,.1);color:var(--success);}
     .stat-icon.warning{background:rgba(245,158,11,.1);color:var(--warning);}
     .stat-icon.info{background:rgba(59,130,246,.1);color:var(--info);}
@@ -439,9 +446,9 @@
     .btn:hover svg{transform:scale(1.1);}
     .btn-primary{
       background:var(--gradient-primary);color:white;
-      box-shadow:0 2px 8px rgba(99,102,241,.25);
+      box-shadow:0 2px 8px rgba(79,70,229,.25);
     }
-    .btn-primary:hover{box-shadow:0 6px 20px rgba(99,102,241,.4);transform:translateY(-1px);}
+    .btn-primary:hover{box-shadow:0 6px 20px rgba(79,70,229,.4);transform:translateY(-1px);}
     .btn-primary:active{transform:scale(.97);}
     .btn-success{background:var(--gradient-success);color:white;box-shadow:0 2px 8px rgba(16,185,129,.25);}
     .btn-success:hover{box-shadow:0 6px 20px rgba(16,185,129,.4);transform:translateY(-1px);}
@@ -450,7 +457,7 @@
       background:white;color:var(--primary);
       border:2px solid var(--primary);box-shadow:none;
     }
-    .btn-outline:hover{background:var(--primary);color:white;transform:translateY(-1px);box-shadow:0 6px 20px rgba(99,102,241,.3);}
+    .btn-outline:hover{background:var(--primary);color:white;transform:translateY(-1px);box-shadow:0 6px 20px rgba(79,70,229,.3);}
     .btn-group{display:flex;gap:.75rem;flex-wrap:wrap;}
 
     /* Loading spinner on button */
@@ -477,7 +484,7 @@
     }
     .form-input:focus,.form-select:focus,.form-textarea:focus{
       outline:none;border-color:var(--primary);
-      box-shadow:0 0 0 3px rgba(99,102,241,.1);
+      box-shadow:0 0 0 3px rgba(79,70,229,.1);
     }
     .form-input::placeholder{color:var(--gray-400);}
     .form-textarea{resize:vertical;min-height:90px;}
@@ -598,12 +605,12 @@
       background:var(--gradient-primary);color:white;
       border:none;cursor:pointer;z-index:199;
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 4px 16px rgba(99,102,241,.4);
+      box-shadow:0 4px 16px rgba(79,70,229,.4);
       opacity:0;transform:translateY(10px) scale(.9);
       transition:all .25s var(--ease);pointer-events:none;
     }
     #scroll-top.visible{opacity:1;transform:none;pointer-events:all;}
-    #scroll-top:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(99,102,241,.5);}
+    #scroll-top:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(79,70,229,.5);}
     #scroll-top:active{transform:scale(.93);}
     #scroll-top svg{width:18px;height:18px;}
 
@@ -864,19 +871,33 @@
       </div>
       {% endif %}
 
-      {# Flash messages — routes flash ~38 of these (success/error/info) and
-         the shell never rendered them, so "Machines synced", "Dispensed.",
-         "Logo updated" etc. were silently dropped: the user acted and saw
-         nothing. Every child template inherits this block. #}
+      {# Flash messages — routes flash ~38 of these and the shell never rendered
+         them, so "Machines synced", "Dispensed.", "Logo updated" etc. were
+         silently dropped: the user acted and saw nothing.
+
+         THIS IS THE ONLY FLASH BLOCK FOR EVERY TEMPLATE THAT EXTENDS base.html.
+         account.html and wallet.html each carried their own copy, so every
+         message on those pages rendered TWICE, in two different styles. Do not
+         re-add a per-page block: get_flashed_messages() pops the session queue
+         only ONCE per request and then caches it on the request context, so a
+         second call in the same render returns the same messages again — the
+         copy is a genuine duplicate, not a harmless no-op.
+
+         All five categories the app actually flashes are styled here
+         (grep `flash(` in app/): success, error, danger, warning, info. #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem;">
           {% for category, message in messages %}
+          {%- set tone = 'error' if category in ('error', 'danger')
+                    else ('success' if category == 'success'
+                    else ('warning' if category == 'warning' else 'info')) -%}
           <div role="status" style="display:flex;align-items:center;gap:.625rem;border-radius:10px;padding:.8125rem 1rem;font-size:.9rem;font-weight:500;
-            {% if category == 'error' %}background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#b91c1c;
-            {% elif category == 'success' %}background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#047857;
-            {% else %}background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2);color:#4338ca;{% endif %}">
-            <span aria-hidden="true">{% if category == 'error' %}✕{% elif category == 'success' %}✓{% else %}ℹ{% endif %}</span>
+            {% if tone == 'error' %}background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#b91c1c;
+            {% elif tone == 'success' %}background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#047857;
+            {% elif tone == 'warning' %}background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#92400e;
+            {% else %}background:rgba(79,70,229,.07);border:1px solid rgba(79,70,229,.2);color:#4338ca;{% endif %}">
+            <span aria-hidden="true">{% if tone == 'error' %}✕{% elif tone == 'success' %}✓{% elif tone == 'warning' %}⚠{% else %}ℹ{% endif %}</span>
             {{ message }}
           </div>
           {% endfor %}
@@ -1015,13 +1036,25 @@
     }
 
     // ── TOP PROGRESS BAR ──
+    // The bar used to animate on EVERY click, so a page that loaded in 80ms
+    // still made you watch a 250ms bar crawl across the screen — clicks felt
+    // heavy and slow. Now it only appears if navigation is actually taking a
+    // while (>300ms): fast pages show nothing at all and feel instant, slow
+    // ones still get feedback. Same trick GitHub/YouTube use.
     const bar = document.getElementById('nprogress');
+    let progressTimer = null;
     function startProgress() {
-      bar.className = 'loading';
+      clearTimeout(progressTimer);
+      progressTimer = setTimeout(() => { bar.className = 'loading'; }, 300);
     }
     function doneProgress() {
-      bar.className = 'done';
-      setTimeout(() => bar.className = '', 500);
+      clearTimeout(progressTimer);
+      if (bar.className === 'loading') {
+        bar.className = 'done';
+        setTimeout(() => bar.className = '', 400);
+      } else {
+        bar.className = '';   // never shown — leave no trace
+      }
     }
     // Fire on navigation links (not forms)
     document.querySelectorAll('a[href]').forEach(a => {

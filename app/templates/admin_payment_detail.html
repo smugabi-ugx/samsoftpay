@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ txn.public_id }} — Admin{% endblock %}
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;align-items:center;">
+  <div>
+    <h1 class="page-title" style="word-break:break-all;">{{ txn.public_id }}</h1>
+    <p class="page-subtitle">
+      {{ txn.currency }} {{ "{:,}".format(txn.amount) }} ·
+      <span class="badge {% if txn.status.value == 'succeeded' %}succeeded{% elif txn.status.value in ('failed','refunded') %}failed{% else %}pending{% endif %}">{{ txn.status.value }}</span>
+      · {{ txn.channel.value }} · {{ 'sandbox' if txn.is_test else 'live' }} ledger
+    </p>
+  </div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+    <a href="{{ url_for('dashboard.admin_payments') }}" class="btn btn-outline" style="font-size:.8125rem;"><i data-feather="arrow-left"></i> Payment search</a>
+    {% if merchant %}
+    <a href="{{ url_for('dashboard.admin_merchant_console', merchant_id=merchant.id) }}" class="btn btn-outline" style="font-size:.8125rem;"><i data-feather="briefcase"></i> {{ merchant.name }}</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="alert" style="margin-bottom:1rem;background:rgba(99,102,241,.08);color:var(--gray-700);">
+  <i data-feather="eye" class="alert-icon"></i>
+  <div>Read-only support view. Nothing on this page moves money — refunds and repairs stay in the merchant tooling.</div>
+</div>
+
+<!-- Charge -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="credit-card"></i> Charge</h3></div>
+  <div class="table-container">
+    <table>
+      <tbody>
+        <tr><td class="text-muted">Charge id</td><td><code>{{ txn.public_id }}</code> <span class="text-muted" style="font-size:.75rem;">(row #{{ txn.id }})</span></td></tr>
+        <tr><td class="text-muted">Merchant</td><td>
+          {% if merchant %}<a href="{{ url_for('dashboard.admin_merchant_console', merchant_id=merchant.id) }}">{{ merchant.name }}</a>
+          <span class="text-muted" style="font-size:.75rem;">{{ merchant.email }} · #{{ merchant.id }}</span>
+          {% else %}<span class="text-muted">merchant #{{ txn.merchant_id }} not found</span>{% endif %}
+        </td></tr>
+        <tr><td class="text-muted">Amount</td><td>{{ txn.currency }} {{ "{:,}".format(txn.amount) }} <span class="text-muted" style="font-size:.75rem;">fee {{ txn.currency }} {{ "{:,}".format(txn.fee_amount or 0) }} · net {{ "{:,}".format(txn.amount - (txn.fee_amount or 0)) }}</span></td></tr>
+        <tr><td class="text-muted">Status</td><td><span class="badge {% if txn.status.value == 'succeeded' %}succeeded{% elif txn.status.value in ('failed','refunded') %}failed{% else %}pending{% endif %}">{{ txn.status.value }}</span>{% if txn.failure_reason %} <span class="text-muted" style="font-size:.8125rem;">{{ txn.failure_reason }}</span>{% endif %}</td></tr>
+        <tr><td class="text-muted">Channel</td><td>{{ txn.channel.value }}</td></tr>
+        <tr><td class="text-muted">Mode</td><td>{% if txn.is_test %}<span class="badge pending">sandbox</span> — posts to the test ledger only{% else %}<span class="badge succeeded">live</span>{% endif %}</td></tr>
+        <tr><td class="text-muted">Customer</td><td>{{ txn.customer_phone or '—' }}{% if txn.customer_email %} · {{ txn.customer_email }}{% endif %}</td></tr>
+        <tr><td class="text-muted">Merchant reference</td><td>{{ txn.merchant_reference or '—' }}</td></tr>
+        <tr><td class="text-muted">Rail reference</td><td><code style="font-size:.75rem;">{{ txn.rail_reference or '—' }}</code></td></tr>
+        <tr><td class="text-muted">Created</td><td>{{ txn.created_at.strftime('%d %b %Y %H:%M:%S') if txn.created_at else '—' }}</td></tr>
+        <tr><td class="text-muted">Completed</td><td>{{ txn.completed_at.strftime('%d %b %Y %H:%M:%S') if txn.completed_at else '—' }}</td></tr>
+        <tr><td class="text-muted">Settled</td><td>{{ txn.settled_at.strftime('%d %b %Y %H:%M:%S') if txn.settled_at else '— (still in hold / not settled)' }}</td></tr>
+        <tr><td class="text-muted">Refunded</td><td>{{ txn.refunded_at.strftime('%d %b %Y %H:%M:%S') if txn.refunded_at else '—' }}</td></tr>
+        {% if txn.split_meta %}<tr><td class="text-muted">Split spec</td><td><code style="font-size:.75rem;word-break:break-all;">{{ txn.split_meta }}</code></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Journal -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="book-open"></i> Journal entries</h3></div>
+  <p class="text-muted" style="font-size:.8125rem;margin-bottom:.75rem;">
+    The source of truth for where this money sits. Merchant balances are stored as negative
+    (credit) numbers, and every posting must sum to zero.
+  </p>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Account</th><th>Ledger</th><th>Amount</th><th>Memo</th><th>Journal</th><th>Posted</th></tr></thead>
+      <tbody>
+        {% for je, acct in entries %}
+        <tr>
+          <td>{{ acct.type.value }}{% if acct.merchant_id %} <span class="text-muted" style="font-size:.75rem;">merchant #{{ acct.merchant_id }}</span>{% endif %}</td>
+          <td><span class="badge {{ 'pending' if acct.is_test else 'succeeded' }}">{{ 'test' if acct.is_test else 'live' }}</span></td>
+          <td>{{ je.currency }} {{ "{:,}".format(je.amount) }}</td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ je.memo or '—' }}</td>
+          <td><code style="font-size:.6875rem;">{{ je.journal_id[:8] }}</code></td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ je.created_at.strftime('%d %b %H:%M:%S') if je.created_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:1.25rem;">No journal entries — no money has been booked for this charge.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if entries %}
+      <tfoot>
+        <tr>
+          <td colspan="2"><strong>Sum</strong></td>
+          <td colspan="4">
+            <strong>{{ "{:,}".format(journal_total) }}</strong>
+            {% if journal_total == 0 %}<span class="badge succeeded">balanced</span>
+            {% else %}<span class="badge failed">UNBALANCED</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<!-- Webhooks -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="send"></i> Webhook deliveries</h3></div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Event</th><th>Status</th><th>Attempts</th><th>HTTP</th><th>Endpoint</th><th>Queued</th></tr></thead>
+      <tbody>
+        {% for d in deliveries %}
+        <tr>
+          <td><code style="font-size:.75rem;">{{ d.event }}</code><div class="text-muted" style="font-size:.6875rem;">{{ d.event_id }}</div></td>
+          <td><span class="badge {% if d.status == 'sent' %}succeeded{% elif d.status == 'failed' %}failed{% else %}pending{% endif %}">{{ d.status }}</span></td>
+          <td>{{ d.attempts }}</td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ d.code if d.code is not none else '—' }}</td>
+          <td class="text-muted" style="font-size:.75rem;word-break:break-all;">{{ d.url }}</td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ d.created_at.strftime('%d %b %H:%M:%S') if d.created_at else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:1.25rem;">No webhooks queued for this charge (the merchant may have no webhook URL configured).</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Origin + refund -->
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="link"></i> Payment link</h3></div>
+  {% if link %}
+  <div class="table-container">
+    <table>
+      <tbody>
+        <tr><td class="text-muted">Link</td><td><code>{{ link.public_id }}</code>{% if link.is_test %} <span class="badge pending">test</span>{% endif %}</td></tr>
+        <tr><td class="text-muted">Description</td><td>{{ link.description or '—' }}</td></tr>
+        <tr><td class="text-muted">Reference</td><td>{{ link.reference or '—' }}</td></tr>
+        <tr><td class="text-muted">Amount</td><td>{{ link.currency }} {{ "{:,}".format(link.amount) }}</td></tr>
+        <tr><td class="text-muted">Active</td><td>{{ 'yes' if link.is_active else 'no' }}{{ ' · reusable' if link.allow_multiple_uses }}</td></tr>
+        {% if link.vending_meta %}<tr><td class="text-muted">Vending</td><td><span class="badge">{{ link.vending_status or 'n/a' }}</span> <code style="font-size:.6875rem;word-break:break-all;">{{ link.vending_meta }}</code></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted" style="font-size:.8125rem;">This charge did not come from a payment link (created directly via the API).</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-header"><h3 class="card-title"><i data-feather="corner-up-left"></i> Refund payout</h3></div>
+  {% if refund_payout %}
+  <div class="table-container">
+    <table>
+      <tbody>
+        <tr><td class="text-muted">Payout</td><td><code>{{ refund_payout.public_id }}</code></td></tr>
+        <tr><td class="text-muted">Amount</td><td>{{ refund_payout.currency }} {{ "{:,}".format(refund_payout.amount) }}</td></tr>
+        <tr><td class="text-muted">Status</td><td><span class="badge {{ refund_payout.status.value }}">{{ refund_payout.status.value }}</span>{% if refund_payout.failure_reason %} <span class="text-muted" style="font-size:.8125rem;">{{ refund_payout.failure_reason }}</span>{% endif %}</td></tr>
+        <tr><td class="text-muted">Recipient</td><td>{{ refund_payout.recipient_phone }}{% if refund_payout.recipient_name %} · {{ refund_payout.recipient_name }}{% endif %}</td></tr>
+        <tr><td class="text-muted">Rail reference</td><td><code style="font-size:.75rem;">{{ refund_payout.rail_reference or '—' }}</code></td></tr>
+        <tr><td class="text-muted">Completed</td><td>{{ refund_payout.completed_at.strftime('%d %b %Y %H:%M:%S') if refund_payout.completed_at else '—' }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted" style="font-size:.8125rem;">No refund payout is linked to this charge.</p>
+  {% endif %}
+</div>
+{% endblock %}
