@@ -87,22 +87,28 @@
     .nav-burger[aria-expanded="true"] span:nth-child(1){transform:translateY(7px) rotate(45deg);}
     .nav-burger[aria-expanded="true"] span:nth-child(2){opacity:0;}
     .nav-burger[aria-expanded="true"] span:nth-child(3){transform:translateY(-7px) rotate(-45deg);}
+    /* Right-anchored menu card (not a full-width bar) — opens under the burger
+       on the right, listing the pages. */
     .mobile-menu{
-      display:none;position:fixed;top:68px;left:0;right:0;z-index:99;
-      background:#fff;border-bottom:1px solid var(--line);
-      box-shadow:0 16px 32px rgba(15,23,42,.08);
-      padding:8px 16px 16px;
+      display:none;position:fixed;top:78px;right:12px;left:auto;z-index:99;
+      width:min(260px,86vw);
+      background:#fff;border:1px solid var(--line);border-radius:14px;
+      box-shadow:0 16px 40px rgba(15,23,42,.16);
+      padding:8px;overflow:hidden;
     }
-    .mobile-menu.open{display:block;}
+    .mobile-menu.open{display:block;animation:menu-in .16s var(--ease) both;}
+    @keyframes menu-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
     .mobile-menu a{
-      display:block;padding:14px 12px;font-size:1rem;font-weight:600;color:var(--ink);
-      border-bottom:1px solid var(--line);
+      display:block;padding:12px 14px;font-size:.95rem;font-weight:600;color:var(--ink);
+      border-radius:9px;
     }
-    .mobile-menu a:last-child{border-bottom:none;}
+    .mobile-menu a:hover{background:var(--soft);}
+    .mobile-menu .menu-cta{background:var(--ink);color:#fff;margin-top:4px;text-align:center;}
+    .mobile-menu .menu-cta:hover{background:#4f46e5;}
 
     /* ── HERO ── */
     .hero{
-      padding:calc(64px + 80px) 24px 64px;
+      padding:calc(64px + 48px) 24px 48px;   /* trimmed — hero was very tall */
       text-align:center;
       overflow:hidden;   /* the radial-gradient bg must never widen the page */
       background:radial-gradient(ellipse 100% 60% at 50% 0%,rgba(87,89,168,.06),transparent);
@@ -293,9 +299,10 @@
     }
 
     /* ── SECTION WRAPPER ── */
-    .section{padding:80px 24px;}
+    .section{padding:52px 24px;}                 /* was 80px — page read too long */
     .section.soft{background:var(--soft);}
-    .sh{text-align:center;margin-bottom:48px;}
+    .sh{text-align:center;margin-bottom:32px;}   /* was 48px */
+    @media(max-width:600px){.section{padding:36px 16px;}.sh{margin-bottom:24px;}}
     .eyebrow{
       display:inline-flex;align-items:center;gap:6px;
       font-size:.75rem;font-weight:700;color:var(--brand);
@@ -347,6 +354,7 @@
  </div>
 </nav>
 <div class="mobile-menu" id="mobile-menu">
+  <a href="#top">Home</a>
   <a href="#features">Features</a>
   <a href="#pricing">Pricing</a>
   <a href="{{ url_for('docs.docs') }}">API Docs</a>
@@ -355,7 +363,7 @@
   <a href="{{ url_for('auth.account') }}">Settings</a>
   {% else %}
   <a href="{{ url_for('auth.login_page') }}">Sign in</a>
-  <a href="{{ url_for('auth.signup_page') }}">Open free account</a>
+  <a href="{{ url_for('auth.signup_page') }}" class="menu-cta">Open free account</a>
   {% endif %}
 </div>
 <script>
