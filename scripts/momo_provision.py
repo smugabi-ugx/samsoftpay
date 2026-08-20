@@ -39,15 +39,33 @@ import requests
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--subscription-key", required=True,
+    ap.add_argument("--subscription-key",
                     help="PRIMARY key of the product (Collections or Disbursements)")
+    ap.add_argument("--from-env", metavar="NAME",
+                    help="read the key from an environment variable instead of "
+                         "typing it (e.g. --from-env MOMO_SUBSCRIPTION_KEY). "
+                         "Avoids pasting a long key into a browser shell.")
     ap.add_argument("--base-url", default="https://sandbox.momodeveloper.mtn.com")
     ap.add_argument("--callback", default="samsoftpay.com",
                     help="providerCallbackHost (a bare host, no scheme/path)")
     args = ap.parse_args()
 
+    import os
+    sub = (args.subscription_key
+           or (os.environ.get(args.from_env, "") if args.from_env else "")).strip()
+    if not sub:
+        # Last resort: ask interactively, so nothing long has to be pasted onto
+        # the command line (some browser shells mangle long paste).
+        try:
+            sub = input("Paste the product PRIMARY key: ").strip()
+        except EOFError:
+            sub = ""
+    if not sub:
+        print("No subscription key given. Use --subscription-key, --from-env NAME, "
+              "or paste it when prompted.")
+        return 1
+
     base = args.base_url.rstrip("/")
-    sub = args.subscription_key.strip()
     api_user = str(uuid.uuid4())
     headers = {"Ocp-Apim-Subscription-Key": sub, "Content-Type": "application/json"}
 
