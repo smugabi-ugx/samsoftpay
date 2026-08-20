@@ -144,10 +144,22 @@ def recompute_balance(account: Account) -> int:
 
 
 def assert_balances_match() -> dict:
-    """Returns {account_id: (cached, recomputed)} for any mismatches. Empty if all good."""
+    """Returns {account_id: (cached, recomputed)} for any mismatches. Empty if all good.
+
+    ONE grouped aggregate instead of a SUM(JournalEntry) scan per account — the
+    old per-account loop was O(accounts) queries on a page render and got
+    slower with every money movement.
+    """
+    from sqlalchemy import func as _func
+    sums = dict(
+        db.session.query(
+            JournalEntry.account_id,
+            _func.coalesce(_func.sum(JournalEntry.amount), 0),
+        ).group_by(JournalEntry.account_id).all()
+    )
     mismatches = {}
     for acct in Account.query.all():
-        recomputed = recompute_balance(acct)
+        recomputed = int(sums.get(acct.id, 0))
         if recomputed != acct.cached_balance:
             mismatches[acct.id] = (acct.cached_balance, recomputed)
     return mismatches

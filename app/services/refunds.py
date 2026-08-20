@@ -100,7 +100,7 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     db.session.commit()
 
     try:
-        from .payouts import PayoutError, create_payout
+        from .payouts import DisbursementUnavailable, PayoutError, create_payout
 
         payout = create_payout(
             merchant=merchant,
@@ -110,8 +110,11 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
             recipient_phone=txn.customer_phone,
             recipient_name="Customer",
         )
-    except PayoutError as exc:
-        # Payout refused with zero writes (guardrail 13) — release the claim.
+    except (PayoutError, DisbursementUnavailable) as exc:
+        # Payout refused/unavailable with zero writes (guardrail 13) — release
+        # the refund claim so the merchant can retry (incl. the transient
+        # disbursement-config case, which must not leave the charge stuck
+        # REFUNDED with no payout).
         txn.status = TxnStatus.SUCCEEDED
         txn.refunded_at = None
         db.session.commit()

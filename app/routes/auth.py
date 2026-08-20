@@ -379,8 +379,12 @@ def logout():
 
 @bp.get("/account")
 @login_required
-@verified_required
 def account():
+    # NOT verified_required: a new merchant must reach their API keys, webhook
+    # config and dashboard BEFORE KYC (sandbox is fully usable with test keys).
+    # KYC only gates LIVE money, enforced independently at the API/service
+    # layer. Gating this page hard-redirected new signups to KYC and hid the
+    # keys entirely — a critical onboarding blocker.
     from ..models import Payout, Transaction, TxnStatus, WebhookDelivery
     txn_count = Transaction.query.filter_by(merchant_id=current_user.id).count()
     succeeded = Transaction.query.filter_by(
@@ -444,7 +448,6 @@ def account():
 @bp.post("/account/webhooks/url")
 @limiter.limit("10 per minute")
 @login_required
-@verified_required
 def set_webhook_url():
     """Set or update the webhook endpoint (auditor finding: signup was the
     ONLY setter — a merchant who moved servers had no way to repoint their
@@ -474,7 +477,6 @@ def set_webhook_url():
 @bp.post("/account/webhooks/test")
 @limiter.limit("10 per minute")
 @login_required
-@verified_required
 def send_test_webhook():
     """Fire a signed test.ping at the merchant's endpoint — the go-live
     checklist's 'prove your receiver verifies our signature and 200s' step."""
@@ -497,7 +499,6 @@ def send_test_webhook():
 @bp.post("/account/webhooks/<int:delivery_id>/resend")
 @limiter.limit("30 per minute")   # resend makes OUR worker POST outward — cap it
 @login_required
-@verified_required
 def resend_webhook(delivery_id: int):
     from ..models import WebhookDelivery
     wh = db.session.get(WebhookDelivery, delivery_id)
@@ -516,7 +517,6 @@ def resend_webhook(delivery_id: int):
 
 @bp.post("/account/toggle-2fa")
 @login_required
-@verified_required
 def toggle_2fa():
     m = db.session.get(Merchant, current_user.id)
     if not m.two_fa_enabled:
@@ -603,7 +603,6 @@ def admin_verify_user(merchant_id: int):
 
 @bp.post("/account/upload-logo")
 @login_required
-@verified_required
 def upload_logo():
     """Upload merchant business logo (shown on payment profile page)."""
     import os
@@ -654,7 +653,6 @@ def serve_logo(merchant_id: int):
 
 @bp.post("/account/rotate-keys/<key_type>")
 @login_required
-@verified_required
 def rotate_keys(key_type: str):
     """Rotate test or live API keys. Invalidates old keys immediately."""
     if key_type not in ("test", "live"):
@@ -677,7 +675,6 @@ def rotate_keys(key_type: str):
 
 @bp.post("/account/collections-keys/<key_type>")
 @login_required
-@verified_required
 def collections_keys(key_type: str):
     """Generate (or rotate) a collections-only key.
 

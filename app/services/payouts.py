@@ -54,6 +54,16 @@ class PayoutError(Exception):
     pass
 
 
+class DisbursementUnavailable(Exception):
+    """A TRANSIENT rail/config failure (e.g. missing MOMO_DISBURSEMENT_* creds
+    on the live switch). Deliberately NOT a PayoutError: callers treat
+    PayoutError as a permanent client rejection and CACHE it under the
+    idempotency key (a 400), which would make the config error un-retryable.
+    This propagates past the `except PayoutError` branches to the generic
+    handler that releases the key and returns a retryable 503."""
+    pass
+
+
 def create_payout(
     *,
     merchant: Merchant,
@@ -385,11 +395,12 @@ def _get_disbursement_adapter(channel: Channel):
         try:
             return RealMTNMoMoDisbursementAdapter()
         except Exception as exc:
-            # Missing/mis-set MOMO_DISBURSEMENT_* creds raised RuntimeError,
-            # which propagated as an uncaught 500 that poisoned the idempotency
-            # key. Re-raise as PayoutError so callers take the money-safe path
-            # (zero writes — this is before any ledger post).
-            raise PayoutError(
+            # Missing/mis-set MOMO_DISBURSEMENT_* creds. Raise the TRANSIENT
+            # exception (not PayoutError) so the route's generic handler
+            # releases the idempotency key and returns a retryable 503 — a
+            # PayoutError here would be cached as a permanent 400 and block
+            # retries after the config is fixed. Zero writes (before earmark).
+            raise DisbursementUnavailable(
                 "disbursement temporarily unavailable — configuration error") from exc
     return _MockDisbursementAdapter()
 

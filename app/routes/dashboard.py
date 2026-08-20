@@ -219,7 +219,6 @@ def admin_home():
 
 @bp.get("/dashboard/<int:merchant_id>")
 @login_required
-@verified_required
 def merchant_detail(merchant_id: int):
     from ..models import Payout
     if not merchant_or_admin(merchant_id):
@@ -293,7 +292,6 @@ def merchant_detail(merchant_id: int):
 
 @bp.get("/dashboard/<int:merchant_id>/activity.json")
 @login_required
-@verified_required
 def activity_page(merchant_id: int):
     """Next page of activity rows for the load-more/infinite scroll.
 
@@ -353,7 +351,6 @@ def dashboard_refund(merchant_id: int, public_id: str):
 
 @bp.get("/dashboard/<int:merchant_id>/export/transactions.csv")
 @login_required
-@verified_required
 def export_transactions_csv(merchant_id: int):
     """Stream the merchant's transactions as a CSV statement.
 
@@ -479,10 +476,14 @@ def vending_settings(merchant_id: int):
         .all()
     )
     # Pair each order with its machine + payment status for the table.
+    # Batch-load the orders' transactions in ONE query instead of one .get()
+    # per row (N+1).
+    _tids = [o.transaction_id for o in orders if o.transaction_id]
+    _txns = {t.id: t for t in Transaction.query.filter(Transaction.id.in_(_tids)).all()} if _tids else {}
     rows = []
     for o in orders:
         meta = read_meta(o) or {}
-        txn = db.session.get(Transaction, o.transaction_id) if o.transaction_id else None
+        txn = _txns.get(o.transaction_id)
         rows.append({
             "link": o,
             "machine": meta.get("machine", "—"),
