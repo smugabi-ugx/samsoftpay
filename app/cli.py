@@ -57,19 +57,31 @@ def register(app: Flask) -> None:
             print(f"secret_key={m.secret_key}")
 
     @app.cli.command("make-admin")
-    def make_admin():
-        """Promote an existing merchant to admin role (interactive)."""
-        import click
+    @click.argument("email", required=False)
+    def make_admin(email):
+        """Promote an existing merchant to admin. EMAIL optional (prompts if omitted).
+
+        Takes the email as an ARGUMENT so it works in a non-interactive shell
+        (`flask make-admin you@example.com`); prompting only when omitted, since
+        a prompt that cannot read a TTY leaves you locked out of /admin.
+        Lists the known accounts when the email does not match, so a typo or a
+        forgotten address does not turn into a dead end.
+        """
         with app.app_context():
-            email = click.prompt("Merchant email")
-            m = Merchant.query.filter_by(email=email).first()
+            if not email:
+                email = click.prompt("Merchant email")
+            m = Merchant.query.filter_by(email=(email or "").strip().lower()).first()
             if not m:
                 print(f"No merchant found with email: {email}")
+                known = [x.email for x in Merchant.query.order_by(Merchant.id).limit(20)]
+                if known:
+                    print("Known accounts: " + ", ".join(known))
                 return
             m.role = "admin"
             m.email_verified = True
             db.session.commit()
-            print(f"Done — {m.name} ({m.email}) is now an admin.")
+            print(f"Done — {m.name} ({m.email}) is now an admin. "
+                  f"Sign out and back in, then open /admin.")
 
     @app.cli.command("create-admin")
     def create_admin():
