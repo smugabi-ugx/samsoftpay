@@ -46,9 +46,35 @@
 
   .live-key-note { background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.9375rem; display: flex; align-items: center; gap: 0.75rem; }
 
+  /* min-width:0 lets the content column shrink instead of a wide code block/
+     table forcing the whole grid wider than the phone (the "docs cut off in
+     half" bug — the global net only reached inline-style grids, not this
+     class grid). */
+  .docs-layout { min-width: 0; }
+  .docs-layout > * { min-width: 0; }
+  .docs-section pre { max-width: 100%; overflow-x: auto; }
+  /* Wide param tables scroll inside their own box rather than stretching the
+     page. */
+  .param-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+  @media (min-width: 720px) { .param-table { display: table; white-space: normal; } }
+  .endpoint-badge { max-width: 100%; overflow-x: auto; }
   @media (max-width: 900px) {
     .docs-layout { grid-template-columns: 1fr; }
-    .docs-nav { display: none; }
+    /* Don't hide the section nav on mobile (users had NO way to jump between
+       docs sections) — turn it into a horizontal scrolling chip bar at the
+       top. */
+    .docs-nav { position: static; display: flex; gap: .4rem; overflow-x: auto;
+      -webkit-overflow-scrolling: touch; padding: .625rem !important;
+      margin-bottom: 1rem; }
+    .docs-nav-section { margin-bottom: 0; display: flex; gap: .4rem; flex-shrink: 0; }
+    .docs-nav-title { display: none; }
+    .docs-nav-link { white-space: nowrap; padding: .4rem .75rem;
+      border: 1px solid var(--gray-200); border-radius: 999px; font-size: .8125rem; }
+  }
+  @media (max-width: 600px) {
+    .docs-section h2 { font-size: 1.25rem; }
+    .docs-section h3 { font-size: 1rem; }
+    pre { font-size: .8rem; padding: 1rem; }
   }
 </style>
 {% endblock %}
