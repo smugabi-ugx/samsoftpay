@@ -653,6 +653,29 @@
     .key-section{display:none;}
     .key-section.visible{display:block;}
 
+    /* ── TABS — keep long pages focused, one section at a time (Stripe /
+       Pesapal / Atlassian pattern). A .tabbar of <button data-tab="x"> toggles
+       .tab-panel#tab-x. Scrolls horizontally on mobile. ── */
+    .tabbar{
+      display:flex;gap:.125rem;border-bottom:1px solid var(--gray-200);
+      margin-bottom:1.5rem;overflow-x:auto;-webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+    }
+    .tabbar::-webkit-scrollbar{display:none;}
+    .tabbar button{
+      appearance:none;background:none;border:none;font:inherit;cursor:pointer;
+      padding:.75rem 1rem;font-size:.9rem;font-weight:600;color:var(--gray-500);
+      border-bottom:2px solid transparent;white-space:nowrap;
+      display:inline-flex;align-items:center;gap:.4rem;
+      transition:color .15s,border-color .15s;min-height:44px;
+    }
+    .tabbar button:hover{color:var(--gray-800);}
+    .tabbar button.active{color:var(--primary);border-bottom-color:var(--primary);}
+    .tabbar button svg{width:15px;height:15px;}
+    .tab-panel{display:none;}
+    .tab-panel.active{display:block;animation:tab-in .2s ease both;}
+    @keyframes tab-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
     {% block extra_head_style %}{% endblock %}
   </style>
 
@@ -1187,6 +1210,31 @@
       document.addEventListener('touchstart', function (e) {
         var a = e.target.closest && e.target.closest('a'); if (a) prefetch(a);
       }, {passive: true});
+    })();
+
+    // ── Tabs: a .tabbar of <button data-tab="x"> shows .tab-panel#tab-x.
+    //    Deep-linkable via #x in the URL; falls back to the first tab. ──
+    (function () {
+      document.querySelectorAll('.tabbar').forEach(function (bar) {
+        var btns = bar.querySelectorAll('button[data-tab]');
+        if (!btns.length) return;
+        function show(key) {
+          btns.forEach(function (b) {
+            var on = b.getAttribute('data-tab') === key;
+            b.classList.toggle('active', on);
+            var panel = document.getElementById('tab-' + b.getAttribute('data-tab'));
+            if (panel) panel.classList.toggle('active', on);
+          });
+          try { history.replaceState(null, '', '#' + key); } catch (e) {}
+          if (window.feather) feather.replace({ 'stroke-width': 2 });
+        }
+        btns.forEach(function (b) {
+          b.addEventListener('click', function () { show(b.getAttribute('data-tab')); });
+        });
+        var hash = (location.hash || '').replace('#', '');
+        var valid = Array.prototype.some.call(btns, function (b) { return b.getAttribute('data-tab') === hash; });
+        show(valid ? hash : btns[0].getAttribute('data-tab'));
+      });
     })();
   </script>
 
