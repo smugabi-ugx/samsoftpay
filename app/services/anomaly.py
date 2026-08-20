@@ -159,3 +159,61 @@ def scan_payout_anomalies() -> list[dict]:
             key=f"payout-anomaly-{f['kind']}-{f.get('merchant_id') or f.get('phone')}",
         )
     return findings
+
+
+def scan_refund_outliers() -> list[dict]:
+    """Daily refunds-vs-charges outlier report (Interswitch lesson: ₦30B left
+    through a refund path that was less defended than the payment path, taken
+    by insiders over YEARS). Refund invariants are enforced in code; this is
+    the watching layer — a merchant (or a compromised dashboard session)
+    whose refunds are outsized against their charge volume gets a human's
+    eyes the same day, not at year three.
+
+    Config: REFUND_OUTLIER_RATIO (default 0.30 of 24h charge volume),
+            REFUND_OUTLIER_MIN (default 100_000 — ignore tiny absolute sums).
+    """
+    from flask import current_app
+    from .alerts import send_alert
+    from ..models import Transaction, TxnStatus
+
+    cfg = current_app.config
+    ratio = float(cfg.get("REFUND_OUTLIER_RATIO", 0.30))
+    floor = int(cfg.get("REFUND_OUTLIER_MIN", 100_000))
+    now = utcnow()
+    day_ago = now - timedelta(hours=24)
+    findings: list[dict] = []
+
+    refunds = (db.session.query(
+                   Transaction.merchant_id,
+                   safunc.count(Transaction.id),
+                   safunc.coalesce(safunc.sum(Transaction.amount), 0))
+               .filter(Transaction.is_test.is_(False),
+                       Transaction.status == TxnStatus.REFUNDED,
+                       Transaction.refunded_at >= day_ago)
+               .group_by(Transaction.merchant_id).all())
+    for mid, n_ref, ref_sum in refunds:
+        ref_sum = int(ref_sum)
+        if ref_sum < floor:
+            continue
+        charge_sum = int(db.session.query(
+                             safunc.coalesce(safunc.sum(Transaction.amount), 0))
+                         .filter(Transaction.merchant_id == mid,
+                                 Transaction.is_test.is_(False),
+                                 Transaction.status == TxnStatus.SUCCEEDED,
+                                 Transaction.completed_at >= day_ago)
+                         .scalar() or 0)
+        # Outlier when refunds dwarf same-day charge volume — including the
+        # degenerate case of refunding yesterday's money with no sales today.
+        if charge_sum == 0 or ref_sum > ratio * charge_sum:
+            f = {"kind": "refund_outlier", "merchant_id": mid,
+                 "refunds_24h": int(n_ref), "refund_sum_24h": ref_sum,
+                 "charge_sum_24h": charge_sum, "ratio_threshold": ratio}
+            findings.append(f)
+            send_alert(
+                "Refund outlier: merchant refunds outsized vs charges",
+                str(f),
+                severity="critical",
+                key=f"refund-outlier-{mid}",
+                dedupe_seconds=86400,
+            )
+    return findings

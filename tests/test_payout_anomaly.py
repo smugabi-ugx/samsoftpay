@@ -148,6 +148,7 @@ def main():
         platform_flags.set_flag(platform_flags.FREEZE_PAYOUTS, "off")
 
     _alerts.send_alert = real_send
+    refund_outlier_checks()
     failed = [lbl for lbl, ok in CHECKS if not ok]
     print()
     if failed:
@@ -155,6 +156,64 @@ def main():
         sys.exit(1)
     print(f"ALL PAYOUT-ANOMALY TESTS PASSED ({len(CHECKS)}/{len(CHECKS)})")
 
+
+
+
+def refund_outlier_checks():
+    """Separate app: refunds-vs-charges outlier report (Interswitch lesson)."""
+    import tempfile as _tf
+    fd, p2 = _tf.mkstemp(suffix=".db", prefix="refoutlier_")
+    os.close(fd)
+    os.environ["DATABASE_URL"] = "sqlite:///" + p2.replace("\\", "/")
+    from app.models import Transaction, TxnStatus
+    app = create_app({"WTF_CSRF_ENABLED": False,
+                      "REFUND_OUTLIER_MIN": 50_000})
+    import app.services.alerts as _alerts
+    _alerts.send_alert = lambda *a, **k: True
+
+    from werkzeug.security import generate_password_hash
+    with app.app_context():
+        db.create_all()
+        m = Merchant(name="RO", email="ro@x.com", public_key="pkro", secret_key="skro",
+                     kyc_status="verified", handle="ro",
+                     password_hash=generate_password_hash("x"))
+        db.session.add(m); db.session.commit()
+        mid = m.id
+        from app.services.anomaly import scan_refund_outliers
+
+        def txn(amount, status, *, refunded=False, is_test=False):
+            t = Transaction(public_id=f"txn_{uuid.uuid4().hex[:12]}",
+                            merchant_id=mid, amount=amount, fee_amount=0,
+                            currency="UGX", channel=Channel.MTN_MOMO,
+                            status=status, is_test=is_test,
+                            customer_phone="256780000009",
+                            completed_at=utcnow())
+            if refunded:
+                t.refunded_at = utcnow()
+            db.session.add(t)
+
+        # healthy: 1M charges, 100k refunds (10% < 30% ratio)
+        txn(1_000_000, TxnStatus.SUCCEEDED)
+        txn(100_000, TxnStatus.REFUNDED, refunded=True)
+        db.session.commit()
+        check("healthy refund ratio (10%) not flagged", scan_refund_outliers() == [])
+
+        # outlier: refunds outweigh charges
+        txn(500_000, TxnStatus.REFUNDED, refunded=True)
+        db.session.commit()
+        findings = scan_refund_outliers()
+        check("outsized refunds (60% of charge volume) flagged",
+              any(f["kind"] == "refund_outlier" and f["merchant_id"] == mid
+                  and f["refund_sum_24h"] == 600_000 for f in findings))
+
+        # sandbox refunds never count
+        Transaction.query.delete(); db.session.commit()
+        txn(900_000, TxnStatus.REFUNDED, refunded=True, is_test=True)
+        db.session.commit()
+        check("sandbox refunds never flagged", scan_refund_outliers() == [])
+
+    try: os.unlink(p2)
+    except OSError: pass
 
 if __name__ == "__main__":
     main()

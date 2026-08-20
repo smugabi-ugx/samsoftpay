@@ -110,3 +110,16 @@ def payout_anomaly_scan() -> dict:
     else:
         print("payout-anomaly: clear")
     return {"ok": not findings, "findings": findings}
+
+
+@celery.task(name="app.tasks.monitoring.refund_outlier_scan")
+def refund_outlier_scan() -> dict:
+    """Daily: refunds-vs-charges outlier report (Interswitch lesson — the
+    refund path watched as closely as the payout path, from day one)."""
+    from ..services.anomaly import scan_refund_outliers
+    findings = scan_refund_outliers()
+    if findings:
+        print(f"refund-outliers: {len(findings)} merchant(s) flagged")
+    else:
+        print("refund-outliers: clear")
+    return {"ok": not findings, "findings": findings}
