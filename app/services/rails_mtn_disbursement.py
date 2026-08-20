@@ -204,3 +204,51 @@ class RealMTNMoMoDisbursementAdapter:
                 "relying on inbound webhook + sweep", payout.id, exc
             )
         return InitiatePayoutResult(rail_reference=reference_id, accepted=True)
+
+    def resolve_account_holder(self, phone: str) -> dict:
+        """Hakikisha pre-flight: MTN's OWN answer about a destination number,
+        BEFORE any money is earmarked. Returns
+        {"active": bool|None, "registered_name": str|None}.
+
+        `active` uses /accountholder/.../active (available on every MTN
+        product tier). `registered_name` uses /basicuserinfo, which needs the
+        KYC scope on the MTN subscription — when MTN hasn't granted it, the
+        name comes back None and `active` is still authoritative.
+        """
+        from .msisdn import normalize_msisdn
+        msisdn = normalize_msisdn(phone)
+        token = _get_token(
+            subscription_key=self.subscription_key,
+            api_user=self.api_user,
+            api_key=self.api_key,
+            base_url=self.base_url,
+        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Ocp-Apim-Subscription-Key": self.subscription_key,
+            "X-Target-Environment": self.target_env,
+        }
+        active = None
+        name = None
+        try:
+            r = requests.get(
+                f"{self.base_url}/disbursement/v1_0/accountholder/msisdn/{msisdn}/active",
+                headers=headers, timeout=15)
+            if r.status_code == 200:
+                body = r.json() if r.content else {}
+                active = bool(body.get("result", True))
+            elif r.status_code == 404:
+                active = False
+        except requests.RequestException:
+            pass   # unknown, NOT false — never claim a wallet is dead on a timeout
+        try:
+            r = requests.get(
+                f"{self.base_url}/disbursement/v1_0/accountholder/msisdn/{msisdn}/basicuserinfo",
+                headers=headers, timeout=15)
+            if r.status_code == 200:
+                body = r.json() if r.content else {}
+                parts = [body.get("given_name") or "", body.get("family_name") or ""]
+                name = " ".join(p for p in parts if p).strip() or None
+        except requests.RequestException:
+            pass
+        return {"active": active, "registered_name": name}

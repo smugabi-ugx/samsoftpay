@@ -650,7 +650,9 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
       dedupe on it. <code>timestamp</code> is Unix seconds; use it to enforce a replay window.</p>
       <p>Event catalogue: <code>charge.succeeded</code>, <code>charge.failed</code>,
       <code>payout.succeeded</code>, <code>payout.failed</code>, <code>vending.dispensed</code>,
-      <code>vending.dispense_failed</code>.</p>
+      <code>vending.dispense_failed</code>, <code>dispute.opened</code> (a customer used the
+      public "Report a problem" link on a receipt — respond within 72 hours; it never moves
+      money by itself), <code>test.ping</code> (the Account → Webhooks test button).</p>
       <div class="callout warning"><code>charge.succeeded</code> means the <strong>money arrived</strong> —
       nothing else. For vending, it does not mean the product came out: wait for
       <code>vending.dispensed</code> before treating the product as delivered.</div>
@@ -756,6 +758,16 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <p>Re-queues one delivery by its <code>evt_…</code> id and returns <code>202</code>. The
       resent delivery carries the same envelope (same <code>id</code>) — your dedupe logic handles
       it like any retry.</p>
+
+      <h3>Pre-flight a payout destination</h3>
+      <div class="endpoint-badge"><span class="method get">GET</span> /v1/resolve-account?phone=0771234567</div>
+      <p>MTN's own answer about a wallet <strong>before any money is earmarked</strong> —
+      returns <code>msisdn</code>, <code>active</code> and <code>registered_name</code>.
+      Treat <code>active: false</code> as the hard stop; the name is the double-check (it can be
+      <code>null</code> while our MTN KYC scope is pending). Sandbox is deterministic:
+      <code>256700000001</code> resolves inactive, every other number is an active
+      <code>SANDBOX HOLDER</code>. Full-scope keys only — a kiosk credential must not be able to
+      enumerate wallet owners.</p>
 
       <h3>Egress IPs</h3>
       <p>Webhook deliveries originate from these static ranges — allowlist them if your endpoint

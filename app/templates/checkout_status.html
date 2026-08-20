@@ -223,7 +223,12 @@
     </form>
     <div id="countdown" style="display:none; margin-top:0.75rem; color:#64748b; font-size:0.85rem;"></div>
 
-    <div class="footer">Secured by <strong>Samsoftpay</strong></div>
+    <div class="footer">
+      Secured by <strong>Samsoftpay</strong>
+      &nbsp;·&nbsp;
+      <a href="{{ url_for('checkout.report_problem_form', public_id=link.public_id) }}"
+         style="color:inherit;">Report a problem</a>
+    </div>
   </div>
 
   <script>

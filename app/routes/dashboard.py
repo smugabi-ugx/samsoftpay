@@ -1,7 +1,7 @@
 """Dashboard routes — all protected by login + RBAC."""
 import uuid
 
-from flask import Blueprint, abort, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import login_required
 
 from ..extensions import db
@@ -270,9 +270,13 @@ def merchant_detail(merchant_id: int):
     payout_count = Payout.query.filter_by(merchant_id=merchant_id).count()
     active_link_count = PaymentLink.query.filter_by(
         merchant_id=merchant_id, is_active=True).count()
+    from ..models import Dispute
+    open_disputes = Dispute.query.filter_by(
+        merchant_id=merchant_id, status="open").count()
 
     return render_template(
         "merchant_detail.html",
+        open_disputes=open_disputes,
         merchant=merchant,
         txns=txns,
         payouts=payouts,
@@ -886,3 +890,49 @@ def sweep_pending():
         url_for("dashboard.reconciliation", swept=result["swept"],
                 succeeded=result["succeeded"], failed=result["failed"])
     )
+
+
+# ---------- disputes (the customer recourse door, merchant side) ----------
+
+@bp.get("/dashboard/<int:merchant_id>/disputes")
+@login_required
+@verified_required
+def disputes_page(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    from ..models import Dispute
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    disputes = (db.session.query(Dispute, Transaction)
+                .join(Transaction, Dispute.transaction_id == Transaction.id)
+                .filter(Dispute.merchant_id == merchant_id)
+                .order_by(Dispute.id.desc())
+                .limit(100).all())
+    return render_template("disputes.html", merchant=merchant, disputes=disputes)
+
+
+@bp.post("/dashboard/<int:merchant_id>/disputes/<int:dispute_id>/close")
+@login_required
+@verified_required
+def close_dispute(merchant_id: int, dispute_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    from ..models import Dispute, utcnow
+    d = db.session.get(Dispute, dispute_id)
+    if d is None or d.merchant_id != merchant_id:
+        abort(404)
+    outcome = request.form.get("outcome")
+    if outcome not in ("resolved", "dismissed"):
+        abort(400)
+    if d.status != "open":
+        flash("This dispute is already closed.", "info")
+        return redirect(url_for("dashboard.disputes_page", merchant_id=merchant_id))
+    d.status = outcome
+    d.resolution_note = (request.form.get("note") or "").strip()[:500] or None
+    d.resolved_at = utcnow()
+    db.session.commit()
+    from ..services.audit import log_event
+    log_event("dispute." + outcome, merchant_id=merchant_id,
+              detail={"dispute": d.public_id, "note": d.resolution_note})
+    db.session.commit()
+    flash(f"Dispute {d.public_id} marked {outcome}.", "success")
+    return redirect(url_for("dashboard.disputes_page", merchant_id=merchant_id))

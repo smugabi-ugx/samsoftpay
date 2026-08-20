@@ -215,12 +215,18 @@
     <code>X-Samsoftpay-Signature</code> is an HMAC-SHA256 of the raw body using
     <strong>your signing secret below</strong>.
   </p>
-  {% if current_user.webhook_url %}
-  <div class="form-group">
+  <form method="POST" action="{{ url_for('auth.set_webhook_url') }}" class="form-group">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="form-label">Endpoint</label>
-    <div class="api-key-display"><code>{{ current_user.webhook_url }}</code></div>
-  </div>
-  {% endif %}
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      <input name="webhook_url" type="url" maxlength="500" class="form-input"
+             style="flex:1;min-width:220px;font-size:.875rem;"
+             placeholder="https://your-server.example/webhooks/samsoftpay"
+             value="{{ current_user.webhook_url or '' }}">
+      <button type="submit" class="btn btn-primary" style="font-size:.8125rem;padding:.5rem .875rem;">Save</button>
+    </div>
+    <div class="form-hint">Must be a public https endpoint. Changing it repoints future deliveries and resends.</div>
+  </form>
   <div class="form-group" style="margin-bottom:0;">
     <label class="form-label">Webhook Signing Secret</label>
     <div class="api-key-display">

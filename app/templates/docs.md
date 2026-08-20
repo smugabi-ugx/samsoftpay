@@ -77,6 +77,7 @@ Account page and receive signed events instead. Charge statuses:
 | `POST /v1/vending/orders` | Create a scan-to-pay vending order (QR + auto-dispense) |
 | `GET /v1/webhooks` | List your recent webhook deliveries: event id, event, status, attempts, last_response_code |
 | `POST /v1/webhooks/<event_id>/resend` | Re-queue one delivery by its `evt_` id; returns `202` |
+| `GET /v1/resolve-account?phone=…` | Confirm a payout destination BEFORE money moves: MTN's own `active` answer + `registered_name` (full-scope keys only) |
 
 Fees: charges 1.5% (min UGX 200, cap UGX 5,000), returned in the `fee` field — you receive
 `amount - fee`. Payouts: flat UGX 750, fully refunded with the amount if the payout fails.
@@ -99,7 +100,7 @@ state change.
 ### Events
 
 `charge.succeeded`, `charge.failed`, `payout.succeeded`, `payout.failed`,
-`vending.dispensed`, `vending.dispense_failed`.
+`vending.dispensed`, `vending.dispense_failed`, `dispute.opened`.
 
 **`charge.succeeded` means the MONEY ARRIVED — nothing else.** For vending, it does not mean the
 product came out: wait for `vending.dispensed` before treating the product as delivered.
@@ -216,6 +217,23 @@ happens with real money:
 
 A failed payout refunds the amount **and** the fee to your available balance, and fires the
 `payout.failed` webhook.
+
+### Pre-flight a destination (Hakikisha)
+
+`GET /v1/resolve-account?phone=0771234567` returns `{"msisdn", "active", "registered_name"}` —
+MTN's own answer about the wallet, before any money is earmarked. In the sandbox this is
+deterministic: `256700000001` resolves `active: false`; every other number is an active
+`SANDBOX HOLDER …`. Treat `active: false` as the hard stop; `registered_name` is the
+double-check (it can be `null` while our MTN KYC scope is pending). Full-scope keys only.
+
+### Disputes
+
+Every hosted receipt carries a public **"Report a problem"** link. A filed report creates a
+dispute you see on Dashboard → Disputes and as a `dispute.opened` webhook
+(`data`: `id`, `charge_id`, `reason`, `details`, `contact`, `amount`, `currency`,
+`opened_at`). A dispute never moves money — if a refund is due, use the normal refund
+tooling. Published timelines: the merchant is expected to respond within **72 hours**;
+unresolved disputes escalate to support@samsoftpay.com.
 
 ### Exact `charge.failed` payloads
 

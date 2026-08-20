@@ -1335,3 +1335,49 @@ def list_settlements():
         ) for s in rows],
         count=len(rows),
     )
+
+
+# ---------- account resolution (Hakikisha pre-flight) ----------
+
+@bp.get("/resolve-account")
+@limiter.limit("30 per minute")   # PII-adjacent + hits MTN — keep it deliberate
+def resolve_account():
+    """Confirm a payout destination BEFORE money moves — M-Pesa's Hakikisha
+    lesson (wrong-number transfers were 60-70% of Safaricom's call volume).
+
+    ?phone=2567… -> {"msisdn", "active", "registered_name"}. `active` is
+    MTN's own answer; `registered_name` needs the KYC scope on our MTN
+    subscription and may be null while that's pending — treat active=false as
+    the hard stop, the name as the double-check. Full-scope keys only: a
+    kiosk credential must not be able to enumerate wallet owners.
+    """
+    merchant = _auth()
+    _require_full_scope()
+    phone = (request.args.get("phone") or "").strip()
+    if not phone:
+        abort(400, description="phone query parameter required")
+    from ..services.msisdn import normalize_msisdn
+    msisdn = normalize_msisdn(phone)
+    if not msisdn or len(msisdn) < 9:
+        abort(400, description="phone does not look like a valid MSISDN")
+
+    from ..services.payouts import PayoutError, _get_disbursement_adapter
+    try:
+        adapter = _get_disbursement_adapter(Channel.MTN_MOMO)
+        result = adapter.resolve_account_holder(phone)
+    except PayoutError as exc:
+        abort(400, description=str(exc))
+    except Exception:
+        from flask import current_app
+        current_app.logger.exception("resolve-account failed")
+        return jsonify(error="account resolution temporarily unavailable — "
+                             "retry shortly"), 502
+
+    log_event("account.resolved", merchant_id=merchant.id,
+              detail={"mode": g.api_mode, "active": result.get("active")})
+    return jsonify(
+        mode=g.api_mode,
+        msisdn=msisdn,
+        active=result.get("active"),
+        registered_name=result.get("registered_name"),
+    )

@@ -346,6 +346,27 @@ class WebhookDelivery(db.Model):
     created_at = Column(DateTime, default=utcnow, nullable=False)
 
 
+class Dispute(db.Model):
+    """A customer-reported problem with one payment — the public recourse door.
+
+    M-Pesa lesson: a published, time-boxed dispute path is why people trust
+    holding money in the system. The dispute is the FRONT DOOR only: it never
+    moves money — the merchant's existing refund tooling is the action.
+    """
+    __tablename__ = "disputes"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), unique=True, nullable=False, index=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=False, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    reason = Column(String(40), nullable=False)      # not_delivered | wrong_amount | double_charge | other
+    details = Column(Text, nullable=True)
+    contact = Column(String(160), nullable=True)     # customer phone/email for follow-up
+    status = Column(String(20), nullable=False, default="open", index=True)  # open | resolved | dismissed
+    resolution_note = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+
+
 class Settlement(db.Model):
     """One settlement batch: a sweep releasing pending -> available.
 

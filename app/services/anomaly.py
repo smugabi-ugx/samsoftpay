@@ -123,7 +123,17 @@ def scan_payout_anomalies() -> list[dict]:
     panic = int(cfg.get("PAYOUT_PLATFORM_HOURLY_PANIC", 0))
     if panic > 0:
         platform_hour = _sum(base.filter(Payout.created_at >= hour_ago))
-        if platform_hour > panic:
+        # Anti-DoS (auditor finding): ONE merchant burning their own balance
+        # must not be able to freeze every other merchant's payouts. A single
+        # contributor already trips their merchant_hourly_cap alert above; the
+        # platform-wide freeze needs the volume to be broad (>=2 merchants) —
+        # the shape a credential-compromise drain actually has.
+        contributors = (db.session.query(Payout.merchant_id)
+                        .filter(Payout.is_test.is_(False),
+                                Payout.status.in_(_COUNTED),
+                                Payout.created_at >= hour_ago)
+                        .distinct().count())
+        if platform_hour > panic and contributors >= 2:
             findings.append({"kind": "platform_panic", "total": platform_hour,
                              "threshold": panic, "action": "auto_freeze"})
             from . import platform_flags

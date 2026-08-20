@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report a problem — {{ merchant.name }}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+  <style>
+    :root { --bg:#f8fafc; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --ok:#059669; --accent:#4f46e5; }
+    *,*::before,*::after { box-sizing:border-box; }
+    html,body { margin:0; padding:0; }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--ink);
+           min-height:100vh; display:flex; align-items:center; justify-content:center; padding:1.25rem; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:16px;
+            max-width:460px; width:100%; padding:2rem; box-shadow:0 1px 3px rgba(15,23,42,.06); }
+    h1 { font-size:1.25rem; margin:0 0 .375rem; }
+    p.sub { color:var(--muted); font-size:.875rem; margin:0 0 1.25rem; line-height:1.6; }
+    .ref { background:var(--bg); border:1px solid var(--line); border-radius:10px;
+           padding:.625rem .875rem; font-size:.8125rem; color:var(--muted); margin-bottom:1.25rem; }
+    .ref code { color:var(--ink); }
+    label { display:block; font-size:.8125rem; font-weight:600; margin:.875rem 0 .3rem; }
+    select, textarea, input { width:100%; border:1px solid var(--line); border-radius:10px;
+           padding:.625rem .75rem; font:inherit; font-size:.9rem; background:#fff; }
+    textarea { min-height:96px; resize:vertical; }
+    .btn { display:block; width:100%; margin-top:1.25rem; background:var(--accent); color:#fff;
+           border:none; border-radius:10px; padding:.75rem; font:inherit; font-weight:600;
+           font-size:.9375rem; cursor:pointer; }
+    .btn:hover { filter:brightness(1.06); }
+    .done { text-align:center; padding:.5rem 0; }
+    .done .tick { width:56px; height:56px; border-radius:50%; background:rgba(5,150,105,.1);
+                  color:var(--ok); display:flex; align-items:center; justify-content:center;
+                  margin:0 auto 1rem; font-size:1.75rem; }
+    .timeline { font-size:.8125rem; color:var(--muted); line-height:1.7; text-align:left;
+                background:var(--bg); border:1px solid var(--line); border-radius:10px;
+                padding:.875rem 1rem; margin-top:1.25rem; }
+    a.back { display:block; text-align:center; margin-top:1rem; font-size:.8125rem; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    {% if submitted %}
+    <div class="done">
+      <div class="tick">✓</div>
+      <h1>Report received</h1>
+      <p class="sub">{{ merchant.name }} has been notified about payment
+        <code>{{ txn.public_id }}</code>. Keep this reference for any follow-up.</p>
+      <div class="timeline">
+        <strong>What happens next</strong><br>
+        • The merchant sees your report immediately and is expected to respond within <strong>72 hours</strong>.<br>
+        • If the payment failed but money left your account, mobile-money reversals are automatic within a few days.<br>
+        • Unresolved after 72 hours? Email <a href="mailto:support@samsoftpay.com">support@samsoftpay.com</a> with the reference above.
+      </div>
+      <a class="back" href="{{ url_for('checkout.status_page', public_id=link.public_id) }}">Back to payment status</a>
+    </div>
+    {% else %}
+    <h1>Report a problem</h1>
+    <p class="sub">Something wrong with this payment? Tell {{ merchant.name }} —
+      your report is recorded permanently and the merchant is notified immediately.</p>
+    <div class="ref">Payment <code>{{ txn.public_id }}</code> ·
+      {{ txn.currency }} {{ "{:,}".format(txn.amount) }} · {{ merchant.name }}</div>
+    <form method="POST" action="{{ url_for('checkout.report_problem_submit', public_id=link.public_id) }}">
+      <label for="reason">What went wrong?</label>
+      <select id="reason" name="reason" required>
+        <option value="not_delivered">I paid but didn't receive the product / service</option>
+        <option value="wrong_amount">I was charged the wrong amount</option>
+        <option value="double_charge">I was charged twice</option>
+        <option value="other">Something else</option>
+      </select>
+      <label for="details">Details (optional)</label>
+      <textarea id="details" name="details" maxlength="2000"
+                placeholder="What happened? Anything that helps the merchant find your payment."></textarea>
+      <label for="contact">Your phone or email (optional, for follow-up)</label>
+      <input id="contact" name="contact" maxlength="160" placeholder="07… or you@example.com">
+      <button class="btn" type="submit">Send report</button>
+    </form>
+    <a class="back" href="{{ url_for('checkout.status_page', public_id=link.public_id) }}">Back to payment status</a>
+    {% endif %}
+  </div>
+</body>
+</html>

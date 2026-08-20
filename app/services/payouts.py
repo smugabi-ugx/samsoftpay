@@ -391,6 +391,16 @@ class _MockDisbursementAdapter:
 
     channel = Channel.MTN_MOMO
 
+    def resolve_account_holder(self, phone: str) -> dict:
+        """Deterministic sandbox Hakikisha: the not-found magic number resolves
+        inactive with no name; every other number is an active test holder."""
+        from .rails import TEST_PAYOUT_OUTCOMES, _phone_key
+        key = _phone_key(phone)
+        if TEST_PAYOUT_OUTCOMES.get(key) == "recipient_not_found":
+            return {"active": False, "registered_name": None}
+        return {"active": True,
+                "registered_name": f"SANDBOX HOLDER {key[-4:] or '0000'}"}
+
     def initiate(self, payout: Payout):
         from .rails_mtn_disbursement import InitiatePayoutResult
         rail_ref = f"disb_mock_{uuid.uuid4().hex[:12]}"

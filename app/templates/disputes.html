@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Disputes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Disputes</h1>
+  <p class="page-subtitle">Problems customers reported on your payments — respond within 72 hours.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'info' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'info' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="message-circle"></i> Customer reports</h3>
+    <span class="badge {% if disputes|selectattr('0.status', 'equalto', 'open')|list %}pending{% else %}succeeded{% endif %}">
+      {{ disputes|selectattr('0.status', 'equalto', 'open')|list|length }} open
+    </span>
+  </div>
+  <p class="text-muted mb-3" style="font-size:.875rem;">
+    A dispute never moves money by itself — if a refund is due, use the refund button on the
+    charge. Resolving here records the outcome for the customer's reference.
+    New disputes also arrive as <code>dispute.opened</code> webhooks.
+  </p>
+
+  {% if disputes %}
+  <div style="display:flex;flex-direction:column;gap:.75rem;">
+    {% for d, t in disputes %}
+    <div style="border:1px solid var(--gray-100);border-radius:12px;padding:.875rem 1rem;">
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+        <span class="badge {% if d.status == 'open' %}pending{% elif d.status == 'resolved' %}succeeded{% else %}failed{% endif %}">{{ d.status }}</span>
+        <strong style="font-size:.875rem;">{{ d.reason.replace('_', ' ') }}</strong>
+        <code style="font-size:.75rem;">{{ t.public_id }}</code>
+        <span class="text-muted" style="font-size:.8125rem;">{{ t.currency }} {{ "{:,}".format(t.amount) }}</span>
+        <span class="text-muted" style="font-size:.75rem;margin-left:auto;">{{ d.created_at.strftime('%d %b %Y %H:%M') }} UTC</span>
+      </div>
+      {% if d.details %}
+      <div style="font-size:.8125rem;color:var(--gray-600);margin-top:.5rem;">{{ d.details }}</div>
+      {% endif %}
+      {% if d.contact %}
+      <div style="font-size:.75rem;color:var(--gray-500);margin-top:.25rem;">Customer contact: <code>{{ d.contact }}</code></div>
+      {% endif %}
+      {% if d.status == 'open' %}
+      <form method="POST" action="{{ url_for('dashboard.close_dispute', merchant_id=merchant.id, dispute_id=d.id) }}"
+            style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap;align-items:center;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input name="note" maxlength="500" placeholder="Resolution note (optional)"
+               class="form-input" style="flex:1;min-width:180px;font-size:.8125rem;padding:.4rem .625rem;">
+        <button name="outcome" value="resolved" class="btn btn-primary" style="font-size:.8125rem;padding:.4rem .875rem;">Mark resolved</button>
+        <button name="outcome" value="dismissed" class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .875rem;">Dismiss</button>
+      </form>
+      {% elif d.resolution_note %}
+      <div style="font-size:.75rem;color:var(--gray-500);margin-top:.5rem;">Outcome note: {{ d.resolution_note }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-muted" style="font-size:.875rem;">No disputes — customers can file one from the
+    "Report a problem" link on any payment receipt.</div>
+  {% endif %}
+</div>
+{% endblock %}

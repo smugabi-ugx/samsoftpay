@@ -662,3 +662,76 @@ def crypto_status_json(public_id: str):
                 )
                 return jsonify(status="exchanging")
     return jsonify(status=status)
+
+
+# ---------- dispute front-door (public recourse; never moves money) ----------
+
+@bp.get("/pay/<public_id>/report")
+def report_problem_form(public_id: str):
+    """The permanent 'something went wrong' door on every payment receipt.
+
+    M-Pesa lesson: people trust holding money in a system where the recourse
+    path is public and time-boxed BEFORE anything goes wrong. Filing a dispute
+    records it for the merchant (dashboard + dispute.opened webhook); refunds
+    remain a merchant action through the existing tooling.
+    """
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or link.transaction_id is None:
+        abort(404)
+    txn = db.session.get(Transaction, link.transaction_id)
+    merchant = db.session.get(Merchant, link.merchant_id)
+    return render_template("report_problem.html", link=link, txn=txn,
+                           merchant=merchant, submitted=False)
+
+
+@bp.post("/pay/<public_id>/report")
+@limiter.limit("5 per hour")   # public + unauthenticated — keep it deliberate
+def report_problem_submit(public_id: str):
+    link = PaymentLink.query.filter_by(public_id=public_id).one_or_none()
+    if link is None or link.transaction_id is None:
+        abort(404)
+    txn = db.session.get(Transaction, link.transaction_id)
+    merchant = db.session.get(Merchant, link.merchant_id)
+
+    reason = (request.form.get("reason") or "").strip()
+    if reason not in ("not_delivered", "wrong_amount", "double_charge", "other"):
+        abort(400)
+    details = (request.form.get("details") or "").strip()[:2000] or None
+    contact = (request.form.get("contact") or "").strip()[:160] or None
+
+    from ..models import Dispute
+    # One OPEN dispute per payment: a second submit updates nothing and still
+    # lands on the confirmation (no error surface to farm, no duplicates).
+    existing = Dispute.query.filter_by(
+        transaction_id=txn.id, status="open").first()
+    if existing is None:
+        import uuid as _uuid
+        d = Dispute(public_id=f"dsp_{_uuid.uuid4().hex[:16]}",
+                    transaction_id=txn.id, merchant_id=link.merchant_id,
+                    reason=reason, details=details, contact=contact)
+        db.session.add(d)
+        db.session.commit()
+        from ..services.audit import log_event
+        log_event("dispute.opened", merchant_id=link.merchant_id,
+                  detail={"dispute": d.public_id, "txn": txn.public_id,
+                          "reason": reason})
+        db.session.commit()
+        # Tell the merchant the moment it happens — never raises, and a
+        # merchant with no webhook still sees it on the dashboard.
+        try:
+            from ..services import webhooks as _wh
+            _wh.enqueue(merchant, "dispute.opened", {
+                "id": d.public_id,
+                "charge_id": txn.public_id,
+                "reason": reason,
+                "details": details,
+                "contact": contact,
+                "amount": txn.amount,
+                "currency": txn.currency,
+                "opened_at": d.created_at.isoformat() if d.created_at else None,
+            }, transaction_id=txn.id)
+        except Exception:
+            pass
+
+    return render_template("report_problem.html", link=link, txn=txn,
+                           merchant=merchant, submitted=True)

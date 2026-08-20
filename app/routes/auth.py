@@ -432,6 +432,36 @@ def account():
     )
 
 
+@bp.post("/account/webhooks/url")
+@limiter.limit("10 per minute")
+@login_required
+@verified_required
+def set_webhook_url():
+    """Set or update the webhook endpoint (auditor finding: signup was the
+    ONLY setter — a merchant who moved servers had no way to repoint their
+    events). Same SSRF guard as signup; resends then target the new URL."""
+    m = db.session.get(Merchant, current_user.id)
+    url = (request.form.get("webhook_url") or "").strip()
+    if url:
+        from ..services.url_guard import is_public_http_url
+        if len(url) > 500 or not is_public_http_url(url):
+            flash("That URL can't receive webhooks — it must be a public "
+                  "https:// endpoint (not an internal or private address).", "danger")
+            return redirect(url_for("auth.account") + "#webhooks")
+        m.webhook_url = url
+        msg = "Webhook endpoint updated. Send a test event to confirm it 200s."
+    else:
+        m.webhook_url = None
+        msg = "Webhook endpoint removed — events will not be delivered until you set one."
+    db.session.commit()
+    from ..services.audit import log_event
+    log_event("webhook.url_changed", merchant_id=m.id,
+              detail={"set": bool(url)})
+    db.session.commit()
+    flash(msg, "success" if url else "info")
+    return redirect(url_for("auth.account") + "#webhooks")
+
+
 @bp.post("/account/webhooks/test")
 @limiter.limit("10 per minute")
 @login_required
