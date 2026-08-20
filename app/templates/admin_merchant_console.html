@@ -6,7 +6,15 @@
     <h1 class="page-title">{{ m.name }}</h1>
     <p class="page-subtitle">{{ m.email }}{% if m.handle %} · @{{ m.handle }}{% endif %} · Merchant #{{ m.id }}</p>
   </div>
-  <a href="{{ url_for('dashboard.admin_merchants') }}" class="btn btn-outline" style="font-size:.8125rem;"><i data-feather="arrow-left"></i> All merchants</a>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+    {% if m.role != 'admin' %}
+    <form method="POST" action="{{ url_for('dashboard.start_view_as', merchant_id=m.id) }}" style="margin:0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline" style="font-size:.8125rem;"><i data-feather="eye"></i> View as (read-only)</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('dashboard.admin_merchants') }}" class="btn btn-outline" style="font-size:.8125rem;"><i data-feather="arrow-left"></i> All merchants</a>
+  </div>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}

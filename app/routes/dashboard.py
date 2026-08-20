@@ -34,6 +34,59 @@ def _inject_maintenance_banner():
         return {"maintenance_mode": False}
 
 
+# Endpoints that stay usable WHILE an admin is in read-only "view as" mode.
+# This is an ALLOWLIST: only these named endpoints may run a state-changing
+# (non-GET) request during impersonation. Kept tiny on purpose — the exit
+# paths, nothing that moves money.
+_VIEW_AS_ALLOWED_ENDPOINTS = {
+    "dashboard.stop_view_as",   # the Exit button (POST)
+    "dashboard.start_view_as",  # switching straight to another merchant (POST, admin-only, session-flag only)
+    "auth.logout",              # signing out (POST) also ends the view
+    "static",
+}
+
+
+@bp.before_app_request
+def _enforce_view_as_readonly():
+    """Make admin 'view as' STRICTLY read-only, app-wide.
+
+    While a view-as session is active only non-mutating methods
+    (GET/HEAD/OPTIONS) run, plus the explicit exit/logout endpoints. Every
+    other POST/PUT/PATCH/DELETE — the only way to create a payout, withdrawal,
+    refund, rotate a key or change any setting — is refused with 403 BEFORE
+    the view function executes (zero writes). Allowlist-by-method means a
+    money endpoint added later is blocked automatically.
+    """
+    from flask import session
+    if not session.get("view_as_merchant_id"):
+        return
+    # Only an authenticated admin may carry this flag; anyone else (logged
+    # out, role changed, forged) has it dropped and proceeds normally.
+    if not (current_user.is_authenticated and getattr(current_user, "role", None) == "admin"):
+        session.pop("view_as_merchant_id", None)
+        return
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    if request.endpoint in _VIEW_AS_ALLOWED_ENDPOINTS:
+        return
+    abort(403, description="Read-only support view is active — click Exit "
+                           "in the banner before making any changes.")
+
+
+@bp.app_context_processor
+def _inject_view_as():
+    """Expose the viewed merchant to every template (the persistent banner).
+    Self-heals a stale flag pointing at a deleted merchant."""
+    from flask import session
+    mid = session.get("view_as_merchant_id")
+    if not mid:
+        return {"view_as_merchant": None}
+    m = db.session.get(Merchant, mid)
+    if m is None:
+        session.pop("view_as_merchant_id", None)
+    return {"view_as_merchant": m}
+
+
 @bp.get("/")
 def index():
     """Landing page — always visible to everyone."""
@@ -298,6 +351,42 @@ def admin_set_limits(merchant_id: int):
     flash("Limits & fee override updated.", "success")
     return redirect(url_for("dashboard.admin_merchant_console",
                             merchant_id=merchant_id) + "#actions")
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/view-as")
+@login_required
+@admin_required
+def start_view_as(merchant_id: int):
+    """Enter read-only support view for a merchant.
+
+    POST (not GET) so link-prefetch/CSRF can never flip the session state.
+    We do NOT call login_user(m) — the admin stays the admin (truthful audit
+    trail, no privilege transfer); the flag + before_app_request guard keep
+    it strictly read-only.
+    """
+    from flask import session
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    # Never impersonate another admin — no support reason to.
+    if getattr(m, "role", None) == "admin":
+        flash("Cannot view-as an admin account.", "error")
+        return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
+    session["view_as_merchant_id"] = m.id
+    _admin_log("merchant.view_as_started", merchant_id, by=current_user.email)
+    flash(f"Now viewing {m.name} in read-only support mode. No money can move "
+          f"until you exit.", "info")
+    return redirect(url_for("dashboard.merchant_detail", merchant_id=m.id))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/view-as/stop")
+@login_required
+@admin_required
+def stop_view_as(merchant_id: int):
+    """Exit read-only support view (allowlisted in the guard so this POST runs)."""
+    from flask import session
+    session.pop("view_as_merchant_id", None)
+    _admin_log("merchant.view_as_stopped", merchant_id, by=current_user.email)
+    flash("Exited support view.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
 
 
 @bp.post("/admin/merchants/create")

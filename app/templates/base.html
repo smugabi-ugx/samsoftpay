@@ -884,6 +884,16 @@
         {% endif %}
       {% endwith %}
 
+      {% if view_as_merchant %}
+      <div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);color:#92400e;border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.875rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+        <span aria-hidden="true">👁</span>
+        <span style="flex:1;min-width:200px;"><strong>Viewing as {{ view_as_merchant.name }}</strong> — read-only support mode. No money can move and no settings can change.</span>
+        <form method="POST" action="{{ url_for('dashboard.stop_view_as', merchant_id=view_as_merchant.id) }}" style="margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.35rem .75rem;">Exit</button>
+        </form>
+      </div>
+      {% endif %}
       {% if maintenance_mode %}
       <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);color:#92400e;border-radius:10px;padding:.75rem 1rem;margin-bottom:1rem;font-size:.875rem;display:flex;align-items:center;gap:.5rem;">
         <span aria-hidden="true">🛠</span>

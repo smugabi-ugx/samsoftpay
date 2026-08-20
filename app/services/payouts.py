@@ -73,6 +73,16 @@ def create_payout(
     recipient_name: str | None = None,
     channel: Channel = Channel.MTN_MOMO,
 ) -> Payout:
+    # Admin "view as" (support impersonation) is STRICTLY read-only. The
+    # before_request guard already blocks the POST, but re-check at the money
+    # boundary: NEVER move a merchant's money out while an admin is viewing
+    # their account. Zero writes on refusal; Celery/tests have no request ctx.
+    from flask import has_request_context, session
+    if has_request_context() and session.get("view_as_merchant_id"):
+        raise PayoutError(
+            "payouts are disabled while an admin is viewing this account in "
+            "read-only support mode")
+
     if amount <= 0:
         raise PayoutError("amount must be positive")
     # Same overflow guard as create_charge: a value above the signed 64-bit
