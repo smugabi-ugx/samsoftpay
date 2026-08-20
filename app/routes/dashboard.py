@@ -626,6 +626,11 @@ def admin_home():
     import os as _os
     rail_mocked = bool(_os.environ.get("RENDER")) and not current_app.config.get("MOMO_USE_REAL")
     rail_raw = _os.environ.get("MOMO_USE_REAL", "(not set)")
+    # Name the service too: env vars are PER SERVICE on Render, so "it works in
+    # my shell" usually means the shell was a different service than the one
+    # serving web traffic. This says which one you are actually looking at.
+    rail_service = (_os.environ.get("RENDER_SERVICE_NAME")
+                    or _os.environ.get("RENDER_SERVICE_ID") or "this service")
     rail_env_mismatch = None
     if current_app.config.get("MOMO_USE_REAL"):
         _base = str(current_app.config.get("MOMO_BASE_URL") or "")
@@ -663,7 +668,7 @@ def admin_home():
         disputes_open=disputes_open, recon_open=recon_open,
         recent_audits=recent_audits,
         rail_mocked=rail_mocked, rail_raw=rail_raw,
-        rail_env_mismatch=rail_env_mismatch,
+        rail_env_mismatch=rail_env_mismatch, rail_service=rail_service,
     )
 
 

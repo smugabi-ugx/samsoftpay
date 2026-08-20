@@ -20,9 +20,12 @@
   <div>
     <strong>MTN Mobile Money is MOCKED — customers cannot pay by MoMo.</strong>
     Checkout hides MTN, subscription plans cannot be created, and wallet top-ups
-    credit the sandbox ledger. <code>MOMO_USE_REAL</code> is currently
-    <code>{{ rail_raw }}</code> — set it to <code>1</code> on the web, worker and
-    beat services, then redeploy and run <code>flask preflight</code>.
+    credit the sandbox ledger.
+    On <strong>{{ rail_service }}</strong> (the service serving this page)
+    <code>MOMO_USE_REAL</code> is <code>{{ rail_raw }}</code>.
+    Render environment variables are <em>per service</em>: setting them on the
+    worker does not configure the web service. Set it to <code>1</code> here,
+    redeploy this service, then run <code>flask preflight</code>.
   </div>
 </div>
 {% elif rail_env_mismatch %}
