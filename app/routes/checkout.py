@@ -20,6 +20,9 @@ from ..services.orchestrator import OrchestratorError, create_charge
 
 bp = Blueprint("checkout", __name__)
 
+# Public profile shows a short first page of items; the rest load on demand.
+_PROFILE_PAGE = 6
+
 
 @bp.get("/pay/@<handle>")
 def merchant_profile(handle: str):
@@ -27,14 +30,44 @@ def merchant_profile(handle: str):
     merchant = Merchant.query.filter_by(handle=handle).one_or_none()
     if merchant is None:
         abort(404)
-    links = (
+    # Show a short first page (6) and let the visitor load more — a merchant
+    # with a long product history rendered a wall of items nobody scrolled.
+    rows = (
         PaymentLink.query
         .filter_by(merchant_id=merchant.id, is_active=True)
         .order_by(PaymentLink.created_at.desc())
-        .limit(12)
+        .limit(_PROFILE_PAGE + 1)
         .all()
     )
-    return render_template("merchant_profile.html", merchant=merchant, links=links)
+    return render_template("merchant_profile.html", merchant=merchant,
+                           links=rows[:_PROFILE_PAGE],
+                           has_more=len(rows) > _PROFILE_PAGE)
+
+
+@bp.get("/pay/@<handle>/items.json")
+def profile_items(handle: str):
+    """Next page of a merchant's public items (cursor = before_id, id-desc).
+
+    Database-driven so the profile stays current; the page requests more only
+    when the visitor asks for it.
+    """
+    from flask import jsonify
+    merchant = Merchant.query.filter_by(handle=handle).one_or_none()
+    if merchant is None:
+        abort(404)
+    try:
+        before_id = int(request.args.get("before_id", 0))
+    except ValueError:
+        abort(400)
+    q = PaymentLink.query.filter_by(merchant_id=merchant.id, is_active=True)
+    if before_id:
+        q = q.filter(PaymentLink.id < before_id)
+    rows = q.order_by(PaymentLink.id.desc()).limit(_PROFILE_PAGE + 1).all()
+    has_more = len(rows) > _PROFILE_PAGE
+    rows = rows[:_PROFILE_PAGE]
+    html = render_template("_profile_items.html", links=rows, merchant=merchant)
+    return jsonify(html=html, has_more=has_more,
+                   next_before=(rows[-1].id if rows else None))
 
 
 @bp.get("/pay/@<handle>/qr.png")
@@ -116,6 +149,7 @@ def checkout_page(public_id: str):
         # instead of a dead form until the customer taps a radio (esp. the
         # MTN-only case, which should read as a plain "enter your number").
         selected_channel=channels[0][0] if channels else None,
+        momo_unavailable=_mobile_money_unavailable(),
         crypto_url=url_for("checkout.crypto_checkout", public_id=link.public_id),
         voucher_applied=bool(voucher_data),
         voucher_discount=voucher_data.get("discount", 0),
@@ -481,6 +515,23 @@ def _channel_options(include_crypto: bool = False):
             pass
         available.append((value, label, kind))
     return available
+
+
+def _mobile_money_unavailable() -> bool:
+    """True when MTN is hidden because it is running as a mock on Render.
+
+    The simulated-rail guard (guardrail 14) is right to hide a fake rail from
+    a live payment page, but it hid MTN — the ONLY way most Ugandan customers
+    can pay — leaving a checkout that silently offered crypto alone. The page
+    now says so instead of pretending mobile money was never an option.
+    """
+    import os
+    if not os.environ.get("RENDER"):
+        return False
+    from flask import current_app, g
+    if g.get("api_mode") == "test":
+        return False
+    return not current_app.config.get("MOMO_USE_REAL")
 
 
 # ── Crypto checkout (ChangeNow) ────────────────────────────────────────

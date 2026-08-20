@@ -328,6 +328,12 @@
 
       <!-- Channels -->
       <div class="section-title">Choose payment method</div>
+      {% if momo_unavailable %}
+      <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);color:#92400e;border-radius:10px;padding:.75rem .875rem;margin-bottom:.875rem;font-size:.8125rem;line-height:1.5;">
+        <strong>Mobile Money is temporarily unavailable</strong> while MTN production access is
+        being switched on. Any option below still works.
+      </div>
+      {% endif %}
       <div class="channels">
         {% for ch_key, ch_label, ch_kind in channels %}
         <label class="channel-label{% if selected_channel == ch_key %} selected{% if ch_key == 'mtn_momo' %}-mtn{% elif ch_key == 'airtel_money' %}-airtel{% endif %}{% endif %}"

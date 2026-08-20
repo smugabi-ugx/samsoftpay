@@ -1,0 +1,27 @@
+{# Shared product-card rows for the public merchant profile.
+   Included by merchant_profile.html for the first page and returned by
+   checkout.profile_items for each "Show more" page, so the two can never
+   drift apart. #}
+{% for link in links %}
+<a class="product-card" href="{{ url_for('checkout.checkout_page', public_id=link.public_id) }}">
+  <div class="product-icon">
+    {% if link.description %}
+      {% if 'food' in link.description.lower() or 'meal' in link.description.lower() %}🍽️
+      {% elif 'school' in link.description.lower() or 'fee' in link.description.lower() %}🎓
+      {% elif 'ticket' in link.description.lower() or 'show' in link.description.lower() or 'event' in link.description.lower() %}🎟️
+      {% elif 'delivery' in link.description.lower() %}🚚
+      {% elif 'shop' in link.description.lower() %}🛒
+      {% else %}💳{% endif %}
+    {% else %}💳{% endif %}
+  </div>
+  <div class="product-info">
+    <div class="product-name">{{ link.description or 'Payment' }}</div>
+    {% if link.reference %}<div class="product-desc">Ref: {{ link.reference }}</div>{% endif %}
+  </div>
+  <div class="product-right">
+    <span class="product-amt">{{ "{:,}".format(link.amount) }}</span>
+    <span class="product-cur">{{ link.currency }}</span>
+  </div>
+  <svg class="product-arrow" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+</a>
+{% endfor %}

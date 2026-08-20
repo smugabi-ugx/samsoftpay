@@ -39,6 +39,26 @@ def _live_channels():
         out.append((value, label))
     return out
 
+
+def _channels_blocked_reason():
+    """Why the channel list is empty, in words a merchant can act on.
+
+    When MTN is running as a mock on Render (MOMO_USE_REAL unset), the
+    simulated-rail guard correctly hides EVERY live channel — which used to
+    render an empty <select> on a required field, so a merchant simply could
+    not create a plan and nothing said why. Never fail silently again.
+    """
+    import os
+    if not os.environ.get("RENDER"):
+        return None
+    from flask import current_app
+    if current_app.config.get("MOMO_USE_REAL"):
+        return None
+    return ("MTN Mobile Money is running in sandbox on this deployment, so no "
+            "live billing channel is available yet. Recurring plans will be "
+            "creatable the moment MTN production credentials are switched on "
+            "(set MOMO_USE_REAL=1).")
+
 _INTERVALS = [
     ("weekly",  "Weekly"),
     ("monthly", "Monthly"),
@@ -78,7 +98,9 @@ def list_plans():
     return render_template("subscriptions.html",
                            plans=plans, counts=counts,
                            total_subs=total_subs, mrr=mrr,
-                           channels=_live_channels(), intervals=_INTERVALS)
+                           channels=_live_channels(),
+                           channels_blocked=_channels_blocked_reason(),
+                           intervals=_INTERVALS)
 
 
 @bp.post("/dashboard/subscriptions/new-plan")
