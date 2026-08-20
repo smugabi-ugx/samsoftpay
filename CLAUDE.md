@@ -303,10 +303,9 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **ab12cd34ef56** (mergepoint)
-  (chain: … → a3b4c5d6e7f8 → b5c6d7e8f9a0 enum+indexes → c6d7e8f9a0b1 PSP account
-  unique → d8e9f0a1b2c3 merchant webhook_secret + txn vending_consumed_at -> e9f0a1b2c3d4
-  recon_exceptions -> f0a1b2c3d4e5 collections-only keys).
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **de45fa67bc89**
+  (chain: … → ab12cd34ef56 mergepoint → bc23de45fa67 platform_flags (payout kill
+  switch) → cd34ef56ab78 settlements (first-class releases) → de45fa67bc89 disputes).
 
 ## Tech stack & Render services
 - Python 3.10/3.x, Flask 3.0.3, SQLAlchemy 2.x + PostgreSQL, Celery 5.3.6 + Redis, Gunicorn.
@@ -466,7 +465,7 @@ real sandbox payments. **Deferred engineering items live in the memory file
 `engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `ab12cd34ef56` (mergepoint of scoped-keys + dunning + splits)
+1. `flask db current` → expect `de45fa67bc89` (disputes; after platform_flags + settlements)
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to
