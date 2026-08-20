@@ -88,3 +88,26 @@
   --shadow-lg: 0 12px 32px rgba(15, 23, 42, .10);
   --shadow-brand: 0 4px 14px rgba(79, 70, 229, .30);
 }
+
+/* ── GLOBAL RESPONSIVE SAFETY NET ─────────────────────────────────────────
+   Loaded on every page (landing + dashboard + public checkout). Stops the
+   whole class of "page slashed in half / horizontal scroll on a phone" bugs
+   at the root, so no single template can push the viewport wider than the
+   screen. */
+*, *::before, *::after { box-sizing: border-box; }
+/* max-width (not overflow-x:hidden) so we don't break position:sticky nav on
+   the docs page. The min-width:0 + overflow-wrap rules below fix the actual
+   overflow causes; individual pages that need clipping (landing) set their
+   own overflow-x:hidden. */
+html, body { max-width: 100%; }
+/* Media and code never exceed their column. */
+img, svg, video, canvas, iframe, pre, table { max-width: 100%; }
+/* The #1 cause of mobile overflow: a flex/grid CHILD refuses to shrink below
+   its content width (min-width defaults to auto). Let children shrink so long
+   text, code blocks and inputs wrap instead of blowing out the row. */
+.stats-grid > *, .grid-2 > *, .quick-actions > *,
+[style*="display:flex"] > *, [style*="display: flex"] > *,
+[style*="display:grid"] > *, [style*="display: grid"] > * { min-width: 0; }
+/* Long unbroken strings (references, keys, URLs, emails) wrap instead of
+   forcing a wide row. */
+code, .ref, .api-key-display, .detail-row span { overflow-wrap: anywhere; word-break: break-word; }
