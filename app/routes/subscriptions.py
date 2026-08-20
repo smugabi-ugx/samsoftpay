@@ -193,8 +193,45 @@ def subscribe_submit(handle: str, plan_public_id: str):
                                success=True, sub=existing)
 
     sub = subscribe(plan=plan, customer_phone=phone, customer_email=email)
+
+    # Fire the FIRST charge synchronously so the customer gets the MoMo prompt
+    # NOW, at the moment they subscribe — instead of a "success" screen with
+    # nothing happening until the 60s beat (the "the plan doesn't bring
+    # anything" report). Then advance next_billing_at by one interval so the
+    # billing beat never re-charges this same first cycle. Never raises out to
+    # the customer: a rail hiccup leaves the subscription for the beat to bill.
+    from datetime import datetime, timezone
+    from flask import g
+    from ..services.orchestrator import OrchestratorError, create_charge
+    from ..services.subscriptions_service import _next_billing
+    charge_ok = False
+    try:
+        g.api_mode = "live"
+        txn = create_charge(
+            merchant=merchant,
+            amount=plan.amount,
+            currency=plan.currency,
+            channel=plan.channel,
+            customer_phone=phone,
+            customer_email=email,
+            merchant_reference=f"sub_{sub.public_id}",
+        )
+        charge_ok = txn is not None and txn.status.value != "failed"
+        now = datetime.now(timezone.utc)
+        sub.current_period_start = now
+        sub.next_billing_at = _next_billing(now, plan.interval)
+        db.session.commit()
+    except OrchestratorError:
+        # Plan channel not available / merchant issue — leave the sub for the
+        # beat; show success (enrollment is recorded) without a false prompt.
+        db.session.rollback()
+    except Exception:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.exception("subscription first-charge failed")
+
     return render_template("subscribe.html", merchant=merchant, plan=plan,
-                           success=True, sub=sub)
+                           success=True, sub=sub, prompt_sent=charge_ok)
 
 
 # ── API endpoints ──────────────────────────────────────────────────────────────

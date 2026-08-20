@@ -83,9 +83,17 @@
 
   {% if success %}
   <div class="success-box">
-    <div class="success-icon">✅</div>
+    <div class="success-icon">{% if prompt_sent %}📲{% else %}✅{% endif %}</div>
     <h3>You're subscribed!</h3>
-    <p>Your first payment of <strong>{{ plan.currency }} {{ "{:,}".format(plan.amount) }}</strong> is being processed. You'll be charged automatically every {{ plan.interval }}.</p>
+    {% if prompt_sent %}
+    <p><strong>Check your phone now</strong> — approve the {{ plan.currency }}
+       {{ "{:,}".format(plan.amount) }} Mobile Money prompt to start your subscription.
+       After this you'll be charged automatically every {{ plan.interval }}.</p>
+    {% else %}
+    <p>Your subscription is set up. Your first payment of <strong>{{ plan.currency }}
+       {{ "{:,}".format(plan.amount) }}</strong> will be requested shortly, then automatically
+       every {{ plan.interval }}.</p>
+    {% endif %}
     <p style="margin-top:.75rem;">Subscription ID: <code>{{ sub.public_id }}</code></p>
   </div>
   <a href="{{ url_for('checkout.merchant_profile', handle=merchant.handle) if merchant.handle else '/' }}"
