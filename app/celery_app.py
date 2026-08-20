@@ -71,6 +71,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.monitoring.check_money_stuck",
                 "schedule": 3600.0,   # hourly — alert on stranded payouts / stuck AUTHORIZED charges
             },
+            "payout-anomaly-scan": {
+                "task": "app.tasks.monitoring.payout_anomaly_scan",
+                "schedule": 600.0,    # every 10 min — rolling-sum drain detection (aggregates, not per-payout)
+            },
         },
         # Worker settings
         worker_prefetch_multiplier=1,       # one task at a time per worker slot

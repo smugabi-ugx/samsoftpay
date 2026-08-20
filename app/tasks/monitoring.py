@@ -95,3 +95,18 @@ def check_money_stuck() -> dict:
         print("money-stuck: clear")
 
     return {"ok": not problems, "problems": problems, "live_suspense_held": held}
+
+
+@celery.task(name="app.tasks.monitoring.payout_anomaly_scan")
+def payout_anomaly_scan() -> dict:
+    """Every 10 min: rolling-sum payout anomaly detection (Flutterwave ₦11B /
+    Pegasus weekend-raid class). Pages on findings; auto-freezes on the
+    platform panic threshold if armed. Per-payout checks cannot see a
+    sub-threshold drip — only aggregates can."""
+    from ..services.anomaly import scan_payout_anomalies
+    findings = scan_payout_anomalies()
+    if findings:
+        print(f"payout-anomaly: {len(findings)} finding(s) alerted")
+    else:
+        print("payout-anomaly: clear")
+    return {"ok": not findings, "findings": findings}

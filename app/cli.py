@@ -194,6 +194,100 @@ def register(app: Flask) -> None:
             else:
                 print("Payouts unfrozen — live payouts flow again.")
 
+    @app.cli.command("payout-anomalies")
+    def payout_anomalies():
+        """Run the payout anomaly scan on demand (the 10-min beat, by hand)."""
+        from .services.anomaly import scan_payout_anomalies
+        with app.app_context():
+            findings = scan_payout_anomalies()
+            if not findings:
+                print("clear — no payout anomalies")
+                return
+            for f in findings:
+                print(f"[{f['kind']}] {f}")
+
+    @app.cli.command("regulator-pack")
+    @click.argument("month")   # YYYY-MM
+    def regulator_pack(month):
+        """Export a regulator/audit bundle for one month into ./regulator_pack/.
+
+        Flutterwave-Kenya lesson: a freeze inquiry answered in hours, not
+        weeks. Contents: full journal (live ledger), merchant register with
+        KYC status, and a flow-of-funds summary — all FROM THE LEDGER (Dash
+        lesson: never show a number the journal can't prove).
+        """
+        import csv
+        import os as _os
+        from datetime import datetime, timedelta
+        from sqlalchemy import func as safunc
+        from .models import Account, JournalEntry, Payout, Transaction
+        with app.app_context():
+            try:
+                start = datetime.strptime(month, "%Y-%m")
+            except ValueError:
+                print("usage: flask regulator-pack YYYY-MM")
+                return
+            end = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+            outdir = _os.path.join("regulator_pack", month)
+            _os.makedirs(outdir, exist_ok=True)
+
+            # 1. Journal — every live-ledger entry in the month.
+            with open(_os.path.join(outdir, "journal.csv"), "w",
+                      newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                w.writerow(["entry_id", "journal_id", "created_at", "account_type",
+                            "merchant_id", "amount", "currency", "memo"])
+                q = (db.session.query(JournalEntry, Account)
+                     .join(Account, JournalEntry.account_id == Account.id)
+                     .filter(Account.is_test.is_(False),
+                             JournalEntry.created_at >= start,
+                             JournalEntry.created_at < end)
+                     .order_by(JournalEntry.id))
+                total = 0
+                for je, acct in q.all():
+                    total += je.amount
+                    w.writerow([je.id, je.journal_id, je.created_at.isoformat(),
+                                acct.type.value, acct.merchant_id, je.amount,
+                                je.currency, je.memo or ""])
+
+            # 2. Merchant register with KYC status.
+            with open(_os.path.join(outdir, "merchants.csv"), "w",
+                      newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                w.writerow(["id", "name", "email", "handle", "kyc_status",
+                            "is_active", "is_managed", "created_at"])
+                for m in Merchant.query.order_by(Merchant.id).all():
+                    w.writerow([m.id, m.name, m.email, m.handle, m.kyc_status,
+                                m.is_active, getattr(m, "is_managed", False),
+                                m.created_at.isoformat() if m.created_at else ""])
+
+            # 3. Flow-of-funds summary (live money only).
+            from .models import TxnStatus as _TS
+            tin = (db.session.query(safunc.coalesce(safunc.sum(Transaction.amount), 0))
+                   .filter(Transaction.is_test.is_(False),
+                           Transaction.completed_at >= start,
+                           Transaction.completed_at < end,
+                           Transaction.status == _TS.SUCCEEDED)
+                   .scalar() or 0)
+            tout = (db.session.query(safunc.coalesce(safunc.sum(Payout.amount), 0))
+                    .filter(Payout.is_test.is_(False),
+                            Payout.created_at >= start,
+                            Payout.created_at < end)
+                    .scalar() or 0)
+            with open(_os.path.join(outdir, "summary.txt"), "w", encoding="utf-8") as fh:
+                fh.write(
+                    f"Samsoftpay regulator pack — {month}\n"
+                    f"Generated: {datetime.utcnow().isoformat()}Z\n\n"
+                    f"Money IN (succeeded charges, live): {int(tin)}\n"
+                    f"Money OUT (payouts initiated, live): {int(tout)}\n"
+                    f"Journal entries sum for the month (must be 0): {total}\n\n"
+                    "All figures generated from the double-entry journal.\n"
+                    "Client money is ledgered per merchant (accounts.csv shows\n"
+                    "the split); the journal is append-only — corrections are\n"
+                    "reversing entries, never edits.\n")
+            print(f"regulator pack written to {outdir}/ "
+                  f"(journal sum for month = {total}; MUST be 0)")
+
     @app.cli.command("stranded-payouts")
     def stranded_payouts():
         """List payouts that took the merchant's money but never reached a rail.

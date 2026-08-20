@@ -14,3 +14,4 @@ karl2/
 
 # local production secrets - never commit
 render_secrets.txt
+regulator_pack/
