@@ -459,4 +459,16 @@ def create_app(config: dict | None = None) -> Flask:
             threshold_seconds=threshold,
         ), (200 if fresh else 503)
 
+    # Cache-bust every static asset on each deploy WITHOUT touching a single
+    # template: append ?v=<deploy commit> to every url_for('static', ...).
+    # tokens.css is cached a day (SEND_FILE_MAX_AGE_DEFAULT) at the browser AND
+    # Cloudflare edge, so a design/responsive change was invisible until the
+    # cache expired. The version changes with each deploy -> fresh CSS on ship.
+    _static_ver = os.environ.get("RENDER_GIT_COMMIT", "")[:12] or "dev"
+
+    @app.url_defaults
+    def _add_static_version(endpoint, values):
+        if endpoint == "static" and "v" not in values:
+            values["v"] = _static_ver
+
     return app
