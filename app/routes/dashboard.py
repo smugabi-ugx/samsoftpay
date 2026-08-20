@@ -2,7 +2,7 @@
 import uuid
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from ..extensions import db
 from ..models import (
@@ -41,8 +41,201 @@ def admin_index():
 @login_required
 @admin_required
 def list_merchants():
-    merchants = Merchant.query.all()
-    return render_template("merchants.html", merchants=merchants)
+    # Legacy route — redirect to the paginated admin console.
+    return redirect(url_for("dashboard.admin_merchants"))
+
+
+# ── Enriched admin console: manage merchants + features ──────────────────────
+
+@bp.get("/admin/merchants")
+@login_required
+@admin_required
+def admin_merchants():
+    """Searchable, paginated, filterable merchant list (replaces the two
+    unbounded Merchant.query.all() screens that would OOM at scale)."""
+    from sqlalchemy import or_
+    q = (request.args.get("q") or "").strip()
+    status = request.args.get("status") or ""
+    kyc = request.args.get("kyc") or ""
+    show_managed = request.args.get("managed") == "1"
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    query = Merchant.query
+    if not show_managed:
+        query = query.filter((Merchant.is_managed.is_(False)) | (Merchant.is_managed.is_(None)))
+    if q:
+        like = f"%{q}%"
+        query = query.filter(or_(Merchant.name.ilike(like),
+                                 Merchant.email.ilike(like),
+                                 Merchant.handle.ilike(like)))
+    if status == "active":
+        query = query.filter(Merchant.is_active.is_(True))
+    elif status == "suspended":
+        query = query.filter(Merchant.is_active.is_(False))
+    if kyc in ("pending", "verified", "rejected"):
+        query = query.filter(Merchant.kyc_status == kyc)
+
+    pag = query.order_by(Merchant.id.desc()).paginate(page=page, per_page=50, error_out=False)
+    # Batch-load live available balances in ONE query (no N+1).
+    ids = [m.id for m in pag.items]
+    balances = {}
+    if ids:
+        rows = (db.session.query(Account.merchant_id, Account.cached_balance)
+                .filter(Account.merchant_id.in_(ids),
+                        Account.type == AccountType.MERCHANT_AVAILABLE,
+                        Account.is_test.is_(False)).all())
+        balances = {mid: -bal for mid, bal in rows}
+    return render_template("admin_merchants.html", pag=pag, merchants=pag.items,
+                           balances=balances, q=q, status=status, kyc=kyc,
+                           show_managed=show_managed)
+
+
+@bp.get("/admin/merchants/<int:merchant_id>")
+@login_required
+@admin_required
+def admin_merchant_console(merchant_id: int):
+    """The operator's per-merchant hub — identity, balances, activity, flags,
+    and the audit timeline, with all admin actions."""
+    from sqlalchemy import func as safunc
+    from ..models import AuditLog, KYCApplication, Payout, TxnStatus
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+
+    def _bal(t, is_test):
+        a = Account.query.filter_by(merchant_id=merchant_id, type=t, is_test=is_test).first()
+        return -a.cached_balance if a else 0
+
+    succ_count, succ_vol = (
+        db.session.query(safunc.count(Transaction.id),
+                         safunc.coalesce(safunc.sum(Transaction.amount), 0))
+        .filter(Transaction.merchant_id == merchant_id,
+                Transaction.status == TxnStatus.SUCCEEDED).one())
+    charges = (Transaction.query.filter_by(merchant_id=merchant_id)
+               .order_by(Transaction.id.desc()).limit(10).all())
+    payouts = (Payout.query.filter_by(merchant_id=merchant_id)
+               .order_by(Payout.id.desc()).limit(10).all())
+    audits = (AuditLog.query.filter_by(merchant_id=merchant_id)
+              .order_by(AuditLog.id.desc()).limit(25).all())
+    kyc_app = (KYCApplication.query.filter_by(merchant_id=merchant_id)
+               .order_by(KYCApplication.id.desc()).first())
+    return render_template(
+        "admin_merchant_console.html", m=m,
+        live_available=_bal(AccountType.MERCHANT_AVAILABLE, False),
+        live_pending=_bal(AccountType.MERCHANT_PENDING, False),
+        sandbox_available=_bal(AccountType.MERCHANT_AVAILABLE, True),
+        succ_count=succ_count, succ_vol=succ_vol,
+        charges=charges, payouts=payouts, audits=audits, kyc_app=kyc_app,
+        keys_present={
+            "live_secret": bool(m.secret_key), "test_secret": bool(m.test_secret_key),
+            "collections": bool(getattr(m, "collections_key", None)),
+        })
+
+
+def _admin_log(event, merchant_id, **detail):
+    from ..services.audit import log_event
+    log_event(event, merchant_id=merchant_id, detail=detail)
+    db.session.commit()
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/suspend")
+@login_required
+@admin_required
+def admin_suspend_merchant(merchant_id: int):
+    from datetime import datetime, timezone
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    reason = (request.form.get("reason") or "").strip()[:500]
+    if not reason:
+        flash("A suspension reason is required.", "error")
+        return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
+    # is_active is the source of truth — api._auth 401s and create_charge/payout
+    # refuse it, so this instantly halts all new money movement. In-flight
+    # settlement of already-owed money is deliberately unaffected.
+    m.is_active = False
+    m.suspended_at = datetime.now(timezone.utc)
+    m.suspended_by = current_user.email
+    m.suspend_reason = reason
+    db.session.commit()
+    _admin_log("merchant.suspended", merchant_id, by=current_user.email, reason=reason)
+    flash(f"{m.name} suspended — new charges, payouts and API access are halted.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/reactivate")
+@login_required
+@admin_required
+def admin_reactivate_merchant(merchant_id: int):
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    m.is_active = True
+    m.suspended_at = None
+    m.suspended_by = None
+    m.suspend_reason = None
+    db.session.commit()
+    _admin_log("merchant.reactivated", merchant_id, by=current_user.email)
+    flash(f"{m.name} reactivated.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/force-kyc")
+@login_required
+@admin_required
+def admin_force_kyc(merchant_id: int):
+    from ..models import KYCApplication
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    target = request.form.get("kyc_status")
+    if target not in ("pending", "verified", "rejected"):
+        abort(400)
+    m.kyc_status = target
+    # Best-effort sync an existing application so the two don't drift.
+    app_row = (KYCApplication.query.filter_by(merchant_id=merchant_id)
+               .order_by(KYCApplication.id.desc()).first())
+    if app_row:
+        app_row.status = {"verified": "approved", "rejected": "draft",
+                          "pending": "submitted"}.get(target, app_row.status)
+    db.session.commit()
+    _admin_log("merchant.kyc_forced", merchant_id, by=current_user.email, to=target,
+               reason=(request.form.get("reason") or "").strip()[:500])
+    flash(f"KYC status set to {target}.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/reset-password")
+@login_required
+@admin_required
+def admin_reset_password(merchant_id: int):
+    import secrets as _secrets
+    from werkzeug.security import generate_password_hash
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    temp = "Ssp-" + _secrets.token_urlsafe(9)
+    m.password_hash = generate_password_hash(temp)
+    m.login_attempts = 0
+    m.locked_until = None
+    db.session.commit()
+    _admin_log("merchant.password_reset", merchant_id, by=current_user.email)
+    # Shown ONCE (no SMTP) — the admin relays it to the merchant.
+    flash(f"Temporary password for {m.email}: {temp} — give it to the merchant; "
+          f"they should change it after signing in.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
+
+
+@bp.post("/admin/merchants/<int:merchant_id>/toggle-feature")
+@login_required
+@admin_required
+def admin_toggle_feature(merchant_id: int):
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    feature = request.form.get("feature")
+    allowed = {"vending_enabled", "instant_settlement"}
+    if feature not in allowed:
+        abort(400)
+    new_val = not bool(getattr(m, feature))
+    setattr(m, feature, new_val)
+    db.session.commit()
+    _admin_log("merchant.feature_toggled", merchant_id, by=current_user.email,
+               feature=feature, enabled=new_val)
+    flash(f"{feature.replace('_', ' ').title()} {'enabled' if new_val else 'disabled'} "
+          f"for {m.name}.", "success")
+    return redirect(url_for("dashboard.admin_merchant_console", merchant_id=merchant_id))
 
 
 @bp.post("/admin/merchants/create")

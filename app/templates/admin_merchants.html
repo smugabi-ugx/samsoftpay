@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Merchants — Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Merchants</h1>
+  <p class="page-subtitle">Search, filter and manage every merchant on the platform.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+<div class="card">
+  <form method="GET" action="{{ url_for('dashboard.admin_merchants') }}"
+        style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem;">
+    <input class="form-input" type="search" name="q" value="{{ q }}"
+           placeholder="Search name, email or handle" style="flex:1;min-width:180px;">
+    <select class="form-select" name="status" style="width:auto;">
+      <option value="">Any status</option>
+      <option value="active" {{ 'selected' if status=='active' }}>Active</option>
+      <option value="suspended" {{ 'selected' if status=='suspended' }}>Suspended</option>
+    </select>
+    <select class="form-select" name="kyc" style="width:auto;">
+      <option value="">Any KYC</option>
+      <option value="pending" {{ 'selected' if kyc=='pending' }}>Pending</option>
+      <option value="verified" {{ 'selected' if kyc=='verified' }}>Verified</option>
+      <option value="rejected" {{ 'selected' if kyc=='rejected' }}>Rejected</option>
+    </select>
+    <label style="display:flex;align-items:center;gap:.375rem;font-size:.8125rem;color:var(--gray-600);">
+      <input type="checkbox" name="managed" value="1" {{ 'checked' if show_managed }}> Show subaccounts
+    </label>
+    <button type="submit" class="btn btn-primary" style="font-size:.875rem;"><i data-feather="search"></i> Filter</button>
+  </form>
+
+  <div class="text-muted" style="font-size:.8125rem;margin-bottom:.5rem;">{{ pag.total }} merchant{{ 's' if pag.total != 1 }}</div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>Merchant</th><th>KYC</th><th>Status</th><th>Available</th><th>Joined</th><th></th></tr></thead>
+      <tbody>
+        {% for m in merchants %}
+        <tr>
+          <td>
+            <strong>{{ m.name }}</strong>{% if m.role == 'admin' %} <span class="badge">admin</span>{% endif %}
+            <div class="text-muted" style="font-size:.75rem;">{{ m.email }}{% if m.handle %} · @{{ m.handle }}{% endif %}</div>
+          </td>
+          <td><span class="badge {% if m.kyc_status=='verified' %}succeeded{% elif m.kyc_status=='rejected' %}failed{% else %}pending{% endif %}">{{ m.kyc_status }}</span></td>
+          <td>{% if m.is_active %}<span class="badge succeeded">active</span>{% else %}<span class="badge failed">suspended</span>{% endif %}</td>
+          <td>UGX {{ "{:,}".format(balances.get(m.id, 0)) }}</td>
+          <td class="text-muted" style="font-size:.8125rem;">{{ m.created_at.strftime('%d %b %Y') if m.created_at else '—' }}</td>
+          <td><a href="{{ url_for('dashboard.admin_merchant_console', merchant_id=m.id) }}" class="btn btn-outline" style="padding:.3rem .7rem;font-size:.8125rem;">Manage</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pag.pages > 1 %}
+  <div style="display:flex;gap:.5rem;justify-content:center;align-items:center;margin-top:1rem;">
+    {% if pag.has_prev %}<a class="btn btn-outline" style="font-size:.8125rem;" href="{{ url_for('dashboard.admin_merchants', q=q, status=status, kyc=kyc, managed='1' if show_managed else '', page=pag.prev_num) }}">Prev</a>{% endif %}
+    <span class="text-muted" style="font-size:.8125rem;">Page {{ pag.page }} of {{ pag.pages }}</span>
+    {% if pag.has_next %}<a class="btn btn-outline" style="font-size:.8125rem;" href="{{ url_for('dashboard.admin_merchants', q=q, status=status, kyc=kyc, managed='1' if show_managed else '', page=pag.next_num) }}">Next</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

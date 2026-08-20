@@ -303,7 +303,7 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **de45fa67bc89**
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **fa67bc89de01**
   (chain: … → ab12cd34ef56 mergepoint → bc23de45fa67 platform_flags (payout kill
   switch) → cd34ef56ab78 settlements (first-class releases) → de45fa67bc89 disputes).
 
@@ -465,7 +465,7 @@ real sandbox payments. **Deferred engineering items live in the memory file
 `engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `de45fa67bc89` (disputes; after platform_flags + settlements)
+1. `flask db current` → expect `fa67bc89de01` (disputes; after platform_flags + settlements)
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{{ m.name }} — Admin Console{% endblock %}
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;align-items:center;">
+  <div>
+    <h1 class="page-title">{{ m.name }}</h1>
+    <p class="page-subtitle">{{ m.email }}{% if m.handle %} · @{{ m.handle }}{% endif %} · Merchant #{{ m.id }}</p>
+  </div>
+  <a href="{{ url_for('dashboard.admin_merchants') }}" class="btn btn-outline" style="font-size:.8125rem;"><i data-feather="arrow-left"></i> All merchants</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}
+  <div class="alert alert-{{ 'success' if cat == 'success' else 'danger' }}" style="margin-bottom:1rem;">
+    <i data-feather="{{ 'check-circle' if cat == 'success' else 'alert-triangle' }}" class="alert-icon"></i>
+    <div>{{ msg }}</div>
+  </div>
+  {% endfor %}
+{% endwith %}
+
+{% if not m.is_active %}
+<div class="alert alert-danger" style="margin-bottom:1rem;">
+  <i data-feather="slash" class="alert-icon"></i>
+  <div><strong>Suspended</strong> by {{ m.suspended_by or 'admin' }}{% if m.suspended_at %} on {{ m.suspended_at.strftime('%d %b %Y') }}{% endif %} — {{ m.suspend_reason or 'no reason recorded' }}. New charges, payouts and API access are halted.</div>
+</div>
+{% endif %}
+
+<!-- Stat cards -->
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-header"><span class="stat-label">Live Available</span></div><div class="stat-value">UGX {{ "{:,}".format(live_available) }}</div><div class="stat-change"><span>Pending UGX {{ "{:,}".format(live_pending) }}</span></div></div>
+  <div class="stat-card"><div class="stat-header"><span class="stat-label">Succeeded Charges</span></div><div class="stat-value">{{ succ_count }}</div><div class="stat-change"><span>UGX {{ "{:,}".format(succ_vol) }} volume</span></div></div>
+  <div class="stat-card"><div class="stat-header"><span class="stat-label">Sandbox Balance</span></div><div class="stat-value">UGX {{ "{:,}".format(sandbox_available) }}</div><div class="stat-change"><span>test ledger</span></div></div>
+</div>
+
+<div class="tabbar">
+  <button data-tab="actions"><i data-feather="sliders"></i> Actions</button>
+  <button data-tab="overview"><i data-feather="info"></i> Overview</button>
+  <button data-tab="activity"><i data-feather="activity"></i> Activity</button>
+  <button data-tab="audit"><i data-feather="list"></i> Audit</button>
+</div>
+
+<!-- ACTIONS -->
+<div class="tab-panel" id="tab-actions">
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="shield"></i> Account</h3></div>
+    <div class="grid-2">
+      <div>
+        <label class="form-label">Status</label>
+        {% if m.is_active %}
+        <form method="POST" action="{{ url_for('dashboard.admin_suspend_merchant', merchant_id=m.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input class="form-input" name="reason" placeholder="Reason for suspension (required)" style="margin-bottom:.5rem;" required>
+          <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);" onclick="return confirm('Suspend {{ m.name }}? This halts all new money movement.')">Suspend account</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('dashboard.admin_reactivate_merchant', merchant_id=m.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-primary">Reactivate account</button>
+        </form>
+        {% endif %}
+      </div>
+      <div>
+        <label class="form-label">Password</label>
+        <form method="POST" action="{{ url_for('dashboard.admin_reset_password', merchant_id=m.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-outline" onclick="return confirm('Reset password for {{ m.email }}? A one-time temporary password will be shown.')"><i data-feather="key"></i> Reset password &amp; unlock</button>
+        </form>
+        <div class="form-hint">Generates a temp password (shown once) and clears any lockout.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="check-square"></i> KYC</h3><span class="badge {% if m.kyc_status=='verified' %}succeeded{% elif m.kyc_status=='rejected' %}failed{% else %}pending{% endif %}">{{ m.kyc_status }}</span></div>
+    <form method="POST" action="{{ url_for('dashboard.admin_force_kyc', merchant_id=m.id) }}" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="flex:1;min-width:160px;"><label class="form-label">Set status</label>
+        <select class="form-select" name="kyc_status">
+          <option value="pending">Pending</option>
+          <option value="verified">Verified</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <input class="form-input" name="reason" placeholder="Reason (optional)" style="flex:2;min-width:160px;">
+      <button class="btn btn-primary">Apply</button>
+    </form>
+    {% if kyc_app %}<div class="form-hint">Full application: <a href="{{ url_for('kyc.admin_detail', app_id=kyc_app.id) }}">review documents</a> (status: {{ kyc_app.status }}).</div>{% else %}<div class="form-hint">No KYC application submitted — use this to fast-track internal merchants.</div>{% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="toggle-right"></i> Features</h3></div>
+    <div style="display:flex;flex-direction:column;gap:.75rem;">
+      {% for feat, label, on in [('vending_enabled','Vending (kiosk dispense)', m.vending_enabled), ('instant_settlement','Instant settlement (skip 24h hold)', m.instant_settlement)] %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.625rem .75rem;border:1px solid var(--gray-100);border-radius:10px;">
+        <div><strong style="font-size:.875rem;">{{ label }}</strong> <span class="badge {{ 'succeeded' if on else 'pending' }}">{{ 'ON' if on else 'OFF' }}</span></div>
+        <form method="POST" action="{{ url_for('dashboard.admin_toggle_feature', merchant_id=m.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="feature" value="{{ feat }}">
+          <button class="btn btn-outline" style="font-size:.8125rem;">{{ 'Disable' if on else 'Enable' }}</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="tab-panel" id="tab-overview">
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="info"></i> Identity &amp; integration</h3></div>
+    <table><tbody>
+      <tr><td>Role</td><td>{{ m.role or 'merchant' }}</td></tr>
+      <tr><td>Joined</td><td>{{ m.created_at.strftime('%d %b %Y %H:%M') if m.created_at else '—' }}</td></tr>
+      <tr><td>Webhook URL</td><td>{{ 'set' if m.webhook_url else 'not set' }}</td></tr>
+      <tr><td>Webhook secret</td><td>{{ 'present' if m.webhook_secret else 'not generated' }}</td></tr>
+      <tr><td>Live secret key</td><td>{{ 'present' if keys_present.live_secret else 'none' }}</td></tr>
+      <tr><td>Test secret key</td><td>{{ 'present' if keys_present.test_secret else 'none' }}</td></tr>
+      <tr><td>Collections key</td><td>{{ 'present' if keys_present.collections else 'none' }}</td></tr>
+      <tr><td>Managed subaccount</td><td>{{ 'yes' if m.is_managed else 'no' }}</td></tr>
+    </tbody></table>
+    <div class="form-hint">Secret values are never shown here — only whether they exist.</div>
+  </div>
+</div>
+
+<!-- ACTIVITY -->
+<div class="tab-panel" id="tab-activity">
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="trending-up"></i> Recent charges</h3></div>
+    <div class="table-container"><table>
+      <thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>When</th></tr></thead>
+      <tbody>{% for t in charges %}<tr><td><code style="font-size:.75rem;">{{ t.public_id }}</code></td><td>UGX {{ "{:,}".format(t.amount) }}</td><td><span class="badge {% if t.status.value=='succeeded' %}succeeded{% elif t.status.value=='failed' %}failed{% else %}pending{% endif %}">{{ t.status.value }}</span></td><td class="text-muted" style="font-size:.8125rem;">{{ t.created_at.strftime('%d %b %H:%M') if t.created_at else '—' }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">No charges.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="send"></i> Recent payouts</h3></div>
+    <div class="table-container"><table>
+      <thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>When</th></tr></thead>
+      <tbody>{% for p in payouts %}<tr><td><code style="font-size:.75rem;">{{ p.public_id }}</code></td><td>UGX {{ "{:,}".format(p.amount) }}</td><td><span class="badge {% if p.status.value=='succeeded' %}succeeded{% elif p.status.value=='failed' %}failed{% else %}pending{% endif %}">{{ p.status.value }}</span></td><td class="text-muted" style="font-size:.8125rem;">{{ p.created_at.strftime('%d %b %H:%M') if p.created_at else '—' }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">No payouts.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- AUDIT -->
+<div class="tab-panel" id="tab-audit">
+  <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="list"></i> Audit timeline</h3></div>
+    <div class="table-container"><table>
+      <thead><tr><th>Event</th><th>Detail</th><th>When</th></tr></thead>
+      <tbody>{% for a in audits %}<tr><td><code style="font-size:.75rem;">{{ a.event }}</code></td><td class="text-muted" style="font-size:.75rem;max-width:320px;overflow-wrap:anywhere;">{{ a.detail or '' }}</td><td class="text-muted" style="font-size:.8125rem;white-space:nowrap;">{{ a.created_at.strftime('%d %b %H:%M') if a.created_at else '—' }}</td></tr>{% else %}<tr><td colspan="3" class="text-muted">No audit events.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

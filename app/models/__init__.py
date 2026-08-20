@@ -123,6 +123,11 @@ class Merchant(UserMixin, db.Model):
     webhook_secret = Column(String(80), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
     is_active = Column(Boolean, default=True, nullable=False)
+    # Admin suspend audit (is_active stays the source of truth; api._auth and
+    # orchestrator already refuse is_active=False, so suspend halts everything).
+    suspended_at = Column(DateTime, nullable=True)
+    suspended_by = Column(String(120), nullable=True)
+    suspend_reason = Column(String(500), nullable=True)
     # When True, succeeded charges skip the 24h settlement hold and land directly
     # in available balance (used for our own products, e.g. KarlPOS).
     instant_settlement = Column(Boolean, default=False, nullable=False)
