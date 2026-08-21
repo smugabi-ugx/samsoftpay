@@ -856,35 +856,15 @@ def export_transactions_csv(merchant_id: int):
     """
     import csv
     import io
-    from datetime import datetime
     from flask import Response
-    from ..models import TxnStatus
     if not merchant_or_admin(merchant_id):
         abort(403)
     db.session.get(Merchant, merchant_id) or abort(404)
 
-    q = Transaction.query.filter_by(merchant_id=merchant_id)
-    status_f = request.args.get("status")
-    if status_f:
-        try:
-            q = q.filter(Transaction.status == TxnStatus(status_f))
-        except ValueError:
-            abort(400, description=f"invalid status: {status_f}")
-
-    def _dt(name):
-        raw = request.args.get(name)
-        if not raw:
-            return None
-        try:
-            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except ValueError:
-            abort(400, description=f"{name} must be an ISO 8601 datetime")
-    after, before = _dt("after"), _dt("before")
-    if after:
-        q = q.filter(Transaction.created_at >= after)
-    if before:
-        q = q.filter(Transaction.created_at <= before)
-
+    # SAME filters as the Transactions page (status/channel/mode/date/search),
+    # so "Download CSV" gives exactly the rows on screen, never a wider set.
+    base = Transaction.query.filter_by(merchant_id=merchant_id)
+    q, _f = _txn_filters(base, model=Transaction)
     rows = q.order_by(Transaction.created_at.desc()).all()
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -903,6 +883,111 @@ def export_transactions_csv(merchant_id: int):
         buf.getvalue(), mimetype="text/csv",
         headers={"Content-Disposition":
                  f"attachment; filename=samsoftpay_transactions_{merchant_id}.csv"})
+
+
+def _txn_filters(q, *, model):
+    """Apply the shared status/channel/mode/date/search filters to a Transaction
+    query from request.args. Used by BOTH the Transactions page and its CSV
+    export so a downloaded statement is EXACTLY the filtered view — never a
+    different set of rows than what the merchant is looking at.
+
+    Returns (query, filters_dict). Bad filter values 400 rather than silently
+    returning everything (a merchant reconciling money must never be shown a
+    wider set than they asked for and not know it)."""
+    from datetime import datetime
+    from sqlalchemy import or_
+    from ..models import TxnStatus, Channel
+    f = {"q": (request.args.get("q") or "").strip(),
+         "status": request.args.get("status") or "",
+         "channel": request.args.get("channel") or "",
+         "mode": request.args.get("mode") or "",
+         "after": request.args.get("after") or "",
+         "before": request.args.get("before") or ""}
+
+    if f["status"]:
+        try:
+            q = q.filter(model.status == TxnStatus(f["status"]))
+        except ValueError:
+            abort(400, description=f"invalid status: {f['status']}")
+    if f["channel"]:
+        try:
+            q = q.filter(model.channel == Channel(f["channel"]))
+        except ValueError:
+            abort(400, description=f"invalid channel: {f['channel']}")
+    if f["mode"] == "live":
+        q = q.filter(model.is_test.is_(False))
+    elif f["mode"] == "test":
+        q = q.filter(model.is_test.is_(True))
+
+    def _dt(name):
+        raw = f[name]
+        if not raw:
+            return None
+        try:
+            # accept a bare date (YYYY-MM-DD) from an <input type=date> too
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            abort(400, description=f"{name} must be a date or ISO 8601 datetime")
+    after, before = _dt("after"), _dt("before")
+    if after:
+        q = q.filter(model.created_at >= after)
+    if before:
+        q = q.filter(model.created_at <= before)
+
+    if f["q"]:
+        like = f"%{f['q']}%"
+        q = q.filter(or_(model.public_id.ilike(like),
+                         model.merchant_reference.ilike(like),
+                         model.customer_phone.ilike(like),
+                         model.rail_reference.ilike(like)))
+    return q, f
+
+
+@bp.get("/dashboard/<int:merchant_id>/transactions")
+@login_required
+def transactions(merchant_id: int):
+    """Dedicated, filterable, paginated transaction ledger — the view a busy
+    merchant (KarlPOS, a vending route) needs to reconcile a month, not the
+    5-row infinite scroll on Home. Search by reference/phone/confirmation code,
+    filter by status/channel/mode/date, page through, and download the EXACT
+    filtered set as CSV. Owner-or-admin gated like every dashboard surface."""
+    from sqlalchemy import func as safunc, case
+    from ..models import TxnStatus, Channel
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    base = Transaction.query.filter_by(merchant_id=merchant_id)
+    q, f = _txn_filters(base, model=Transaction)
+    pag = q.order_by(Transaction.id.desc()).paginate(
+        page=page, per_page=50, error_out=False)
+
+    # Totals for the FILTERED set (all pages), so the header reflects the query,
+    # not just the 50 rows on screen. Succeeded-only sum = money actually earned.
+    filtered_ids_q, _ = _txn_filters(
+        Transaction.query.filter_by(merchant_id=merchant_id), model=Transaction)
+    match_count, succ_count, succ_sum = (
+        filtered_ids_q.with_entities(
+            safunc.count(Transaction.id),
+            safunc.coalesce(safunc.sum(
+                case((Transaction.status == TxnStatus.SUCCEEDED, 1), else_=0)), 0),
+            safunc.coalesce(safunc.sum(
+                case((Transaction.status == TxnStatus.SUCCEEDED, Transaction.amount), else_=0)), 0),
+        ).one())
+
+    # querystring without `page`, so pagination links preserve the filters
+    from urllib.parse import urlencode
+    keep = {k: v for k, v in request.args.items() if k != "page" and v}
+    qs = urlencode(keep)
+    return render_template(
+        "transactions.html", merchant=merchant, pag=pag, txns=pag.items, f=f,
+        qs=qs, match_count=match_count, succ_count=succ_count, succ_sum=succ_sum,
+        statuses=[s.value for s in TxnStatus],
+        channels=[c.value for c in Channel])
 
 
 @bp.get("/dashboard/<int:merchant_id>/new-link")

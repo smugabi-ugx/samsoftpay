@@ -737,6 +737,10 @@
              class="nav-link {% if request.endpoint == 'dashboard.merchant_detail' %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="home"></i><span>Home</span>
           </a>
+          <a href="{{ url_for('dashboard.transactions', merchant_id=current_user.id) }}"
+             class="nav-link {% if request.endpoint == 'dashboard.transactions' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="list"></i><span>Transactions</span>
+          </a>
           <a href="{{ url_for('auth.account') }}"
              class="nav-link {% if request.endpoint == 'auth.account' %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="settings"></i><span>Settings &amp; API Keys</span>

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Transactions — {{ merchant.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .tx-wrap{max-width:1100px;margin:0 auto;}
+  .tx-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1.25rem;}
+  .tx-head h1{font-family:'Urbanist',sans-serif;font-size:1.6rem;font-weight:800;margin:0;}
+  .tx-stats{display:flex;gap:1.5rem;flex-wrap:wrap;}
+  .tx-stat .k{font-size:.72rem;color:var(--gray-500,#6b7280);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
+  .tx-stat .v{font-family:'Urbanist',sans-serif;font-size:1.15rem;font-weight:800;}
+  .tx-filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:.6rem;align-items:end;
+              background:var(--card,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:1rem;margin-bottom:1rem;}
+  .tx-filters label{display:block;font-size:.7rem;font-weight:700;color:var(--gray-500,#6b7280);margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.03em;}
+  .tx-filters input,.tx-filters select{width:100%;padding:.55rem .6rem;border:1px solid var(--border,#e5e7eb);border-radius:9px;font:inherit;background:var(--bg,#fff);color:inherit;}
+  .tx-actions{display:flex;gap:.5rem;}
+  .tx-table{width:100%;border-collapse:collapse;background:var(--card,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;overflow:hidden;}
+  .tx-table th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:var(--gray-500,#6b7280);
+               padding:.7rem .9rem;background:var(--gray-50,#f9fafb);border-bottom:1px solid var(--border,#e5e7eb);font-weight:700;}
+  .tx-table td{padding:.7rem .9rem;border-bottom:1px solid var(--border,#f1f1f4);font-size:.88rem;vertical-align:middle;}
+  .tx-table tr:last-child td{border-bottom:none;}
+  .tx-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;color:var(--gray-600,#4b5563);}
+  .tx-amt{font-family:'Urbanist',sans-serif;font-weight:800;text-align:right;white-space:nowrap;}
+  .tx-amt.in{color:var(--success,#10b981);}
+  .tx-amt.out{color:var(--gray-500,#9ca3af);}
+  .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.72rem;font-weight:700;text-transform:capitalize;}
+  .badge.succeeded{background:rgba(16,185,129,.12);color:#059669;}
+  .badge.failed{background:rgba(239,68,68,.12);color:#dc2626;}
+  .badge.pending,.badge.authorized,.badge.processing{background:rgba(245,158,11,.12);color:#d97706;}
+  .badge.refunded,.badge.expired{background:rgba(107,114,128,.14);color:#4b5563;}
+  .pill-test{font-size:.65rem;background:rgba(245,158,11,.12);color:#d97706;border-radius:4px;padding:1px 5px;font-weight:800;margin-left:5px;}
+  .tx-pager{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:1.1rem;flex-wrap:wrap;}
+  .tx-empty{text-align:center;padding:3rem 1rem;color:var(--gray-500,#6b7280);}
+  @media (max-width:820px){
+    .tx-filters{grid-template-columns:1fr 1fr;}
+    .tx-filters .tx-actions{grid-column:1 / -1;}
+    .tx-table thead{display:none;}
+    .tx-table,.tx-table tbody,.tx-table tr,.tx-table td{display:block;width:100%;}
+    .tx-table tr{border-bottom:1px solid var(--border,#e5e7eb);padding:.5rem 0;}
+    .tx-table td{border:none;padding:.25rem .9rem;}
+    .tx-table td.tx-amt{text-align:left;font-size:1.05rem;}
+    .tx-table td[data-l]::before{content:attr(data-l) " ";color:var(--gray-400,#9ca3af);font-size:.7rem;text-transform:uppercase;font-weight:700;margin-right:.4rem;}
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tx-wrap">
+  <div class="tx-head">
+    <div>
+      <h1>Transactions</h1>
+      <div style="color:var(--gray-500,#6b7280);font-size:.9rem;margin-top:.2rem;">
+        Full history — nothing here is ever deleted.
+      </div>
+    </div>
+    <div class="tx-stats">
+      <div class="tx-stat"><div class="k">Matching</div><div class="v">{{ "{:,}".format(match_count) }}</div></div>
+      <div class="tx-stat"><div class="k">Succeeded</div><div class="v">{{ "{:,}".format(succ_count) }}</div></div>
+      <div class="tx-stat"><div class="k">Collected (UGX)</div><div class="v">{{ "{:,}".format(succ_sum) }}</div></div>
+    </div>
+  </div>
+
+  <form method="get" class="tx-filters" action="{{ url_for('dashboard.transactions', merchant_id=merchant.id) }}">
+    <div>
+      <label>Search</label>
+      <input type="search" name="q" value="{{ f.q }}" placeholder="Reference, phone, ID or confirmation code">
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="status">
+        <option value="">Any</option>
+        {% for s in statuses %}<option value="{{ s }}" {% if f.status == s %}selected{% endif %}>{{ s|capitalize }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Channel</label>
+      <select name="channel">
+        <option value="">Any</option>
+        {% for c in channels %}<option value="{{ c }}" {% if f.channel == c %}selected{% endif %}>{{ c.replace('_',' ')|title }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>From</label>
+      <input type="date" name="after" value="{{ f.after }}">
+    </div>
+    <div>
+      <label>To</label>
+      <input type="date" name="before" value="{{ f.before }}">
+    </div>
+    <div class="tx-actions">
+      <button type="submit" class="btn btn-primary">Filter</button>
+      <a class="btn btn-outline" href="{{ url_for('dashboard.transactions', merchant_id=merchant.id) }}">Clear</a>
+    </div>
+    <input type="hidden" name="mode" value="{{ f.mode }}">
+  </form>
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.6rem;">
+    <a class="btn btn-outline" style="font-size:.82rem;"
+       href="{{ url_for('dashboard.export_transactions_csv', merchant_id=merchant.id) }}{% if qs %}?{{ qs }}{% endif %}">
+      ⬇ Download CSV{% if qs %} (filtered){% endif %}
+    </a>
+  </div>
+
+  {% if txns %}
+  <table class="tx-table">
+    <thead>
+      <tr>
+        <th>When</th><th>Channel</th><th>Reference</th><th>Customer</th><th>Status</th><th style="text-align:right;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in txns %}
+      <tr>
+        <td data-l="When">{{ t.created_at.strftime('%d %b %Y %H:%M') }}</td>
+        <td data-l="Channel">
+          {{ t.channel.value.replace('_',' ')|title }}
+          {% if t.is_test %}<span class="pill-test">TEST</span>{% endif %}
+        </td>
+        <td data-l="Ref" class="tx-ref">
+          {{ t.merchant_reference or t.public_id }}
+          {% if t.rail_reference %}<br><span style="color:var(--gray-400,#9ca3af);">conf: {{ t.rail_reference }}</span>{% endif %}
+        </td>
+        <td data-l="Customer" class="tx-ref">{{ t.customer_phone or '—' }}</td>
+        <td data-l="Status"><span class="badge {{ t.status.value }}">{{ t.status.value }}</span></td>
+        <td data-l="Amount" class="tx-amt {{ 'in' if t.status.value == 'succeeded' else 'out' }}">
+          {% if t.status.value == 'succeeded' %}+ {% endif %}{{ "{:,}".format(t.amount) }} UGX
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="tx-pager">
+    <div style="color:var(--gray-500,#6b7280);font-size:.85rem;">
+      Page {{ pag.page }} of {{ pag.pages or 1 }} · {{ "{:,}".format(match_count) }} total
+    </div>
+    <div style="display:flex;gap:.5rem;">
+      {% if pag.has_prev %}
+      <a class="btn btn-outline" href="?page={{ pag.prev_num }}{% if qs %}&{{ qs }}{% endif %}">← Newer</a>
+      {% endif %}
+      {% if pag.has_next %}
+      <a class="btn btn-outline" href="?page={{ pag.next_num }}{% if qs %}&{{ qs }}{% endif %}">Older →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="tx-empty">
+    <div style="font-size:2rem;">🧾</div>
+    <p>No transactions match{% if qs %} these filters{% endif %}.</p>
+    {% if qs %}<a class="btn btn-outline" href="{{ url_for('dashboard.transactions', merchant_id=merchant.id) }}">Clear filters</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
