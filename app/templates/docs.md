@@ -284,10 +284,16 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
   `POST /v1/webhooks/<event_id>/resend` re-queues one; `GET /v1/charges` lets you reconcile by
   listing.
 
-### Egress IPs
+### Egress IPs (only if your endpoint is IP-firewalled)
 
-Webhook deliveries originate from these static ranges. Allowlist them if your endpoint is
-firewalled:
+**Verify the signature, don't rely on IP.** The reliable way to trust a webhook is the
+`X-Samsoftpay-Signature` HMAC (see Verifying Webhooks) — it proves the request is really from us and
+can't be spoofed. That's all most integrators need.
+
+Only if your webhook endpoint sits behind an **IP allowlist** do you need our outbound ranges. These
+are the source addresses our servers *send from* — not websites, so you can't open them in a browser.
+They can change if we move hosting region, so **keep signature verification as your primary check** and
+treat the allowlist as a convenience, not the security boundary. Current outbound ranges:
 
 - `74.220.48.0/24`
 - `74.220.56.0/24`
