@@ -50,6 +50,22 @@ def send_email(to_email: str, subject: str, html: str, plain: str | None = None)
     server.quit()
 
 
+def _log_otp_fallback(to_email: str, otp: str, purpose: str) -> None:
+    """Break-glass: print the OTP to the server log when email delivery FAILS,
+    so an email outage can never lock an operator out of their own account.
+
+    Called ONLY on a delivery failure — never in normal operation — so it is a
+    fallback, not a standing leak. Retrieve it from Render -> Logs (grep
+    'OTP FALLBACK'). Gated by config OTP_LOG_ON_FAILURE (default True)."""
+    print(f"\n{'='*60}", flush=True)
+    print(f"  [OTP FALLBACK] email delivery failed — code logged so you can still sign in", flush=True)
+    print(f"  [OTP FALLBACK] To:      {to_email}", flush=True)
+    print(f"  [OTP FALLBACK] Code:    {otp}", flush=True)
+    print(f"  [OTP FALLBACK] Purpose: {purpose}", flush=True)
+    print(f"{'='*60}\n", flush=True)
+    sys.stdout.flush()
+
+
 def generate_otp() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 
@@ -126,20 +142,20 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
         print(f"[SMTP] Email sent successfully to {to_email}", flush=True)
         sys.stdout.flush()
 
-    except smtplib.SMTPAuthenticationError as exc:
-        print(f"[SMTP ERROR] Authentication failed: {exc}", flush=True)
-        print(f"[SMTP ERROR] Check MAIL_USERNAME and MAIL_PASSWORD (must be App Password, no spaces)", flush=True)
-        sys.stdout.flush()
-        raise
-    except smtplib.SMTPException as exc:
-        print(f"[SMTP ERROR] SMTP error: {exc}", flush=True)
-        sys.stdout.flush()
-        raise
-    except OSError as exc:
-        print(f"[SMTP ERROR] Connection failed to {host}:{port} — {exc}", flush=True)
-        sys.stdout.flush()
-        raise
     except Exception as exc:
-        print(f"[SMTP ERROR] Unexpected error: {exc}", flush=True)
+        # LOGIN FALLBACK — email delivery must NEVER lock anyone out. The OTP is
+        # already stored server-side; if delivery fails we surface it in the
+        # server logs (break-glass) and DO NOT raise, so a mail outage cannot
+        # 500 the login flow — the user still reaches the code-entry page and an
+        # operator can read the code from Render -> Logs. This logs the code
+        # ONLY on a delivery failure, never in normal operation.
+        hint = ""
+        if isinstance(exc, smtplib.SMTPAuthenticationError):
+            hint = (" — auth failed: check MAIL_USERNAME/MAIL_PASSWORD "
+                    "(Gmail needs an App Password; Resend username is 'resend')")
+        print(f"[SMTP ERROR] delivery to {to_email} failed: {exc}{hint}", flush=True)
+        if current_app.config.get("OTP_LOG_ON_FAILURE", True):
+            _log_otp_fallback(to_email, otp, purpose)
         sys.stdout.flush()
-        raise
+        # Intentionally NO re-raise. Delivery is best-effort; the login flow
+        # must proceed to the code-entry step regardless of a mail outage.
