@@ -130,10 +130,7 @@
     <div class="auth-footer">
       Don't have an account? <a href="{{ url_for('auth.signup_page') }}">Create one free</a>
       <div style="margin-top:.625rem;font-size:.8125rem;">
-        Forgot your password?
-        <a href="mailto:samsoftware75@gmail.com?subject=Password%20reset%20request">Contact support</a>
-        or WhatsApp <a href="https://wa.me/256783647260">+256 783 647260</a> —
-        we verify your identity, then reset it for you.
+        <a href="{{ url_for('auth.forgot_password_page') }}">Forgot your password?</a>
       </div>
     </div>
   </div>

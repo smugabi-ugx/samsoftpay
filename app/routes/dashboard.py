@@ -694,7 +694,9 @@ def admin_flags():
             "updated_by": row.updated_by if row else None,
             "updated_at": row.updated_at if row else None,
         })
-    return render_template("admin_flags.html", flags=flags)
+    from ..services.settlement import get_hold_minutes
+    return render_template("admin_flags.html", flags=flags,
+                           settlement_hold_minutes=get_hold_minutes())
 
 
 @bp.post("/admin/flags/set")
@@ -710,6 +712,29 @@ def admin_set_flag():
     pf.set_flag(key, value, updated_by=current_user.email)
     _admin_log("platform.flag_set", None, by=current_user.email, flag=key, value=value)
     flash(f"{pf.FLAG_META[key]['label']} is now {value.upper()}.", "success")
+    return redirect(url_for("dashboard.admin_flags"))
+
+
+@bp.post("/admin/settlement-hold")
+@login_required
+@admin_required
+def admin_set_settlement_hold():
+    """Set how long a payment stays in `pending` before it clears to withdrawable
+    `available`. Admin-adjustable at runtime, no deploy. Bounded 0 min .. 30 days.
+    Applies to money not yet past its hold; already-aged money sweeps next run."""
+    from ..services import platform_flags as pf
+    try:
+        minutes = int(request.form.get("minutes", ""))
+    except (TypeError, ValueError):
+        flash("Enter a whole number of minutes.", "error")
+        return redirect(url_for("dashboard.admin_flags"))
+    if not (0 <= minutes <= 43_200):
+        flash("Settlement hold must be between 0 minutes and 30 days (43200 min).", "error")
+        return redirect(url_for("dashboard.admin_flags"))
+    pf.set_flag(pf.SETTLEMENT_HOLD_MINUTES, str(minutes), updated_by=current_user.email)
+    _admin_log("platform.settlement_hold_set", None, by=current_user.email, minutes=minutes)
+    flash(f"Settlement hold is now {minutes} minute(s). New payments clear that fast; "
+          f"money already past its hold clears on the next sweep.", "success")
     return redirect(url_for("dashboard.admin_flags"))
 
 

@@ -18,7 +18,27 @@ from ..models import (
 from . import ledger
 
 
-def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
+DEFAULT_HOLD_MINUTES = 30   # the "clear" window when the admin hasn't set one
+
+
+def get_hold_minutes() -> int:
+    """The settlement hold, in minutes — admin-configurable at runtime via the
+    `settlement_hold_minutes` platform flag (no deploy). Defaults to 30 and fails
+    SAFE to the default on any missing/bad value or a DB read error, so settlement
+    can never be broken by a malformed setting. Bounded 0 min .. 30 days."""
+    try:
+        from .platform_flags import get_flag, SETTLEMENT_HOLD_MINUTES
+        raw = get_flag(SETTLEMENT_HOLD_MINUTES)
+        v = int(raw)
+        if 0 <= v <= 43_200:
+            return v
+    except (TypeError, ValueError, Exception):
+        pass
+    return DEFAULT_HOLD_MINUTES
+
+
+def sweep_to_available(*, hold_minutes: int | None = None,
+                       hold_hours: int | None = None, batch_size: int = 500) -> dict:
     """Move merchant_pending -> merchant_available for transactions whose own hold
     period has elapsed.
 
@@ -27,9 +47,15 @@ def sweep_to_available(*, hold_hours: int = 24, batch_size: int = 500) -> dict:
     transaction on the same merchant aged out. Work is committed per merchant so one
     merchant's failure or a long run never holds a table-wide lock.
 
+    The hold defaults to the admin-configured `settlement_hold_minutes` (30 min out
+    of the box). An explicit `hold_minutes`/`hold_hours` overrides it (tests + the
+    manual sweep button pass one); `hold_hours` is kept for backward compatibility.
+
     Returns {merchant_id: amount_moved}.
     """
-    cutoff = utcnow() - timedelta(hours=hold_hours)
+    if hold_minutes is None:
+        hold_minutes = hold_hours * 60 if hold_hours is not None else get_hold_minutes()
+    cutoff = utcnow() - timedelta(minutes=hold_minutes)
 
     # Collect the distinct merchant/currency/MODE groups that have anything due.
     # Mode is part of the key: sandbox and live are separate ledgers, and a sweep
