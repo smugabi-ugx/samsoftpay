@@ -499,6 +499,48 @@ def create_app(config: dict | None = None) -> Flask:
             **_rail_diag(),
         ), (200 if fresh else 503)
 
+    @app.get("/ops/readiness")
+    def ops_readiness():
+        """Go-live config readiness — every launch-critical setting as a NON-SECRET
+        boolean, so 'is email/SMS/alerts/production actually wired?' is one curl.
+
+        Reports what THIS (web) process resolved. Alerts fire from the WORKER, so
+        the mail/Slack vars must ALSO be set there — check the worker's own
+        /ops/readiness is not exposed; confirm via a test alert. Never prints values.
+        """
+        from flask import jsonify
+        from .services.sms_service import sms_configured
+        is_prod = bool(os.environ.get("RENDER"))
+        wh = app.config.get("WEBHOOK_SIGNING_SECRET", "")
+        base = app.config.get("BASE_URL", "")
+        checks = {
+            "production": is_prod,
+            "base_url_set": bool(base) and not base.startswith("http://localhost"),
+            "webhook_signing_secret_set": bool(wh) and wh != "whsec_demo_replace_me",
+            # money rail
+            "mtn_rail_real": bool(app.config.get("MOMO_USE_REAL")),
+            "mtn_target_env": app.config.get("MOMO_TARGET_ENV"),
+            "mtn_credentials_present": _rail_diag()["momo_credentials_present"],
+            # notifications (receipts, OTP, tax receipts)
+            "email_configured": bool(app.config.get("MAIL_HOST")),
+            "sms_configured": sms_configured(),
+            # observability / on-call
+            "sentry_configured": bool(os.environ.get("SENTRY_DSN")),
+            "alerts_slack_configured": bool(app.config.get("SLACK_WEBHOOK_URL")),
+            "alerts_email_configured": bool(app.config.get("ALERT_EMAIL")),
+        }
+        # A single go/no-go: the things that must be true to take REAL money safely.
+        go_live_ready = (
+            checks["production"]
+            and checks["base_url_set"]
+            and checks["webhook_signing_secret_set"]
+            and checks["mtn_rail_real"]
+            and checks["mtn_target_env"] == "production"
+            and checks["mtn_credentials_present"]["collections"]
+            and checks["email_configured"]
+        )
+        return jsonify(go_live_ready=go_live_ready, checks=checks), 200
+
     def _rail_diag() -> dict:
         """Non-secret rail configuration, so 'is the real MTN rail on?' can be
         answered from outside the box.
