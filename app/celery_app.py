@@ -39,6 +39,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.billing.process_due_subscriptions",
                 "schedule": 60.0,          # every 60 seconds
             },
+            "run-scheduled-payouts": {
+                "task": "app.tasks.scheduled_payouts.run_scheduled_payouts",
+                "schedule": 60.0,          # every 60 seconds — payroll autopilot
+            },
             "auto-settlement-sweep": {
                 "task": "app.tasks.sweep.auto_settlement_sweep",
                 "schedule": 3600.0,        # every hour

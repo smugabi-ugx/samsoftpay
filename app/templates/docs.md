@@ -163,6 +163,27 @@ It moves no money, changes no state, and dispenses nothing — iterate until `ok
 signing profile (which fields are signed, key ordering, replay window) is **configuration on our
 side**, so onboarding a new machine is a profile, not a platform code change.
 
+## Scheduled payouts (payroll autopilot)
+
+Set a recurring disbursement once and Samsoftpay fires it on schedule — daily, weekly or monthly —
+paying a uniform amount to a list of recipients (salaries, stipends, commissions). Full-scope key only.
+
+```
+POST /v1/scheduled-payouts        # X-Timestamp + Idempotency-Key required
+{ "name": "August payroll", "amount": 500000, "currency": "UGX", "interval": "monthly",
+  "recipients": [ {"phone":"256780000001","name":"Jane"}, {"phone":"256780000002","name":"Peter"} ],
+  "max_per_recipient": 1000000 }        # optional per-recipient cap (a larger amount is rejected 400)
+-> 201 { "id":"spo_…", "status":"active", "interval":"monthly", "next_run_at":"…", "recipients":[…] }
+```
+
+Money-safety guarantees (each is enforced, not a nicety):
+- **Exactly-once per cycle** — a double tick / worker restart can never pay a cycle twice.
+- **Never a partial payroll** — if the balance can't cover the whole run, the schedule **pauses** and
+  pays no one (fund the wallet, then resume).
+- Each payout goes through the normal rail (1.5% fee, `payout.succeeded`/`payout.failed` webhooks,
+  the schedule's `id` as the `reference`), and obeys the platform payout freeze.
+- `GET /v1/scheduled-payouts` / `GET /v1/scheduled-payouts/{id}` to list/inspect.
+
 ## Your Samsoftpay balance & reconciliation
 
 Every merchant has a real Samsoftpay balance (`pending` + `available`, per currency) — the ledger we

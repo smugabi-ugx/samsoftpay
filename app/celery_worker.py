@@ -30,6 +30,7 @@ from .tasks import (  # noqa: E402,F401
     monitoring,
     polling,
     reconciliation,
+    scheduled_payouts,
     sweep,
     webhooks_task,
 )
