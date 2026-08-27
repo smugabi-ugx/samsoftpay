@@ -511,6 +511,17 @@ def _channel_options(include_crypto: bool = False):
         try:
             if _simulated_rail_forbidden(Channel(value)):
                 continue
+            # Crypto uses the passthrough adapter, so the simulated-rail guard
+            # above does NOT catch it. Hide it in live-on-Render unless a real
+            # ChangeNow key + receiving wallet are configured — otherwise the
+            # mock would phantom-settle a live charge (see changenow._mock_forbidden).
+            if value == "crypto":
+                from ..services.changenow import _mock_forbidden
+                from flask import current_app as _ca
+                configured = (_ca.config.get("CHANGENOW_API_KEY")
+                              and _ca.config.get("CHANGENOW_RECEIVING_ADDRESS"))
+                if not configured and _mock_forbidden():
+                    continue
         except Exception:      # unknown channel / no app context — show it
             pass
         available.append((value, label, kind))

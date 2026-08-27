@@ -91,7 +91,11 @@ def status_page():
          "Settlement sweeps, reconciliation and payment polling."),
         ("Webhook delivery", wh_status, wh_note),
         ("MTN Mobile Money (UG)", mtn_status, mtn_note),
-        ("Crypto (via ChangeNow)", "operational", "BTC / ETH / USDT settlement to UGX."),
+        ("Crypto (via ChangeNow)",
+         "operational" if (current_app.config.get("CHANGENOW_API_KEY")
+                           and current_app.config.get("CHANGENOW_RECEIVING_ADDRESS"))
+         else "in development",
+         "BTC / ETH / USDT settlement to UGX."),
         ("Airtel Money", "in development", "Rail under construction — not yet accepting live payments."),
         ("Cards (Visa / Mastercard)", "in development", "Rail under construction — not yet accepting live payments."),
     ]

@@ -83,10 +83,10 @@
   {% if app.status == 'draft' %}
   <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--gray-200);">
     <form method="POST" action="{{ url_for('kyc.submit') }}">
-      <button type="submit" class="btn btn-primary" {% if not (app.company_name and app.directors|length > 0 and app.documents|length > 0 and app.bank_name and app.ownership_structure) %}disabled{% endif %}>
+      <button type="submit" class="btn btn-primary" {% if not (app.company_name and app.directors|length > 0 and app.documents|length > 0 and app.bank_name) %}disabled{% endif %}>
         <i data-feather="send"></i> Submit for Review
       </button>
-      <p class="form-hint" style="margin-top:.5rem;">All 5 steps must be completed before submitting.</p>
+      <p class="form-hint" style="margin-top:.5rem;">Business details, an owner, an ID document and a bank account are required. The AML/CFT ownership step is optional.</p>
     </form>
   </div>
   {% endif %}

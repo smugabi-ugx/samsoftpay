@@ -23,8 +23,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import os
+
 import requests as _req
-from flask import current_app
+from flask import current_app, g
+
+
+def _mock_forbidden() -> bool:
+    """True when the crypto MOCK must not run — i.e. live traffic on Render.
+
+    Guardrail-14 analog for crypto: the mock returns a fake deposit address and
+    then reports 'finished' with nothing actually received, which would credit
+    the LIVE ledger with phantom money (crypto uses the passthrough adapter, so
+    the simulated-rail guard does not catch it). Sandbox (api_mode=='test') and
+    local/dev (no RENDER) stay on the mock so testing works; live-on-Render is
+    refused until a real ChangeNow key + receiving wallet are configured.
+    """
+    return bool(os.environ.get("RENDER")) and g.get("api_mode") != "test"
 
 _BASE = "https://api.changenow.io/v1"
 
@@ -87,7 +102,13 @@ def create_exchange(
     recv_network = current_app.config.get("CHANGENOW_RECEIVING_NETWORK", "bsc")
 
     if not api_key or not recv_address:
-        # ── Mock mode ───────────────────────────────────────────────────
+        if _mock_forbidden():
+            # LIVE traffic on Render without real crypto config — refuse rather
+            # than hand out a mock address that would later phantom-settle.
+            return CryptoOrderResult(
+                accepted=False,
+                reason="crypto is not enabled in production yet — configure ChangeNow first")
+        # ── Mock mode (sandbox / local dev only) ─────────────────────────
         import uuid, time
         return CryptoOrderResult(
             accepted=True,
@@ -147,7 +168,11 @@ def get_status(exchange_id: str) -> str:
     """
     api_key = current_app.config.get("CHANGENOW_API_KEY", "")
     if not api_key or exchange_id.startswith("cn_mock_"):
-        # Mock: return waiting for first 3 polls, then finished
+        if _mock_forbidden():
+            # NEVER phantom-settle live crypto — only the real ChangeNow API may
+            # move a live crypto charge to 'finished' (see _mock_forbidden).
+            return "waiting"
+        # Mock (sandbox / local dev): waiting for first 3 polls, then finished
         count = _mock_poll_counts.get(exchange_id, 0) + 1
         _mock_poll_counts[exchange_id] = count
         return "finished" if count >= 3 else "waiting"
