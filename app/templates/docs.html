@@ -108,7 +108,8 @@
   <nav class="docs-nav card" style="padding:1.25rem;">
     <div class="docs-nav-section">
       <div class="docs-nav-title">Getting Started</div>
-      <a href="#quickstart" class="docs-nav-link active">Quickstart</a>
+      <a href="#integration-modes" class="docs-nav-link active">Choose Your Integration</a>
+      <a href="#quickstart" class="docs-nav-link">Quickstart</a>
       <a href="#authentication" class="docs-nav-link">Authentication</a>
       <a href="#headers" class="docs-nav-link">Required Headers</a>
       <a href="#errors" class="docs-nav-link">Error Catalog</a>
@@ -138,6 +139,46 @@
 
   <!-- Content -->
   <div>
+
+    <!-- Choose Your Integration -->
+    <div class="docs-section" id="integration-modes">
+      <h2><i data-feather="git-merge" style="width:22px;height:22px;color:var(--primary);"></i> Choose Your Integration</h2>
+      <p style="font-size:1.0625rem;">Samsoftpay supports three integration shapes. Pick the row that matches
+      what you're building — each links to the endpoints you need. They can be combined (a POS that both
+      takes payments <em>and</em> pays out uses two of them).</p>
+      <table class="param-table">
+        <thead><tr><th>Mode</th><th>You're building</th><th>Customer pays on a Samsoftpay screen?</th><th>Who acts on success?</th><th>Start here</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>A · Hosted&nbsp;checkout</strong></td>
+            <td>A web/app checkout, a payment link, a QR at the till — your device confirms the payment and then does its own thing (print receipt, unlock, dispense over its own hardware).</td>
+            <td><strong>Yes</strong> — we host the pay page + QR; you show it.</td>
+            <td><strong>You do.</strong> Poll <code>GET /v1/charges/&lt;id&gt;</code> or receive the <code>charge.succeeded</code> webhook, then act. We command nothing.</td>
+            <td><a href="#payment-links">Payment Links</a> + <a href="#charges">Charges</a></td>
+          </tr>
+          <tr>
+            <td><strong>B · Backend&nbsp;money-out</strong></td>
+            <td>Payroll, supplier payouts, merchant withdrawals — server-to-server disbursement. No customer, no checkout page.</td>
+            <td><strong>No</strong> — pure API.</td>
+            <td>N/A — money goes out; you track <code>payout.succeeded</code>/<code>payout.failed</code>.</td>
+            <td><a href="#payouts">Payouts</a> (single &amp; bulk)</td>
+          </tr>
+          <tr>
+            <td><strong>C · Vending (machine&nbsp;present)</strong></td>
+            <td>A vending machine that shows a QR and dispenses a physical product — and you want <em>us</em> to command the machine to dispense once the money lands.</td>
+            <td><strong>Yes</strong> — the machine shows our QR; the customer scans and pays.</td>
+            <td><strong>We do.</strong> On payment success we command the machine to dispense and confirm the real outcome via the supplier callback.</td>
+            <td><a href="#vending">Vending Machines</a></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout"><strong>Which one is "the QR mode"?</strong> Both A and C show a QR. The difference is
+      <em>who dispenses</em>: in <strong>Mode A</strong> your own device watches for <code>succeeded</code> and acts itself
+      (this is how a POS or a self-dispensing kiosk integrates — use <code>/v1/payment-links</code>); in
+      <strong>Mode C</strong> Samsoftpay drives the machine for you (use <code>/v1/vending/orders</code>). Sending a
+      Mode-C order to a machine that dispenses itself would double-fire — so pick by <em>who acts</em>, not by whether
+      there's a QR. All three share the same keys, auth, balance and webhooks below.</div>
+    </div>
 
     <!-- Quickstart -->
     <div class="docs-section" id="quickstart">
