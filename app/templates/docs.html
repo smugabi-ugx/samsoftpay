@@ -803,10 +803,13 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
       <code>https://www.yourdomain.com/webhooks/samsoftpay</code> (KarlPOS uses
       <code>https://www.karlpos.com/webhooks/samsoftpay</code>). It must be a <strong>publicly reachable
       HTTPS URL on a server you control</strong> — a deployed backend, never <code>localhost</code> or a
-      private/internal address (those are rejected). A common mistake is leaving it pointing at
-      Samsoftpay's own domain, which just 404s and queues undelivered events. Until it's a real
-      endpoint of yours, fall back to polling <code>GET /v1/charges/&lt;id&gt;</code> or
-      <code>GET /v1/payouts/&lt;id&gt;</code> — webhooks are the push convenience, not a requirement for correctness.</div>
+      private/internal address (those are rejected).
+      <br><br><strong>While you're testing you don't need your own endpoint yet.</strong> Leave the
+      webhook URL as-is (the default Samsoftpay value is fine — nothing breaks, events simply queue)
+      and just <strong>poll</strong> <code>GET /v1/charges/&lt;id&gt;</code> or
+      <code>GET /v1/payouts/&lt;id&gt;</code> for the result. <strong>When you go live, switch the URL to your own
+      server</strong> (e.g. <code>https://www.karlpos.com/webhooks/samsoftpay</code>) so you receive and verify
+      events automatically. Webhooks are the push convenience, not a requirement for correctness.</div>
 
       <h3>The Envelope</h3>
       <p>Every delivery is one JSON envelope, sent as <strong>canonical JSON with no spaces</strong>

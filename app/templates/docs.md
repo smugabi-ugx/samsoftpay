@@ -161,13 +161,13 @@ side**, so onboarding a new machine is a profile, not a platform code change.
 Configure `webhook_url` on your Account page. Samsoftpay POSTs a signed JSON envelope on every
 state change.
 
-**Point the webhook URL at YOUR OWN backend — not at `api.samsoftpay.com`.** Set it to your public
-HTTPS endpoint, e.g. `https://www.yourdomain.com/webhooks/samsoftpay` (KarlPOS uses
-`https://www.karlpos.com/webhooks/samsoftpay`). It must be a **publicly reachable HTTPS URL on a
-server you control** — a deployed backend, never `localhost` or a private/internal address (those are
-rejected). Leaving it pointed at Samsoftpay's own domain just 404s and queues undelivered events.
-Until it's a real endpoint of yours, poll `GET /v1/charges/<id>` / `GET /v1/payouts/<id>` — webhooks
-are the push convenience, not required for correctness.
+**While testing you don't need your own webhook endpoint yet** — leave the URL as-is (the default
+Samsoftpay value is fine; nothing breaks, events just queue) and **poll** `GET /v1/charges/<id>` /
+`GET /v1/payouts/<id>` for the result. **When you go live, switch the URL to YOUR OWN backend** — set
+it on Account → Webhooks to your public HTTPS endpoint, e.g. `https://www.karlpos.com/webhooks/samsoftpay`.
+It must be a **publicly reachable HTTPS URL on a server you control** (never `localhost` or a
+private/internal address — those are rejected, and pointing it at `api.samsoftpay.com` just 404s).
+Webhooks are the push convenience, not required for correctness.
 
 ### Events
 
