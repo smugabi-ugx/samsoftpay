@@ -80,6 +80,21 @@ def _sign_base(params: dict) -> str:
     return "&".join(f"{k}={xy_vending._str(params[k])}" for k in sorted(params))
 
 
+# XY v1.41's §2.2.3 signing EXAMPLE is NOT strictly alphabetical: it lists
+# `tksj` before `tkje` (alphabetical order is tkje, then tksj — j < s), while
+# every other field is sorted. MD5 is order-sensitive, so if XY's real backend
+# signs in its own documented order, an alphabetical-only base would REJECT a
+# legitimate refund/dispense callback. We therefore ALSO try a base that is
+# sorted-except-that-one-pair-swapped. This is purely additive (an extra
+# candidate hash); it never weakens the secret check.
+def _sign_base_swapped(params: dict, a: str, b: str) -> str:
+    keys = sorted(params)
+    if a in keys and b in keys:
+        ia, ib = keys.index(a), keys.index(b)
+        keys[ia], keys[ib] = keys[ib], keys[ia]
+    return "&".join(f"{k}={xy_vending._str(params[k])}" for k in keys)
+
+
 def _candidate_signs(secret: str, timestamp: str, payload: dict) -> set[str]:
     """Every signature the doc could plausibly mean, for one payload.
 
@@ -97,8 +112,10 @@ def _candidate_signs(secret: str, timestamp: str, payload: dict) -> set[str]:
 
     out = set()
     for variant in variants:
-        raw = f"{secret}{timestamp}{_sign_base(variant)}"
-        out.add(hashlib.md5(raw.encode("utf-8")).hexdigest().lower())
+        for base in (_sign_base(variant),
+                     _sign_base_swapped(variant, "tkje", "tksj")):
+            raw = f"{secret}{timestamp}{base}"
+            out.add(hashlib.md5(raw.encode("utf-8")).hexdigest().lower())
     return out
 
 

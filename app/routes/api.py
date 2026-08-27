@@ -661,6 +661,14 @@ def create_vending_order():
         if idem_key:
             idempotency.release(merchant.id, idem_key)   # nothing created — allow retry
         abort(400, description=str(exc))
+    except Exception:
+        # Any OTHER failure (DB error, unexpected bug) also created nothing worth
+        # caching — release the IN_FLIGHT reservation before re-raising, otherwise
+        # the caller's Idempotency-Key stays wedged and every retry 409s ("still
+        # in flight") until the TTL expires.
+        if idem_key:
+            idempotency.release(merchant.id, idem_key)
+        raise
 
     pay_url = url_for("checkout.checkout_page", public_id=link.public_id, _external=True)
     log_event("vending.order_created", merchant_id=merchant.id, resource_id=link.public_id,
@@ -793,11 +801,11 @@ def vending_dispense():
         "order_id": "<your order no>",
         "pay_account": "<payer account>",
         "goods": [ {"spbh": "0001", "spmc": "Coke", "spdj": 250}, ... ],
-        "charge_id": "txn_..."   (optional — used as the third-party txn id) }
+        "charge_id": "txn_..."   (REQUIRED — the SUCCEEDED charge that paid for this) }
 
     Requires a confirmed, SUCCEEDED charge id belonging to this merchant: we will
     NOT dispense unless the charge actually succeeded. This is the payment->dispense
-    guard ("no payment, no dispense").
+    guard ("no payment, no dispense"). charge_id is mandatory — see below.
     """
     _check_timestamp()
     merchant = _auth()
@@ -808,22 +816,27 @@ def vending_dispense():
     order_id = body.get("order_id")
     goods = body.get("goods") or []
     charge_id = body.get("charge_id")
-    if not machine or not order_id or not goods:
-        abort(400, description="machine, order_id and goods are required")
+    # charge_id is MANDATORY: it is the ONLY proof of payment this endpoint has.
+    # It was once optional, and the SUCCEEDED-charge check + the atomic single-use
+    # consume below were both wrapped in `if charge_id:` — so omitting charge_id
+    # skipped ALL payment verification and dispensed a real product for free,
+    # unlimited times (a decompiled collections key on a kiosk could drain a
+    # machine). Guardrail 11: no payment, no dispense. Never make this optional.
+    if not machine or not order_id or not goods or not charge_id:
+        abort(400, description="machine, order_id, goods and charge_id are required")
 
     # Enforce: only dispense against a real SUCCEEDED charge for THIS merchant,
     # and CONSUME it atomically — one charge pays for ONE dispense. Without
     # the claim, the same SUCCEEDED charge_id authorized unlimited dispenses
     # under fresh order_ids (guardrail 11's "once" only held inside the order
     # flow, and this endpoint bypasses that flow by design).
-    third_party_txn = charge_id or order_id
-    if charge_id:
-        txn = Transaction.query.filter_by(public_id=charge_id, merchant_id=merchant.id).one_or_none()
-        if txn is None:
-            abort(404, description="charge not found")
-        from ..models import TxnStatus, utcnow
-        if txn.status != TxnStatus.SUCCEEDED:
-            abort(400, description=f"cannot dispense: charge status is {txn.status.value}, not succeeded")
+    third_party_txn = charge_id
+    txn = Transaction.query.filter_by(public_id=charge_id, merchant_id=merchant.id).one_or_none()
+    if txn is None:
+        abort(404, description="charge not found")
+    from ..models import TxnStatus, utcnow
+    if txn.status != TxnStatus.SUCCEEDED:
+        abort(400, description=f"cannot dispense: charge status is {txn.status.value}, not succeeded")
 
     # Machine ownership BEFORE consuming the charge: the claim used to come
     # first, so a typo'd machine id 404'd with the charge already consumed and
@@ -834,17 +847,15 @@ def vending_dispense():
     if not _vending.owns_machine(merchant, str(machine)):
         abort(404, description="machine not registered to this merchant")
 
-    if charge_id:
-        from ..models import utcnow
-        claimed = (
-            db.session.query(Transaction)
-            .filter(Transaction.id == txn.id,
-                    Transaction.vending_consumed_at.is_(None))
-            .update({"vending_consumed_at": utcnow()}, synchronize_session=False)
-        )
-        db.session.commit()
-        if not claimed:
-            abort(409, description="this charge has already paid for a dispense")
+    claimed = (
+        db.session.query(Transaction)
+        .filter(Transaction.id == txn.id,
+                Transaction.vending_consumed_at.is_(None))
+        .update({"vending_consumed_at": utcnow()}, synchronize_session=False)
+    )
+    db.session.commit()
+    if not claimed:
+        abort(409, description="this charge has already paid for a dispense")
 
     try:
         resp = xy_vending.apply_export_goods(
@@ -858,12 +869,11 @@ def vending_dispense():
     except xy_vending.XYVendingError as exc:
         # Supplier failed — no product came out, so RELEASE the consumption
         # claim: the customer's paid charge must remain usable for a retry.
-        if charge_id:
-            db.session.query(Transaction).filter(
-                Transaction.public_id == charge_id,
-                Transaction.merchant_id == merchant.id,
-            ).update({"vending_consumed_at": None}, synchronize_session=False)
-            db.session.commit()
+        db.session.query(Transaction).filter(
+            Transaction.public_id == charge_id,
+            Transaction.merchant_id == merchant.id,
+        ).update({"vending_consumed_at": None}, synchronize_session=False)
+        db.session.commit()
         log_event("vending.dispense_failed", merchant_id=merchant.id,
                   resource_id=str(order_id), detail={"error": str(exc)})
         return jsonify(ok=False, error=str(exc)), 502
