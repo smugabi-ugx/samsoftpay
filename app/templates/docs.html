@@ -109,6 +109,7 @@
     <div class="docs-nav-section">
       <div class="docs-nav-title">Getting Started</div>
       <a href="#integration-modes" class="docs-nav-link active">Choose Your Integration</a>
+      <a href="#connection" class="docs-nav-link">How You Connect</a>
       <a href="#quickstart" class="docs-nav-link">Quickstart</a>
       <a href="#authentication" class="docs-nav-link">Authentication</a>
       <a href="#headers" class="docs-nav-link">Required Headers</a>
@@ -178,6 +179,39 @@
       <strong>Mode C</strong> Samsoftpay drives the machine for you (use <code>/v1/vending/orders</code>). Sending a
       Mode-C order to a machine that dispenses itself would double-fire — so pick by <em>who acts</em>, not by whether
       there's a QR. All three share the same keys, auth, balance and webhooks below.</div>
+    </div>
+
+    <!-- How You Connect -->
+    <div class="docs-section" id="connection">
+      <h2><i data-feather="repeat" style="width:22px;height:22px;color:var(--primary);"></i> How You Connect</h2>
+      <p style="font-size:1.0625rem;">The whole integration is <strong>two connections in opposite directions</strong>. Get these right and everything else follows.</p>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:1rem;margin:1.25rem 0;">
+        <div style="border:1px solid var(--primary);border-radius:12px;padding:1rem 1.25rem;background:rgba(99,102,241,0.05);">
+          <div style="font-weight:700;color:var(--primary);margin-bottom:.35rem;">① To transact &nbsp;·&nbsp; YOUR server → US</div>
+          <p style="margin:0;">Your backend calls <strong>our</strong> endpoint to create charges, payouts, check balance:</p>
+          <pre style="margin:.5rem 0 0;"><code>POST https://api.samsoftpay.com/v1/charges
+Authorization: Bearer sk_live_…        ← your API key (proves YOU to US)</code></pre>
+          <p style="margin:.5rem 0 0;font-size:.875rem;color:var(--gray-500);">Same base URL for test and live — the key prefix (<code>sk_test_</code> / <code>sk_live_</code>) picks the mode. This connection is <strong>always required</strong>: we hold the rails, so you call us to move money.</p>
+        </div>
+        <div style="border:1px solid #10b981;border-radius:12px;padding:1rem 1.25rem;background:rgba(16,185,129,0.05);">
+          <div style="font-weight:700;color:#0b7a4b;margin-bottom:.35rem;">② To get notified &nbsp;·&nbsp; US → YOUR server</div>
+          <p style="margin:0;">We POST a signed event to <strong>your</strong> public URL when something changes:</p>
+          <pre style="margin:.5rem 0 0;"><code>POST https://www.yourdomain.com/webhooks/samsoftpay
+X-Samsoftpay-Signature: …              ← verify with your whsec_ (proves US to YOU)</code></pre>
+          <p style="margin:.5rem 0 0;font-size:.875rem;color:var(--gray-500);">Set this URL on Account → Webhooks — it must be <strong>your own</strong> reachable HTTPS host, never <code>api.samsoftpay.com</code>. Optional: you can poll <code>GET /v1/charges/&lt;id&gt;</code> instead.</p>
+        </div>
+      </div>
+
+      <h3>Two keys — don't mix them up</h3>
+      <table class="param-table">
+        <thead><tr><th>Credential</th><th>Direction</th><th>Used for</th><th>Where you find it</th></tr></thead>
+        <tbody>
+          <tr><td><code>sk_live_…</code> / <code>sk_test_…</code></td><td>proves <strong>you → us</strong></td><td><code>Authorization: Bearer</code> on every API call</td><td>Your Account page</td></tr>
+          <tr><td><code>whsec_…</code></td><td>verifies <strong>us → you</strong></td><td>Checking <code>X-Samsoftpay-Signature</code> on incoming webhooks</td><td>Account → Webhooks (shown masked)</td></tr>
+        </tbody>
+      </table>
+      <div class="callout">The <strong>API key</strong> authenticates <em>your requests to us</em>; the <strong>webhook secret</strong> lets you confirm <em>our webhooks really came from us</em>. They are different values, both per-account — you never need any Samsoftpay internal secret, only your own <code>sk_</code> and <code>whsec_</code>.</div>
     </div>
 
     <!-- Quickstart -->
