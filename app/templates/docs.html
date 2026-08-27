@@ -496,6 +496,45 @@ print(resp.json())
 });</code></pre>
         </div>
       </div>
+
+      <div class="callout"><strong>X-Timestamp</strong> may be Unix <em>seconds</em> or <em>milliseconds</em> (<code>Date.now()</code> is fine) — we normalise it. The ±5-minute replay window applies to all POSTs.</div>
+
+      <h3>Provider IDs &amp; the "no id" case</h3>
+      <p>An accepted payout returns a stable <code>pout_…</code> id <strong>immediately</strong>. It is immutable across <code>pending → authorized → succeeded/failed</code>, appears in every webhook (<code>data.id</code>), and is the key for <code>GET /v1/payouts/{id}</code>. A payout that reaches the rail keeps its id even when it later <code>fails</code>.</p>
+      <p>A request <strong>rejected before creation</strong> (bad request, wrong scope, or <strong>insufficient available balance</strong>) has <strong>no <code>pout_…</code> id and no record</strong> — read the <code>error</code>/<code>failure_reason</code> to see why, correct it and retry. A null id is a rejection, never a lost payout.</p>
+
+      <h3>Payout status lifecycle</h3>
+      <table class="param-table">
+        <thead><tr><th>Status</th><th>Meaning</th><th>Final?</th><th>Webhook</th></tr></thead>
+        <tbody>
+          <tr><td><code>pending</code></td><td>created, funds reserved, not yet on the rail</td><td>no</td><td>—</td></tr>
+          <tr><td><code>authorized</code></td><td>accepted by the MTN rail, in flight</td><td>no</td><td>—</td></tr>
+          <tr><td><code>succeeded</code></td><td>recipient paid</td><td><strong>yes</strong></td><td><code>payout.succeeded</code></td></tr>
+          <tr><td><code>failed</code></td><td>rail rejected/failed — amount + fee refunded in full</td><td><strong>yes</strong></td><td><code>payout.failed</code></td></tr>
+        </tbody>
+      </table>
+      <p>States never move backward. An ambiguous network error parks the payout <code>authorized</code> (never a false <code>failed</code>) and is resolved from MTN's own answer — poll <code>GET /v1/payouts/{id}</code> as the source of truth.</p>
+
+      <h3>Machine-readable failure reasons</h3>
+      <p><code>failure_reason</code> is a stable code (with a human message where relevant): <code>recipient_not_found</code>, <code>wallet_locked</code>, <code>timeout</code>, <code>insufficient_funds</code>, <code>user_cancelled</code>, <code>insufficient_balance</code> (merchant wallet), <code>rail_rejected</code>.</p>
+
+      <h3>Bulk payouts (payroll)</h3>
+      <div class="endpoint-badge"><span class="method post">POST</span> /v1/payouts/bulk</div>
+      <p>Up to <strong>1000 items</strong>, <strong>per-item</strong> (not atomic — some items may succeed while others fail). <code>Idempotency-Key</code> is required; each item also dedupes on its <code>reference</code>. The array root may be <code>payouts</code> <em>or</em> <code>items</code>, and each item uses the same <code>recipient:{phone,name}</code> shape as the single endpoint.</p>
+<pre><code>POST /v1/payouts/bulk
+{ "payouts": [
+  { "amount": 50000, "recipient": { "phone": "256780000001", "name": "Emp One" }, "reference": "PR-001" },
+  { "amount": 75000, "recipient": { "phone": "256780000002", "name": "Emp Two" }, "reference": "PR-002" }
+] }
+
+// -> per-item results, each correlatable by reference + provider id + status
+{ "batch_id": "batch_…", "total": 2, "accepted": 2, "failed": 0, "results": [
+  { "index": 0, "ok": true, "id": "pout_…", "status": "authorized", "reference": "PR-001" },
+  { "index": 1, "ok": true, "id": "pout_…", "status": "authorized", "reference": "PR-002" }
+] }</code></pre>
+
+      <h3>Payout webhooks</h3>
+      <p>Configure a webhook URL on <a href="{{ url_for('auth.account') }}#webhooks">Account → Webhooks</a> to receive <code>payout.succeeded</code> / <code>payout.failed</code>. Each event carries a stable <code>evt_…</code> id (dedupe on it), the <code>pout_…</code> id, your <code>reference</code>, status, amount, fee, currency and <code>failure_reason</code> — HMAC-signed exactly like charge events (see <a href="#webhook-verify">Verifying Webhooks</a>).</p>
     </div>
 
     <!-- Payment Links -->
