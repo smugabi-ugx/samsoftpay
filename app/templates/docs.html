@@ -418,6 +418,19 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
         </tbody>
       </table>
 
+      <h3>Funding your sandbox wallet</h3>
+      <p>A <strong>payout or refund needs available balance</strong> (<code>amount + fee</code>) or it is rejected
+      before a <code>pout_</code> id is created — a fresh sandbox starts empty. Two ways to add <strong>test money</strong>
+      (it lives on a separate test ledger, is never withdrawable, and disappears at production go-live):</p>
+      <ul>
+        <li><strong>One click:</strong> Dashboard → <strong>Wallet → Add test funds</strong>. No KYC required to test — add as
+        much as you need, instantly, then run payouts/refunds against it.</li>
+        <li><strong>Or take a sandbox payment:</strong> create a charge with an <code>sk_test_</code> key using an ordinary
+        test number — it settles in seconds and credits your sandbox available balance (minus the fee).</li>
+      </ul>
+      <p>Check it any time with <code>GET /v1/balance</code>: <code>available</code> must be ≥ <code>Σ amounts + Σ fees</code> before payroll/bulk runs.</p>
+      <div class="callout success">Going live is a one-line change — swap <code>sk_test_</code> → <code>sk_live_</code>. Same base URL, same endpoints, same webhooks. Sandbox test balances never cross into live.</div>
+
       <h3>Exact <code>charge.failed</code> payloads</h3>
       <p>Each failure number produces a <code>charge.failed</code> webhook whose <code>data</code>
       is exactly this shape (identical to <code>GET /v1/charges/&lt;id&gt;</code>). Build your
