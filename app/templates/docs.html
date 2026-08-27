@@ -694,6 +694,16 @@ print(data["url"])  # Share this link with your customer</code></pre>
       <p>Take Mobile Money on an unattended machine. You create an order, the machine shows the QR we return, the customer scans and pays on their phone, and we tell the machine to release the product the moment the payment succeeds. Your machine software never handles money.</p>
       <p><strong>Enable it first:</strong> Dashboard → Vending. While it is off, no order can be created and no machine will be told to dispense.</p>
 
+      <div class="callout"><strong>Bringing your own machine? (Machine Integration Standard v1)</strong>
+      Any machine can integrate — not just one supplier. After a payment we send a signed dispense
+      command, and your machine reports the real result to a signed callback
+      (<code>MD5(secret + timestamp + reqData)</code>, fields sorted alphabetically). You certify against
+      us before go-live: post a sample signed callback to <code>POST /v1/vending/conformance</code>
+      (<code>{ "payload": {…}, "sign": "…" }</code>) and we reply <code>{ "ok": true }</code> or show the exact
+      reqData we expected — iterate until it passes. It moves no money and dispenses nothing. Your vendor
+      signing profile (which fields are signed, key ordering, replay window) is configuration on our side,
+      not a code change — so onboarding a new machine never touches the platform.</div>
+
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/vending/orders</div>
       <table class="param-table">
         <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>

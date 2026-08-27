@@ -57,79 +57,29 @@ SIGNATURE RECIPE (for testing / for the supplier's engineers):
 """
 from __future__ import annotations
 
-import hashlib
-import os
+import time
 
 from flask import Blueprint, current_app, jsonify, request
 
 from ..extensions import db
 from ..models import Merchant, PaymentLink
-from ..services import vending, xy_vending
+from ..services import signing, vending, xy_vending
 
 bp = Blueprint("xy_inbound", __name__, url_prefix="/inbound/xy")
 
-# Fields that are part of the signature base. `splist` is a nested list and the
-# doc never includes it in a sign example, so it is excluded.
-_NON_SIGNED = {"sign", "key", "timestamp", "splist"}
 
-# The doc contradicts itself between its field table and its signing example.
-_ALIASES = {"status": "state", "dsfshdh": "dsfshbh"}
+def _verify(payload: dict, secret: str, merchant) -> bool:
+    """Verify the callback signature against the merchant's vendor signing
+    profile. Fails closed (guardrail 9).
 
-
-def _sign_base(params: dict) -> str:
-    return "&".join(f"{k}={xy_vending._str(params[k])}" for k in sorted(params))
-
-
-# XY v1.41's §2.2.3 signing EXAMPLE is NOT strictly alphabetical: it lists
-# `tksj` before `tkje` (alphabetical order is tkje, then tksj — j < s), while
-# every other field is sorted. MD5 is order-sensitive, so if XY's real backend
-# signs in its own documented order, an alphabetical-only base would REJECT a
-# legitimate refund/dispense callback. We therefore ALSO try a base that is
-# sorted-except-that-one-pair-swapped. This is purely additive (an extra
-# candidate hash); it never weakens the secret check.
-def _sign_base_swapped(params: dict, a: str, b: str) -> str:
-    keys = sorted(params)
-    if a in keys and b in keys:
-        ia, ib = keys.index(a), keys.index(b)
-        keys[ia], keys[ib] = keys[ib], keys[ia]
-    return "&".join(f"{k}={xy_vending._str(params[k])}" for k in keys)
-
-
-def _candidate_signs(secret: str, timestamp: str, payload: dict) -> set[str]:
-    """Every signature the doc could plausibly mean, for one payload.
-
-    Small and bounded: the documented spelling, and the alternate spelling used
-    in the signing example. Both are MD5 over the same secret+timestamp, so this
-    widens spelling tolerance without weakening the secret.
+    The per-vendor knobs (which fields are signed, key ordering, spelling
+    aliases, replay window) now live in a `signing.Profile` — see
+    app/services/signing.py — instead of hardcoded constants here. XY resolves to
+    the built-in XY profile, which reproduces the previous behaviour exactly.
     """
-    scalars = {k: v for k, v in payload.items()
-               if k not in _NON_SIGNED and not isinstance(v, (dict, list))}
-
-    variants = [scalars]
-    aliased = {_ALIASES.get(k, k): v for k, v in scalars.items()}
-    if aliased != scalars:
-        variants.append(aliased)
-
-    out = set()
-    for variant in variants:
-        for base in (_sign_base(variant),
-                     _sign_base_swapped(variant, "tkje", "tksj")):
-            raw = f"{secret}{timestamp}{base}"
-            out.add(hashlib.md5(raw.encode("utf-8")).hexdigest().lower())
-    return out
-
-
-def _verify(payload: dict, secret: str) -> bool:
-    """Verify the callback signature. Fail closed when a secret is configured."""
-    if not secret:
-        # No credentials for this merchant. In production that is a hard stop —
-        # we will not accept an unverifiable call that can change order state.
-        return not os.environ.get("RENDER")
-    supplied = str(payload.get("sign") or "").strip().lower()
-    if not supplied:
-        return False
-    timestamp = xy_vending._str(payload.get("timestamp", ""))
-    return supplied in _candidate_signs(secret, timestamp, payload)
+    profile = signing.resolve_profile(getattr(merchant, "signing_profile_vendor", None))
+    now_ms = int(time.time() * 1000)
+    return signing.verify(profile, secret, payload, now_ms=now_ms)
 
 
 # ---------- payload interpretation ----------
@@ -216,7 +166,7 @@ def dispense_result():
 
     merchant = db.session.get(Merchant, link.merchant_id)
     secret = xy_vending.for_merchant(merchant).secret if merchant else ""
-    if not _verify(payload, secret):
+    if not _verify(payload, secret, merchant):
         _audit("vending.callback_rejected", link, payload)
         current_app.logger.warning(
             "XY dispense callback failed signature for order %s", link.public_id

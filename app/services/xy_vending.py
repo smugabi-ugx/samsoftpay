@@ -183,46 +183,24 @@ def apply_export_goods(*, jqbh: str, order_id: str, third_party_txn_id: str,
 
     Signed per the doc's §2.2.1 case: the flattened order fields
     (consumeType, ddbh, dsfjybh, jqbh, qhm, zfzh) sorted alphabetically.
+
+    This is now a thin shim over the vendor-neutral `dispense_driver` using the
+    built-in XY signing profile — same request byte-for-byte. A machine vendor
+    with a different dispense protocol adds a profile + body builder there; this
+    XY entry point never changes (memory: xy-vending-callback-hardening).
     """
-    if not goods:
-        raise XYVendingError("goods list is required")
+    from .dispense_driver import command_dispense
+    from .signing import XY_PROFILE
 
-    c = _resolve(creds)
-    ts = _now_ms()
-    sign_params = {
-        "consumeType": consume_type,
-        "ddbh": order_id,
-        "dsfjybh": third_party_txn_id,
-        "jqbh": jqbh,
-        "qhm": pickup_code,
-        "zfzh": pay_account,
-    }
-    sign = make_sign(c.secret, ts, sign_params)
-
-    body = {
-        "orderDTO": {
-            "payType": str(pay_type),
-            "orderGoodsDetailList": [
-                {"spbh": g.get("spbh", ""), "spmc": g.get("spmc", ""),
-                 "spdj": _str(g.get("spdj", ""))}
-                for g in goods
-            ],
-            "order": {
-                "spsl": str(len(goods)),
-                "zfzh": pay_account,
-                "qhm": pickup_code,
-                "dsfjybh": third_party_txn_id,
-                "ddbh": order_id,
-                "jqbh": jqbh,
-            },
-        },
-        "sign": sign,
-        "consumeType": consume_type,
-        "key": c.key,
-        "timestamp": ts,
-    }
-    resp = _post("/service-pay-third/third/pay/api/ApplyExportGoods", body, c)
-    # code "1" == success per the doc.
-    if str(resp.get("code")) != "1":
-        raise XYVendingError(f"dispense rejected: {resp.get('message') or resp}")
-    return resp
+    return command_dispense(
+        profile=XY_PROFILE,
+        creds=_resolve(creds),
+        jqbh=jqbh,
+        order_id=order_id,
+        third_party_txn_id=third_party_txn_id,
+        pay_account=pay_account,
+        goods=goods,
+        pay_type=pay_type,
+        consume_type=consume_type,
+        pickup_code=pickup_code,
+    )

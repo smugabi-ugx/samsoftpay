@@ -143,6 +143,11 @@ class Merchant(UserMixin, db.Model):
     xy_secret_encrypted = Column(Text, nullable=True)
     xy_merchant_no = Column(String(60), nullable=True)   # shbh
     xy_base_url = Column(String(200), nullable=True)
+    # Which machine-vendor signing profile this merchant's callbacks/dispenses
+    # use (Machine Integration Standard). Defaults to "xy"; a new vendor sets its
+    # own. Resolved via services.signing.resolve_profile.
+    signing_profile_vendor = Column(String(40), nullable=False,
+                                    server_default="xy", default="xy")
     # ── Split payments / subaccounts ──
     # A subaccount is a MANAGED Merchant: parent_merchant_id points at the
     # platform that owns it, is_managed=True means it can never log in or call
@@ -568,6 +573,42 @@ class VendingMachine(db.Model):
         # could in principle be given overlapping numbering by the supplier.
         UniqueConstraint("merchant_id", "jqbh", name="uq_machine_per_merchant"),
     )
+
+
+class SigningProfile(db.Model):
+    """How ONE machine vendor signs its callbacks and receives dispense commands.
+
+    Machine Integration Standard v1. Replaces the hardcoded XY constants that
+    used to live in webhooks_xy.py / xy_vending.py. A new vendor is a row here
+    (+ a passed conformance sample), not a code change. XY works from a built-in
+    default with NO row needed; a row overrides the built-in when present and is
+    how a vendor is edited (`flask signing-profile`) or a new one added.
+
+    Signing is always MD5(secret + timestamp + reqData); a profile only varies
+    the knobs a vendor's firmware differs on. It can NEVER disable verification —
+    there is no such column (guardrail 9). See app/services/signing.py.
+    """
+    __tablename__ = "signing_profiles"
+    id = Column(Integer, primary_key=True)
+    vendor = Column(String(40), nullable=False, unique=True, index=True)
+    display_name = Column(String(120), nullable=False)
+
+    # Inbound callback-verification knobs (JSON-encoded where noted).
+    non_signed_fields = Column(Text, nullable=False,
+                               default='["sign", "key", "timestamp"]')
+    field_aliases = Column(Text, nullable=False, default="{}")
+    sign_order = Column(String(20), nullable=False, default="alpha")   # alpha | alpha_swap
+    sign_order_swaps = Column(Text, nullable=False, default="[]")      # [[a,b],...]
+    replay_window_seconds = Column(Integer, nullable=False, default=0)
+
+    # Outbound dispense-command knobs.
+    dispense_path = Column(String(255), nullable=False,
+                           default="/service-pay-third/third/pay/api/ApplyExportGoods")
+    dispense_body_style = Column(String(40), nullable=False, default="xy_orderdto")
+    dispense_extra = Column(Text, nullable=False, default="{}")
+
+    is_legacy_shim = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
 
 class AuditLog(db.Model):

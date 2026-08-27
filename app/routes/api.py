@@ -883,6 +883,61 @@ def vending_dispense():
     return jsonify(ok=True, machine=machine, order_id=order_id, supplier_response=resp), 200
 
 
+@bp.post("/vending/conformance")
+def vending_conformance():
+    """Machine Integration Standard v1 — self-serve signature conformance check.
+
+    A machine vendor posts a sample dispense-result callback exactly as its
+    firmware would sign it; we report whether that signature verifies against the
+    merchant's signing profile. This is the certify-against-us gate: a vendor
+    iterates here until it passes, BEFORE any live callback. It moves NO money,
+    changes NO state, and dispenses nothing.
+
+    Body: { "payload": {...the exact callback JSON...},
+            "timestamp": "<13-digit ms>",   (optional; else read from payload)
+            "sign": "<what your firmware produced>" }
+
+    Collections-only keys are allowed (a kiosk vendor holds only that) — this is
+    a read-only check that reveals nothing money-moving.
+    """
+    _check_timestamp()
+    merchant = _auth()
+    from ..services import signing, xy_vending
+
+    body = request.get_json(silent=True) or {}
+    payload = body.get("payload")
+    supplied = str(body.get("sign") or (payload or {}).get("sign") or "").strip().lower()
+    if not isinstance(payload, dict) or not supplied:
+        abort(400, description="payload (object) and sign are required")
+
+    ts = str(body.get("timestamp") or payload.get("timestamp") or "").strip()
+    secret = xy_vending.for_merchant(merchant).secret if merchant else ""
+    if not secret:
+        abort(400, description="no machine-vendor secret configured for this merchant; "
+                               "set your XY/vendor credentials first")
+
+    profile = signing.resolve_profile(getattr(merchant, "signing_profile_vendor", None))
+    accepted = signing.candidate_signs(profile, secret, ts, payload)
+    ok = supplied in accepted
+
+    out = {
+        "ok": ok,
+        "vendor": profile.vendor,
+        "profile": profile.display_name,
+    }
+    if ok:
+        out["note"] = "signature verifies against your profile"
+    else:
+        # Show the reqData bases we WOULD accept (not the hashes, and never the
+        # secret) so the vendor can see exactly which field ordering/selection we
+        # expect and fix their firmware.
+        out["expected_reqData_any_of"] = signing.sign_bases(profile, payload)
+        out["hint"] = ("your signature did not match; check which fields you sign "
+                       "(nested lists like splist are excluded), the key ordering, "
+                       "and that timestamp is included as the 2nd element of the MD5")
+    return jsonify(out), 200
+
+
 # ---------- bulk payouts (CSV or JSON) ----------
 
 def _parse_bulk_items() -> list:
