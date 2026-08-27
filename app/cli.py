@@ -430,6 +430,59 @@ def register(app: Flask) -> None:
             print(f"Reversed {public_id}: {p.amount + p.fee_amount} {p.currency} "
                   f"returned to merchant {p.merchant_id}")
 
+    @app.cli.command("reset-vending")
+    @click.argument("public_id")
+    @click.option("--redispense", is_flag=True, default=False,
+                  help="After confirming NO product came out, retry the dispense.")
+    def reset_vending(public_id, redispense):
+        """Recover a vending order stuck in DISPENSING (worker died mid-dispense).
+
+        dispense_for_link claims the order pending->dispensing and only THEN calls
+        the supplier. If the worker dies in that window, the order is stuck
+        DISPENSING forever — retry_dispense refuses it (it assumes a live in-flight
+        call) and no sweep clears it, while the customer's charge is SUCCEEDED.
+
+        ONLY run this after you have confirmed the real outcome (the XY §2.2.3
+        dispense-result callback, or a physical check) — the original
+        ApplyExportGoods may already have reached the machine, so a blind retry
+        risks a DOUBLE dispense. Default just clears the stuck state to `failed`
+        (visible, refundable). Pass --redispense ONLY when you have confirmed
+        nothing came out and want to send the product again.
+        """
+        from .models import PaymentLink, Transaction, TxnStatus
+        from .services import vending
+
+        with app.app_context():
+            link = PaymentLink.query.filter_by(public_id=public_id).first()
+            if not link:
+                print(f"No vending order {public_id}")
+                return
+            if link.vending_status != "dispensing":
+                print(f"REFUSING: {public_id} is vending_status="
+                      f"{link.vending_status!r}, not 'dispensing' — nothing stuck to reset.")
+                return
+            txn = (db.session.get(Transaction, link.transaction_id)
+                   if link.transaction_id else None)
+            if txn is None or txn.status != TxnStatus.SUCCEEDED:
+                print(f"REFUSING: {public_id} has no SUCCEEDED charge.")
+                return
+
+            if redispense:
+                # Operator has confirmed no product came out. Clear the stuck
+                # claim to pending and dispense again through the normal guard.
+                link.vending_status = "pending"
+                db.session.commit()
+                ok = vending.dispense_for_link(link, txn)
+                print(f"{public_id}: re-dispense {'succeeded' if ok else 'failed'} "
+                      f"(now {link.vending_status}).")
+            else:
+                link.vending_status = "failed"
+                link.vending_error = "reset from stuck DISPENSING (worker died mid-dispense)"
+                db.session.commit()
+                print(f"{public_id}: cleared stuck DISPENSING -> failed. "
+                      f"Refund the customer or re-run with --redispense once you have "
+                      f"confirmed no product came out.")
+
     @app.cli.command("disable-2fa")
     @click.argument("email", required=False)
     def disable_2fa(email):

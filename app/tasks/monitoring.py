@@ -40,7 +40,8 @@ def check_money_stuck() -> dict:
     from datetime import timedelta
 
     from ..models import (
-        Account, AccountType, Payout, PayoutStatus, Transaction, TxnStatus, utcnow,
+        Account, AccountType, PaymentLink, Payout, PayoutStatus, Transaction,
+        TxnStatus, utcnow,
     )
     from ..services.alerts import send_alert
 
@@ -73,6 +74,29 @@ def check_money_stuck() -> dict:
             f"{len(stuck)} charge(s) stuck AUTHORIZED > {_AUTHORIZED_ALERT_HOURS}h "
             f"({total} total) — MTN never returned a final status. "
             f"Check reconciliation. ids: {ids}")
+
+    # 3b. Vending orders stuck DISPENSING: dispense_for_link commits the atomic
+    #     claim pending->dispensing and only THEN makes the supplier ApplyExportGoods
+    #     HTTP call. If the worker dies in that window (deploy/OOM/SIGKILL) before
+    #     _finish runs, the order is stuck 'dispensing' forever — retry_dispense
+    #     refuses a DISPENSING order and no sweep clears it, while the charge is
+    #     SUCCEEDED (customer paid). A genuine dispense finishes in seconds, so an
+    #     order still 'dispensing' an hour after creation is a dead in-flight call.
+    #     Do NOT auto re-dispense: the original ApplyExportGoods may already have
+    #     reached the machine, so a blind retry risks a double dispense. Alert a
+    #     human, who reconciles the §2.2.3 callback and runs `flask reset-vending`.
+    dispensing_cutoff = utcnow() - timedelta(hours=1)
+    stuck_vend = (PaymentLink.query
+                  .filter(PaymentLink.vending_status == "dispensing",
+                          PaymentLink.created_at <= dispensing_cutoff)
+                  .all())
+    if stuck_vend:
+        ids = ", ".join(v.public_id for v in stuck_vend[:10])
+        problems.append(
+            f"{len(stuck_vend)} vending order(s) stuck DISPENSING > 1h — a worker "
+            f"likely died between claim and supplier confirmation. The customer PAID. "
+            f"Do NOT blind-retry (double-dispense risk); reconcile then "
+            f"`flask reset-vending <id>`. ids: {ids}")
 
     # 3. Any LIVE suspense balance is worth a warning even if not obviously stranded
     #    (money in flight is normal; money PARKED here is the leak signature).
