@@ -44,28 +44,54 @@
   <div style="border:1px solid var(--gray-100);border-radius:12px;padding:1rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
       <div style="flex:1;min-width:240px;">
-        <strong style="font-size:.9375rem;">Clearing time</strong>
+        <strong style="font-size:.9375rem;">Live clearing time</strong>
         <span class="badge succeeded">{{ settlement_hold_minutes }} min</span>
         <div class="text-muted" style="font-size:.8125rem;margin-top:.25rem;">
-          How long a successful payment sits in <em>pending</em> before it clears to
-          withdrawable <em>available</em>. Lower = faster access to funds; higher =
+          How long a successful <strong>live</strong> payment sits in <em>pending</em> before it
+          clears to withdrawable <em>available</em>. Lower = faster access; higher =
           more fraud/chargeback protection. Applies to money not yet past its hold.
         </div>
       </div>
       <form method="POST" action="{{ url_for('dashboard.admin_set_settlement_hold') }}"
             style="display:flex;gap:.5rem;align-items:center;"
-            onsubmit="return confirm('Set settlement hold to ' + this.minutes.value + ' minutes platform-wide?')">
+            onsubmit="return confirm('Set LIVE settlement hold to ' + this.minutes.value + ' minutes platform-wide?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="scope" value="live">
         <input type="number" name="minutes" min="0" max="43200" step="1"
                value="{{ settlement_hold_minutes }}" required
                style="width:7rem;padding:.5rem .6rem;border:1px solid var(--gray-200);border-radius:8px;"
-               aria-label="Settlement hold in minutes">
+               aria-label="Live settlement hold in minutes">
         <span class="text-muted" style="font-size:.8125rem;">minutes</span>
         <button class="btn btn-primary">Update</button>
       </form>
     </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--gray-200);">
+      <div style="flex:1;min-width:240px;">
+        <strong style="font-size:.9375rem;">Sandbox clearing time</strong>
+        <span class="badge pending">{{ sandbox_hold_minutes }} min</span>
+        <div class="text-muted" style="font-size:.8125rem;margin-top:.25rem;">
+          The hold for <strong>test</strong> money (sandbox). Kept short (default 1 min) so
+          integrators aren't blocked testing charges, payouts and withdrawals. This is
+          test money only — it can never be withdrawn as real funds.
+        </div>
+      </div>
+      <form method="POST" action="{{ url_for('dashboard.admin_set_settlement_hold') }}"
+            style="display:flex;gap:.5rem;align-items:center;"
+            onsubmit="return confirm('Set SANDBOX settlement hold to ' + this.minutes.value + ' minutes?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="scope" value="sandbox">
+        <input type="number" name="minutes" min="0" max="43200" step="1"
+               value="{{ sandbox_hold_minutes }}" required
+               style="width:7rem;padding:.5rem .6rem;border:1px solid var(--gray-200);border-radius:8px;"
+               aria-label="Sandbox settlement hold in minutes">
+        <span class="text-muted" style="font-size:.8125rem;">minutes</span>
+        <button class="btn btn-outline">Update</button>
+      </form>
+    </div>
+
     <div class="text-muted" style="font-size:.7rem;margin-top:.6rem;">
-      Common values: <code>30</code> = 30 min · <code>1440</code> = 24 hours · <code>60</code> = 1 hour.
+      Common values: <code>30</code> = 30 min · <code>1440</code> = 24 hours · <code>1</code> = near-instant.
       Bounded 0 min – 30 days. Audit-logged.
     </div>
   </div>

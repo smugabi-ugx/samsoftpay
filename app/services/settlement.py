@@ -37,6 +37,25 @@ def get_hold_minutes() -> int:
     return DEFAULT_HOLD_MINUTES
 
 
+DEFAULT_SANDBOX_HOLD_MINUTES = 1   # sandbox clears near-instantly — it's test money
+
+
+def get_sandbox_hold_minutes() -> int:
+    """The SANDBOX settlement hold, in minutes. Sandbox is test money (is_test=True,
+    can never be withdrawn as real funds), so it clears fast (~1 min) — an integrator
+    testing charges/payouts/withdrawals shouldn't wait the live hold. Admin-
+    configurable via `sandbox_settlement_hold_minutes`; fails SAFE to 1."""
+    try:
+        from .platform_flags import get_flag, SANDBOX_SETTLEMENT_HOLD_MINUTES
+        raw = get_flag(SANDBOX_SETTLEMENT_HOLD_MINUTES)
+        v = int(raw)
+        if 0 <= v <= 43_200:
+            return v
+    except (TypeError, ValueError, Exception):
+        pass
+    return DEFAULT_SANDBOX_HOLD_MINUTES
+
+
 def sweep_to_available(*, hold_minutes: int | None = None,
                        hold_hours: int | None = None, batch_size: int = 500) -> dict:
     """Move merchant_pending -> merchant_available for transactions whose own hold
@@ -47,15 +66,29 @@ def sweep_to_available(*, hold_minutes: int | None = None,
     transaction on the same merchant aged out. Work is committed per merchant so one
     merchant's failure or a long run never holds a table-wide lock.
 
-    The hold defaults to the admin-configured `settlement_hold_minutes` (30 min out
-    of the box). An explicit `hold_minutes`/`hold_hours` overrides it (tests + the
-    manual sweep button pass one); `hold_hours` is kept for backward compatibility.
+    The hold is MODE-AWARE by default: LIVE uses the admin-configured
+    `settlement_hold_minutes` (30 min out of the box); SANDBOX uses the short
+    `sandbox_settlement_hold_minutes` (~1 min) so test money clears almost
+    immediately. An explicit `hold_minutes`/`hold_hours` overrides BOTH uniformly
+    (tests + the manual sweep button pass one); `hold_hours` is back-compat.
 
     Returns {merchant_id: amount_moved}.
     """
-    if hold_minutes is None:
-        hold_minutes = hold_hours * 60 if hold_hours is not None else get_hold_minutes()
-    cutoff = utcnow() - timedelta(minutes=hold_minutes)
+    explicit = (hold_minutes if hold_minutes is not None
+                else (hold_hours * 60 if hold_hours is not None else None))
+    if explicit is not None:
+        live_minutes = sandbox_minutes = explicit
+    else:
+        live_minutes = get_hold_minutes()
+        sandbox_minutes = get_sandbox_hold_minutes()
+
+    now = utcnow()
+    live_cutoff = now - timedelta(minutes=live_minutes)
+    sandbox_cutoff = now - timedelta(minutes=sandbox_minutes)
+    # Gather candidates with the LOOSER (more-recent) cutoff so BOTH modes are
+    # covered; each (merchant, currency, MODE) group is then settled against ITS
+    # own cutoff below — so a shorter sandbox hold never releases live money early.
+    gather_cutoff = max(live_cutoff, sandbox_cutoff)
 
     # Collect the distinct merchant/currency/MODE groups that have anything due.
     # Mode is part of the key: sandbox and live are separate ledgers, and a sweep
@@ -66,7 +99,7 @@ def sweep_to_available(*, hold_minutes: int | None = None,
         .filter(
             Transaction.status == TxnStatus.SUCCEEDED,
             Transaction.settled_at.is_(None),
-            Transaction.completed_at <= cutoff,
+            Transaction.completed_at <= gather_cutoff,
         )
         .distinct()
         .all()
@@ -79,7 +112,7 @@ def sweep_to_available(*, hold_minutes: int | None = None,
                 merchant_id=merchant_id,
                 currency=currency,
                 is_test=bool(is_test),
-                cutoff=cutoff,
+                cutoff=(sandbox_cutoff if is_test else live_cutoff),
                 batch_size=batch_size,
             )
             if merchant_moved:
@@ -96,10 +129,14 @@ def sweep_to_available(*, hold_minutes: int | None = None,
 
     # Second pass: split-charge shares. A split txn carries settled_at from the
     # moment it succeeds (so the pass above skips it); its money lives in
-    # SplitAllocation rows that settle per-share here, after the same hold.
+    # SplitAllocation rows that settle per-share here, after the hold. Split
+    # allocations aren't mode-partitioned in this call, so use the LIVE cutoff —
+    # never releasing live split money early. (A sandbox split therefore waits the
+    # live hold; splits are an advanced/live feature, so that's an acceptable,
+    # safe trade-off vs. the fast path above for ordinary sandbox charges.)
     from .splits import sweep_split_allocations
     for merchant_id, amount in sweep_split_allocations(
-            cutoff=cutoff, batch_size=batch_size).items():
+            cutoff=live_cutoff, batch_size=batch_size).items():
         moved[merchant_id] = moved.get(merchant_id, 0) + amount
     return moved
 
