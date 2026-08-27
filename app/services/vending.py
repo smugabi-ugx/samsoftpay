@@ -185,6 +185,14 @@ def create_order(*, merchant: Merchant, machine: str, goods: list[dict],
         raise VendingError("machine is required")
     if not isinstance(amount, int) or amount <= 0:
         raise VendingError("amount must be a positive integer")
+    # Redirect-URL scheme guard (adversarial audit): success_url is echoed into
+    # the checkout status page's anchor href and window.location, so a
+    # `javascript:` URI would be stored XSS on the checkout origin. Only http(s)
+    # is allowed — same rule as create_payment_link's _safe_url, enforced here so
+    # EVERY caller (API + any future one) is covered, not just the API route.
+    import re as _re
+    if success_url and not _re.match(r"^https?://", str(success_url)):
+        raise VendingError("success_url must start with http:// or https://")
     # If the merchant has synced their machines, the order must name one of
     # theirs. Catches a typo'd machine number before a customer pays for a
     # dispense that can never happen, and stops one operator addressing

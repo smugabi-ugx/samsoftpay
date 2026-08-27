@@ -1046,6 +1046,17 @@ def new_link_submit(merchant_id: int):
         return render_template(
             "new_link.html", merchant=merchant, error="Amount must be positive."
         )
+    # Redirect-URL scheme guard: success_url/cancel_url are echoed into the
+    # checkout status page (anchor href + window.location), so a `javascript:`
+    # URI would be stored XSS. Only http(s) — same rule as the API's _safe_url.
+    import re as _re
+    _surl = request.form.get("success_url") or None
+    _curl = request.form.get("cancel_url") or None
+    for _u in (_surl, _curl):
+        if _u and not _re.match(r"^https?://", str(_u)):
+            return render_template(
+                "new_link.html", merchant=merchant,
+                error="Success/cancel URLs must start with http:// or https://.")
     link = PaymentLink(
         public_id=f"lnk_{uuid.uuid4().hex[:16]}",
         merchant_id=merchant.id,
@@ -1053,8 +1064,8 @@ def new_link_submit(merchant_id: int):
         currency=request.form.get("currency", "UGX"),
         description=request.form.get("description") or None,
         reference=request.form.get("reference") or None,
-        success_url=request.form.get("success_url") or None,
-        cancel_url=request.form.get("cancel_url") or None,
+        success_url=_surl,
+        cancel_url=_curl,
         allow_multiple_uses=bool(request.form.get("allow_multiple_uses")),
     )
     db.session.add(link)

@@ -1081,6 +1081,21 @@ def create_bulk_payout():
             # path's prior retry-on-rejection behaviour.
             idempotency.release(merchant.id, idem_key)
             results.append({"index": i, "ok": False, "reference": ref, "error": str(exc)})
+        except Exception:
+            # ANY other failure — e.g. DisbursementUnavailable (a distinct
+            # Exception, NOT a PayoutError) raised before any earmark when live
+            # disbursement creds are momentarily missing/misconfigured. Without
+            # this clause it propagated out of the loop -> HTTP 500, aborting the
+            # rest of the batch, AND the IN_FLIGHT reservation committed by
+            # reserve() survived — so every later retry of that reference returned
+            # "still in flight" until the 30-day prune, permanently wedging the
+            # recipient. Release the reservation and record a retryable failure,
+            # exactly like the single POST /payouts path (guardrail 21 discipline).
+            db.session.rollback()
+            idempotency.release(merchant.id, idem_key)
+            results.append({"index": i, "ok": False, "reference": ref,
+                            "error": "disbursement temporarily unavailable — retry",
+                            "retryable": True})
 
     accepted = sum(1 for r in results if r.get("ok"))
     log_event("payout.bulk", merchant_id=merchant.id, resource_id=batch_id,

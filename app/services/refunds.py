@@ -132,6 +132,35 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
 
     _fee_return(+1)
 
+    # EARLY-RELEASE FROM HOLD (adversarial money audit — HIGH): if this charge's
+    # proceeds are still inside the settlement hold (settled_at is None, i.e. net
+    # is sitting in MERCHANT_PENDING, not yet swept to MERCHANT_AVAILABLE), move
+    # them pending -> available BEFORE funding the refund. Otherwise create_payout
+    # debits `available` for money that never reached it, AND the charge's pending
+    # credit is orphaned forever — the sweep only settles SUCCEEDED charges and
+    # this one is now REFUNDED — silently over-debiting the merchant's withdrawable
+    # balance by the net amount (ledger still sums to zero, so reconciliation
+    # passes). Same direction as settlement.sweep_to_available (pending/available
+    # are credit-normal, hence +net / -net). A settled or instant charge already
+    # has settled_at set, so this is a no-op for them. If the payout is later
+    # refused we leave this in place: the money is legitimately the merchant's and
+    # now correctly settled — only the fee-return and REFUNDED claim are reverted.
+    if txn.settled_at is None:
+        net = int(txn.amount) - int(txn.fee_amount or 0)
+        if net > 0:
+            pending_acct = _ledger.get_or_create_account(
+                type=AccountType.MERCHANT_PENDING, merchant_id=merchant.id,
+                currency=txn.currency, is_test=mode)
+            avail_acct = _ledger.get_or_create_account(
+                type=AccountType.MERCHANT_AVAILABLE, merchant_id=merchant.id,
+                currency=txn.currency, is_test=mode)
+            _ledger.post(
+                [(pending_acct, +net), (avail_acct, -net)],
+                currency=txn.currency,
+                memo=f"refund early-release from hold {txn.public_id}")
+        txn.settled_at = datetime.now(timezone.utc)
+        db.session.commit()
+
     try:
         from .payouts import DisbursementUnavailable, PayoutError, create_payout
 

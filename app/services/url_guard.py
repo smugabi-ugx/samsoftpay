@@ -16,7 +16,11 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
+
+
+class SsrfBlocked(Exception):
+    """Raised by safe_post when a URL does not resolve to a public address."""
 
 
 def _ip_is_public(ip_str: str) -> bool:
@@ -61,3 +65,67 @@ def is_public_http_url(url: str | None) -> bool:
     if not addrs:
         return False
     return all(_ip_is_public(a) for a in addrs)
+
+
+def _resolve_public_ip(host: str, port: int | None, scheme: str) -> str | None:
+    """Resolve host to ONE validated globally-routable IP, or None. Fail-closed."""
+    try:
+        ipaddress.ip_address(host)               # literal IP — use directly
+        return host if _ip_is_public(host) else None
+    except ValueError:
+        pass
+    try:
+        infos = socket.getaddrinfo(
+            host, port or (443 if scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, UnicodeError, OSError):
+        return None
+    addrs = [info[4][0] for info in infos]
+    # Reject if ANYTHING resolves non-public (a split public/private answer).
+    if not addrs or not all(_ip_is_public(a) for a in addrs):
+        return None
+    return addrs[0]
+
+
+def safe_post(url: str, **kwargs):
+    """POST to a merchant-supplied URL with the resolved public IP PINNED.
+
+    Closes the DNS-rebinding TOCTOU that a save-time/deliver-time re-resolution
+    left open: the address we VALIDATE is the exact address we CONNECT to, so an
+    attacker-controlled DNS name cannot answer 'public' to the guard and
+    169.254.169.254 / an internal host to the actual request. The original
+    hostname is preserved for the Host header and TLS SNI/cert verification, so
+    genuine HTTPS delivery is unchanged. Fail-closed: any non-public/unresolvable
+    host raises SsrfBlocked before a byte is sent. allow_redirects defaults False.
+    """
+    import requests
+    from requests.adapters import HTTPAdapter
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise SsrfBlocked("url must be http(s) with a hostname")
+    ip = _resolve_public_ip(parsed.hostname, parsed.port, parsed.scheme)
+    if ip is None:
+        raise SsrfBlocked(f"host {parsed.hostname!r} does not resolve to a public address")
+
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    ip_host = f"[{ip}]" if ":" in ip else ip                 # bracket IPv6
+    pinned_url = urlunparse(parsed._replace(netloc=f"{ip_host}:{port}"))
+
+    headers = dict(kwargs.pop("headers", None) or {})
+    headers["Host"] = parsed.hostname                        # original vhost
+    kwargs.setdefault("allow_redirects", False)
+
+    class _SNIAdapter(HTTPAdapter):
+        """Keep TLS SNI + cert hostname = the real name, though we dialled an IP."""
+        def init_poolmanager(self, *a, **kw):
+            kw["server_hostname"] = parsed.hostname
+            kw["assert_hostname"] = parsed.hostname
+            return super().init_poolmanager(*a, **kw)
+
+    session = requests.Session()
+    if parsed.scheme == "https":
+        session.mount("https://", _SNIAdapter())
+    try:
+        return session.post(pinned_url, headers=headers, **kwargs)
+    finally:
+        session.close()
