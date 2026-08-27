@@ -1,0 +1,12 @@
+{
+  "name": "samsoftpay",
+  "version": "1.0.0",
+  "description": "Node SDK for the Samsoftpay API (MTN Mobile Money collections & disbursements, Uganda).",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "engines": { "node": ">=18" },
+  "keywords": ["samsoftpay", "mtn", "mobile money", "uganda", "payments", "momo"],
+  "license": "MIT",
+  "homepage": "https://api.samsoftpay.com/docs",
+  "files": ["index.js", "index.d.ts", "README.md"]
+}
