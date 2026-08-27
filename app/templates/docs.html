@@ -590,6 +590,11 @@ print(data["url"])  # Share this link with your customer</code></pre>
       created with a <code>split</code> cannot be refunded through this endpoint yet.
       You will receive <code>400 {"error": "split_charge_refunds_not_yet_supported"}</code>;
       contact support to reverse a split charge.</p>
+      <div class="callout"><strong>A refund draws from your <em>available</em> balance, not pending.</strong>
+      A charge that just succeeded sits in the settlement hold (pending) — refunding it immediately can
+      return <code>400 insufficient available balance</code> even though the customer clearly just paid.
+      This is correct: available (settled) funds back the disbursement. Refund once the charge has settled,
+      or keep enough available balance to cover same-day refunds.</div>
     </div>
 
     <!-- Listing -->
