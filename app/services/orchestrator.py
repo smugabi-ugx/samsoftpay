@@ -292,6 +292,12 @@ def complete_transaction(
         from .vending import maybe_dispense_on_success
         maybe_dispense_on_success(txn)
         _maybe_mark_bill_paid(txn)
+        # Receipt to the final consumer (email + SMS) with the URA tax breakdown.
+        # Best-effort, never raises; skipped for sandbox test charges. Delivery
+        # activates once MAIL_*/AT_API_KEY are configured, else it logs.
+        if not txn.is_test and (txn.customer_email or txn.customer_phone):
+            from .receipts import send_receipt
+            send_receipt(txn)
 
     # Subscription dunning bridge — runs on BOTH outcomes: a failed subscription
     # charge (the common insufficient-funds case, which resolves async here) goes
