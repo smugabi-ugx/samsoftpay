@@ -194,6 +194,26 @@ def sandbox_fund():
     return redirect(url_for("wallet.wallet_home"))
 
 
+@bp.get("/dashboard/wallet/statement/<period>.pdf")
+@login_required
+@verified_required
+def statement_pdf(period: str):
+    """Finance-grade monthly statement PDF for the logged-in merchant (live ledger).
+    `period` = YYYY-MM."""
+    from datetime import datetime as _dt
+    try:
+        d = _dt.strptime(period, "%Y-%m")
+    except ValueError:
+        abort(400, description="period must be YYYY-MM")
+    from ..services.statements import build_statement, render_pdf
+    merchant = db.session.get(Merchant, current_user.id)
+    st = build_statement(merchant, d.year, d.month, is_test=False)
+    from flask import Response
+    fname = f"samsoftpay-statement-{merchant.handle or merchant.id}-{period}.pdf"
+    return Response(render_pdf(st), mimetype="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename={fname}"})
+
+
 @bp.get("/dashboard/wallet/statement.csv")
 @login_required
 @verified_required

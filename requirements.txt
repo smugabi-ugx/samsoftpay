@@ -15,3 +15,4 @@ redis>=5.0.1
 sentry-sdk[flask]>=2.0.0
 segno>=1.6.1
 cryptography>=42.0.0
+fpdf2>=2.7.0

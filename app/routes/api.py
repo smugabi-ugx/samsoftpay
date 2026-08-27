@@ -1233,6 +1233,49 @@ def list_scheduled_payouts():
     return jsonify(data=[_scheduled_payout_public(sp) for sp in rows])
 
 
+# ---------- reconciliation statements ----------
+
+def _parse_period(period: str):
+    """'2026-08' or '2026-08.pdf' -> (year, month, want_pdf)."""
+    want_pdf = period.endswith(".pdf")
+    key = period[:-4] if want_pdf else period
+    try:
+        y, m = key.split("-")
+        year, month = int(y), int(m)
+        if not (1 <= month <= 12):
+            raise ValueError
+    except (ValueError, AttributeError):
+        abort(400, description="period must be YYYY-MM (optionally .pdf)")
+    return year, month, want_pdf
+
+
+def _statement_json(st: dict) -> dict:
+    def d(x):
+        return x.isoformat() if hasattr(x, "isoformat") else x
+    out = dict(st)
+    out["generated_at"] = d(st["generated_at"])
+    for k in ("money_in", "money_out"):
+        out[k] = [dict(r, date=d(r["date"])) for r in st[k]]
+    return out
+
+
+@bp.get("/statements/<period>")
+def get_statement(period: str):
+    """Finance-grade monthly statement — reference-level, reconciles to /v1/balance.
+    `GET /v1/statements/2026-08` for JSON, `…2026-08.pdf` for the PDF."""
+    merchant = _auth()
+    year, month, want_pdf = _parse_period(period)
+    from ..services.statements import build_statement, render_pdf
+    st = build_statement(merchant, year, month, is_test=(g.api_mode == "test"))
+    if want_pdf:
+        from flask import Response
+        pdf = render_pdf(st)
+        fname = f"samsoftpay-statement-{merchant.handle or merchant.id}-{st['period_key']}.pdf"
+        return Response(pdf, mimetype="application/pdf",
+                        headers={"Content-Disposition": f"attachment; filename={fname}"})
+    return jsonify(_statement_json(st))
+
+
 # ---------- subaccounts (split payments) ----------
 
 @bp.post("/subaccounts")
