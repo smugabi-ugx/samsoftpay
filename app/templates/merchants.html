@@ -153,10 +153,13 @@
 
               <!-- Verify shortcut -->
               {% if m.kyc_status != 'verified' %}
-              <a href="{{ url_for('auth.admin_verify_user', merchant_id=m.id) }}"
-                 class="btn btn-success" style="padding:.375rem .625rem;font-size:.8125rem;" title="Verify KYC">
-                <i data-feather="shield" style="width:13px;height:13px;"></i>
-              </a>
+              <form method="POST" action="{{ url_for('auth.admin_verify_user', merchant_id=m.id) }}"
+                    style="display:inline;" onsubmit="return confirm('Verify this merchant\'s KYC?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success" style="padding:.375rem .625rem;font-size:.8125rem;" title="Verify KYC">
+                  <i data-feather="shield" style="width:13px;height:13px;"></i>
+                </button>
+              </form>
               {% endif %}
 
               <!-- Delete -->

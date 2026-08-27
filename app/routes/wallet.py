@@ -347,6 +347,15 @@ def request_withdrawal():
         merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail_acct.cached_balance if avail_acct else 0
+    # Subtract funds already committed to OTHER pending withdrawal requests so a
+    # merchant can't stack several requests that each pass on their own but
+    # together exceed the balance (the payout isn't earmarked until admin approval).
+    from sqlalchemy import func as _sf
+    pending_committed = int(db.session.query(
+        _sf.coalesce(_sf.sum(WithdrawalRequest.amount + WithdrawalRequest.fee_amount), 0)
+    ).filter(WithdrawalRequest.merchant_id == current_user.id,
+             WithdrawalRequest.status == "pending").scalar() or 0)
+    available = max(0, available - pending_committed)
     from ..services.fees import calculate_payout_fee
     fee = calculate_payout_fee(amount=amount, currency="UGX")   # 1.5%, same as a payout
     total_needed = amount + fee
