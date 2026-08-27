@@ -608,9 +608,12 @@ print(data["url"])  # Share this link with your customer</code></pre>
   "next_cursor": "txn_9f2c41d8a3b7e615"   // pass as ?starting_after=
 }</code></pre>
       <p>Filters: <code>status</code>, <code>reference</code> (charges only),
+      <code>phone</code>, <code>email</code> (reconcile by customer),
       <code>created_after</code> / <code>created_before</code> (ISO&nbsp;8601),
-      <code>limit</code> (1–100). Lists are scoped to your key's mode: a test key
-      only ever sees test data. Failed charges carry <code>failure_reason</code>
+      <code>limit</code> (1–100). <code>phone</code> matches on the last 9 digits, so
+      <code>0780…</code>, <code>256780…</code> and <code>+256&nbsp;780…</code> all find the
+      same customer. Lists are scoped to your key's mode: a test key only ever sees
+      test data. Failed charges carry <code>failure_reason</code>
       (e.g. <code>insufficient_funds</code>) on every charge object.</p>
     </div>
 
