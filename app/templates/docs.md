@@ -5,6 +5,24 @@
 > This is the complete, agent-friendly markdown version of https://api.samsoftpay.com/docs.
 > Machine-readable index: https://api.samsoftpay.com/docs/llms.txt
 
+## Choose your integration
+
+Samsoftpay supports three integration shapes. Pick the one that matches what you're building — they
+can be combined (a POS that both takes payments *and* pays out uses two of them). All three share the
+same keys, auth, balance and webhooks.
+
+| Mode | You're building | Customer pays on a Samsoftpay screen? | Who acts on success? | Start with |
+|---|---|---|---|---|
+| **A · Hosted checkout** | A web/app checkout, payment link, or QR at the till — your device confirms the payment and then does its own thing (receipt, unlock, dispense over its own hardware). | Yes — we host the pay page + QR; you show it. | **You do.** Poll `GET /v1/charges/<id>` or receive the `charge.succeeded` webhook, then act. We command nothing. | `POST /v1/payment-links` + Charges |
+| **B · Backend money-out** | Payroll, supplier payouts, merchant withdrawals — server-to-server. No customer, no checkout page. | No — pure API. | N/A — money goes out; track `payout.succeeded`/`payout.failed`. | `POST /v1/payouts` (single & bulk) |
+| **C · Vending (machine present)** | A vending machine that shows a QR and dispenses a physical product, where you want *us* to command the machine to dispense once the money lands. | Yes — the machine shows our QR; the customer scans and pays. | **We do.** On success we command the machine to dispense and confirm the real outcome via the supplier callback. | `POST /v1/vending/orders` |
+
+**Which one is "the QR mode"?** Both A and C show a QR — the difference is *who dispenses*. In **Mode A**
+your own device watches for `succeeded` and acts itself (a POS or self-dispensing kiosk — use
+`/v1/payment-links`). In **Mode C** Samsoftpay drives the machine for you (use `/v1/vending/orders`).
+Sending a Mode-C order to a machine that dispenses itself would double-fire, so pick by *who acts*, not
+by whether there's a QR.
+
 ## Quickstart
 
 You need exactly **two things**:
