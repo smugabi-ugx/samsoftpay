@@ -163,6 +163,31 @@ It moves no money, changes no state, and dispenses nothing — iterate until `ok
 signing profile (which fields are signed, key ordering, replay window) is **configuration on our
 side**, so onboarding a new machine is a profile, not a platform code change.
 
+## Your Samsoftpay balance & reconciliation
+
+Every merchant has a real Samsoftpay balance (`pending` + `available`, per currency) — the ledger we
+hold for you. It rises when you collect and falls when you pay out; every change is atomic and can
+never overdraft.
+
+| Event | Effect on your balance |
+|---|---|
+| **Charge succeeds** (money in) | `+ (amount − 1.5% fee)` into `pending`, then to `available` after the settlement hold |
+| **Payout / refund** (money out) | `− (amount + 1.5% fee)` from `available`; a *failed* payout refunds amount + fee |
+| **Withdrawal** to your own MoMo | `− (amount + 1.5% fee)` from `available` (needs a verified account) |
+
+**Keeping your app in sync:**
+
+- **`GET /v1/balance` is the source of truth.** If your app keeps its own mirror balance or per-user
+  wallets, they must reconcile to this figure (mode-scoped — an `sk_test_` key shows sandbox only).
+- **Update on webhooks, verify with balance.** `charge.succeeded` raises your mirror;
+  `payout.succeeded`/`payout.failed` adjusts it — so you don't poll. When webhook and balance disagree,
+  `GET /v1/balance` (or `GET /v1/charges` / `GET /v1/payouts`) wins.
+- **Deductions are real-time** — the moment a payout is accepted, `available` drops by amount + fee.
+- **Fees & tax:** the only Samsoftpay charge is the **1.5%** fee (min UGX 200, cap UGX 5,000) on each
+  charge and payout. The 0.5% Mobile-Money levy is deducted by MTN at the rail (not by us); URA VAT
+  applies to fees. Reconcile against **net (amount − fee)**, not gross. If `consistent` is ever `false`,
+  the journal totals returned are still authoritative — tell us.
+
 ## Webhooks: the operations contract
 
 Configure `webhook_url` on your Account page. Samsoftpay POSTs a signed JSON envelope on every
