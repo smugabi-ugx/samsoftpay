@@ -62,8 +62,11 @@ def _notify_withdrawal_paid(merchant, amount: int, payout_ref: str) -> None:
 
 @bp.get("/dashboard/wallet")
 @login_required
-@verified_required
 def wallet_home():
+    # NOTE: KYC (verified_required) is NOT required to VIEW the wallet or use
+    # sandbox test funds — testing must be frictionless (Stripe-style). Every
+    # LIVE money action (withdraw, add settlement account, sweep) keeps its own
+    # @verified_required, so live money still needs KYC.
     accounts   = SettlementAccount.query.filter_by(merchant_id=current_user.id).all()
     withdrawals = (WithdrawalRequest.query
                    .filter_by(merchant_id=current_user.id)
@@ -139,10 +142,23 @@ def wallet_home():
         sandbox_balance=sandbox_balance,
         sandbox_available=sandbox_available,
         sandbox_pending=sandbox_pending,
+        sandbox_active=_sandbox_active(),
     )
 
 
-_SANDBOX_FUND_CAP = 10_000_000   # UGX per click
+def _sandbox_active() -> bool:
+    """True while the platform is still on MTN sandbox (pre-production).
+
+    The sandbox balance + 'add test funds' UI show only while this is True, so the
+    moment MOMO_TARGET_ENV is flipped to the production value at go-live, all
+    sandbox figures VANISH from the wallet automatically. Test money lives on a
+    separate is_test ledger regardless, so nothing real is ever affected."""
+    import os
+    env = (os.environ.get("MOMO_TARGET_ENV") or "sandbox").strip().lower()
+    return "sandbox" in env or env == ""
+
+
+_SANDBOX_FUND_CAP = 1_000_000_000   # UGX per click — test money, be generous
 
 
 @bp.post("/dashboard/wallet/sandbox-fund")
@@ -154,6 +170,9 @@ def sandbox_fund():
     (which need `available` >= amount + fee) without first building a top-up flow.
     """
     from ..services import ledger
+    if not _sandbox_active():
+        flash("Sandbox test funds are only available before MTN production go-live.", "error")
+        return redirect(url_for("wallet.wallet_home"))
     try:
         amount = int(request.form.get("amount") or 1_000_000)
     except (TypeError, ValueError):
