@@ -163,6 +163,50 @@ def register(app: Flask) -> None:
             db.session.commit()
             print(f"verified: {m.name} ({m.email}) — live keys enabled")
 
+    @app.cli.command("credit-sandbox")
+    @click.argument("email")
+    @click.argument("amount", type=int)
+    @click.option("--currency", default="UGX", help="Currency (default UGX).")
+    def credit_sandbox(email, amount, currency):
+        """Credit a merchant's SANDBOX available balance for testing.
+
+        Test money ONLY (is_test=True) — it can never touch the live/withdrawable
+        ledger, so this cannot mint real funds. Lets an integrator (e.g. Backbone
+        Payroll) test payouts without first building a sandbox top-up flow: a
+        payout needs `available` funds (amount + fee) or it is rejected before a
+        pout_ id is created.
+
+        Example:  flask credit-sandbox tester@example.com 5000000
+        """
+        with app.app_context():
+            from .services import ledger
+            from .models import Account, AccountType
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant found with email: {email}")
+                return
+            if amount <= 0:
+                print("amount must be a positive integer")
+                return
+            # Zero-sum, sandbox-only: sandbox float in (+, debit-normal) and the
+            # merchant's SANDBOX available up (-, credit-normal). Same convention
+            # as a charge landing in available, minus any fee.
+            rail = ledger.get_or_create_account(
+                type=AccountType.RAIL_CLEARING, merchant_id=None,
+                currency=currency, is_test=True)
+            avail = ledger.get_or_create_account(
+                type=AccountType.MERCHANT_AVAILABLE, merchant_id=m.id,
+                currency=currency, is_test=True)
+            ledger.post(
+                [(rail, +amount), (avail, -amount)],
+                currency=currency,
+                memo=f"sandbox test credit for {email}")
+            db.session.commit()
+            db.session.refresh(avail)
+            print(f"Credited {amount} {currency} to {m.name} ({email}) SANDBOX available. "
+                  f"New sandbox available: {-int(avail.cached_balance)} {currency}. "
+                  f"(Test money only — is_test=True; cannot be withdrawn as real funds.)")
+
     @app.cli.command("set-instant-settlement")
     @click.argument("email")
     @click.argument("state", required=False, default="on")
