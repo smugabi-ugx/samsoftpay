@@ -956,3 +956,39 @@ class Subscription(db.Model):
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
+
+
+# ---------- Scheduled payouts / payroll (money-OUT autopilot) ----------
+
+class ScheduledPayout(db.Model):
+    """A recurring mobile-money disbursement a merchant sets and forgets.
+
+    The money-OUT mirror of SubscriptionPlan+Subscription (money IN) pointed at
+    the existing payout rail. run_due() fires it on an interval and drives
+    payouts.create_payout for each recipient. A uniform `amount` is paid to
+    every recipient in `recipients`. is_test is fixed ONCE at creation from the
+    key's mode (guardrail 12/15). Exactly-once is the atomic claim in run_due():
+    next_run_at is advanced BEFORE any payout is created.
+    """
+    __tablename__ = "scheduled_payouts"
+    id = Column(Integer, primary_key=True)
+    public_id = Column(String(40), nullable=False, unique=True, index=True)
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=False, index=True)
+    name = Column(String(200), nullable=True)
+    amount = Column(BigInteger, nullable=False)      # paid to EACH recipient, per cycle
+    currency = Column(String(3), nullable=False, default="UGX")
+    channel = Column(SAEnum(Channel), nullable=False, default=Channel.MTN_MOMO)
+    interval = Column(String(20), nullable=False)    # daily | weekly | monthly
+    recipients = Column(Text, nullable=False)        # JSON [{"phone","name"}]
+    max_per_recipient = Column(BigInteger, nullable=True)   # NULL = no cap
+    status = Column(String(20), nullable=False, default="active", index=True)
+    is_test = Column(Boolean, default=False, nullable=False)
+    next_run_at = Column(DateTime, nullable=False, index=True)
+    last_run_at = Column(DateTime, nullable=True)
+    failure_reason = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_scheduled_payout_amount_positive"),
+        Index("ix_scheduled_payouts_status_next_run", "status", "next_run_at"),
+    )

@@ -271,6 +271,7 @@ def test_collections_key_refused_at_create(app):
             kyc_status="verified")
         db.session.add(m)
         db.session.commit()
+        _before = ScheduledPayout.query.count()   # earlier tests share this file DB
 
     client = app.test_client()
 
@@ -285,7 +286,7 @@ def test_collections_key_refused_at_create(app):
                     headers=hdr("sk_test_col_sched5", "sched-col-1"), json=body)
     check("[5] collections key is 403 on POST /v1/scheduled-payouts", r.status_code == 403)
     with app.app_context():
-        check("[5] the 403 wrote no schedule row", ScheduledPayout.query.count() == 0)
+        check("[5] the 403 wrote no schedule row", ScheduledPayout.query.count() == _before)
 
     r = client.post("/v1/scheduled-payouts",
                     headers=hdr("sk_test_full_sched5", "sched-full-1"), json=body)

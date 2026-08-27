@@ -191,6 +191,30 @@ def _paths() -> dict:
                 "responses": {"200": _obj("ConformanceResult"), "400": _err("Missing payload/sign or no vendor secret")},
             },
         },
+        "/v1/scheduled-payouts": {
+            "post": {
+                "tags": ["Payouts"], "summary": "Create a recurring payout (payroll autopilot)",
+                "description": "A recurring disbursement of a uniform amount to a list of recipients, daily/weekly/monthly. FULL key only. Fires on its interval; a cycle the merchant can't fully fund PAUSES (never a partial payroll); exactly-once per cycle.",
+                "security": _BEARER, "parameters": [_H_TIMESTAMP, _H_IDEM],
+                "requestBody": _body("ScheduledPayoutCreate"),
+                "responses": {"201": _obj("ScheduledPayout"), "400": _err("Invalid / cap breach"),
+                              "403": _err("Collections-only key"), "409": _err("Idempotency in flight")},
+            },
+            "get": {
+                "tags": ["Payouts"], "summary": "List scheduled payouts",
+                "security": _BEARER,
+                "parameters": [_q("status", "active | paused | cancelled"),
+                               _q("limit", "1–100", typ="integer")],
+                "responses": {"200": _list("ScheduledPayout"), "401": _err("Auth")},
+            },
+        },
+        "/v1/scheduled-payouts/{id}": {
+            "get": {
+                "tags": ["Payouts"], "summary": "Retrieve a scheduled payout",
+                "security": _BEARER, "parameters": [_path_id("spo_…")],
+                "responses": {"200": _obj("ScheduledPayout"), "404": _err("Not found")},
+            },
+        },
         "/v1/subaccounts": {
             "post": {
                 "tags": ["Subaccounts"], "summary": "Register a subaccount for split payments",
@@ -373,6 +397,27 @@ def _components() -> dict:
             "SubaccountCreate": {"type": "object", "required": ["name"], "properties": {
                 "name": {"type": "string"}, "payout_phone": {"type": "string"},
                 "external_ref": {"type": "string"}}},
+            "ScheduledPayoutCreate": {"type": "object", "required": ["amount", "interval", "recipients"], "properties": {
+                "amount": dict(money, description="Paid to EACH recipient, per cycle."),
+                "currency": {"type": "string", "default": "UGX"},
+                "channel": {"type": "string", "default": "mtn_momo"},
+                "interval": {"type": "string", "enum": ["daily", "weekly", "monthly"]},
+                "recipients": {"type": "array", "items": {"$ref": "#/components/schemas/Recipient"}},
+                "name": {"type": "string", "description": "Optional label, e.g. 'August payroll'."},
+                "max_per_recipient": dict(money, description="Optional per-recipient cap; a larger amount is rejected 400.")}},
+            "ScheduledPayout": {"type": "object", "properties": {
+                "id": {"type": "string", "example": "spo_…"},
+                "mode": {"type": "string", "enum": ["test", "live"]},
+                "status": {"type": "string", "enum": ["active", "paused", "cancelled"]},
+                "name": {"type": ["string", "null"]}, "amount": money,
+                "currency": {"type": "string"}, "channel": {"type": "string"},
+                "interval": {"type": "string"},
+                "recipients": {"type": "array", "items": {"$ref": "#/components/schemas/Recipient"}},
+                "max_per_recipient": {"type": ["integer", "null"]},
+                "next_run_at": {"type": ["string", "null"], "format": "date-time"},
+                "last_run_at": {"type": ["string", "null"], "format": "date-time"},
+                "failure_reason": {"type": ["string", "null"]},
+                "created_at": {"type": ["string", "null"], "format": "date-time"}}},
             "Subaccount": {"type": "object", "properties": {
                 "id": {"type": "string", "example": "sub_…"}, "name": {"type": "string"},
                 "status": {"type": "string"}}},

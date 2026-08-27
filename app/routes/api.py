@@ -1110,6 +1110,129 @@ def create_bulk_payout():
     ), 200
 
 
+# ---------- scheduled payouts / payroll (money-OUT autopilot) ----------
+
+def _scheduled_payout_public(sp) -> dict:
+    return dict(
+        id=sp.public_id,
+        mode="test" if sp.is_test else "live",
+        status=sp.status,
+        name=sp.name,
+        amount=sp.amount,
+        currency=sp.currency,
+        channel=sp.channel.value,
+        interval=sp.interval,
+        recipients=json.loads(sp.recipients) if sp.recipients else [],
+        max_per_recipient=sp.max_per_recipient,
+        next_run_at=sp.next_run_at.isoformat() if sp.next_run_at else None,
+        last_run_at=sp.last_run_at.isoformat() if sp.last_run_at else None,
+        failure_reason=sp.failure_reason,
+        created_at=sp.created_at.isoformat() if sp.created_at else None,
+    )
+
+
+@bp.post("/scheduled-payouts")
+def create_scheduled_payout_route():
+    from ..services.scheduled_payouts_service import (
+        ScheduledPayoutError, create_scheduled_payout,
+    )
+
+    _check_timestamp()
+    merchant = _auth()
+    _require_full_scope()   # money-OUT on autopilot — collections-only keys forbidden (403)
+
+    idem_key = request.headers.get("Idempotency-Key")
+    if not idem_key:
+        abort(400, description="Idempotency-Key header required")
+
+    body = request.get_json(silent=True) or {}
+    request_hash = idempotency.hash_body(body)
+
+    existing = idempotency.find(merchant.id, idem_key)
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            abort(409, description="idempotency key reused with different request body")
+        if existing.response_status == idempotency.IN_FLIGHT:
+            abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
+        return _replayed(json.loads(existing.response_body), existing.response_status)
+    if not idempotency.reserve(merchant.id, idem_key, request_hash):
+        abort(409, description="a request with this Idempotency-Key is still in flight — retry shortly")
+
+    try:
+        amount = int(body["amount"])
+        currency = body.get("currency", "UGX")
+        channel = Channel(body.get("channel", "mtn_momo"))
+        interval = body.get("interval", "monthly")
+        raw = body.get("recipients") or []
+        if not isinstance(raw, list) or not raw:
+            raise ValueError("recipients must be a non-empty list")
+        recipients = [{"phone": r["phone"], "name": r.get("name")} for r in raw]
+        max_per_recipient = body.get("max_per_recipient")
+        if max_per_recipient is not None:
+            max_per_recipient = int(max_per_recipient)
+        name = body.get("name")
+    except (KeyError, ValueError, TypeError) as exc:
+        idempotency.release(merchant.id, idem_key)
+        abort(400, description=f"invalid request: {exc}")
+
+    try:
+        sp = create_scheduled_payout(
+            merchant=merchant,
+            amount=amount,
+            currency=currency,
+            channel=channel,
+            interval=interval,
+            recipients=recipients,
+            name=name,
+            max_per_recipient=max_per_recipient,
+            is_test=(g.api_mode == "test"),
+        )
+    except ScheduledPayoutError as exc:
+        body_out = {"error": str(exc)}
+        idempotency.store(merchant.id, idem_key, request_hash, 400, body_out)
+        log_event("scheduled_payout.rejected", merchant_id=merchant.id,
+                  detail={"reason": str(exc)})
+        return jsonify(body_out), 400
+
+    out = _scheduled_payout_public(sp)
+    idempotency.store(merchant.id, idem_key, request_hash, 201, out)
+    log_event("scheduled_payout.created", merchant_id=merchant.id, resource_id=sp.public_id,
+              detail={"amount": sp.amount, "interval": sp.interval,
+                      "recipients": len(recipients)})
+    return jsonify(out), 201
+
+
+@bp.get("/scheduled-payouts/<public_id>")
+def get_scheduled_payout(public_id: str):
+    from ..models import ScheduledPayout
+    merchant = _auth()
+    sp = ScheduledPayout.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id,
+        is_test=(g.api_mode == "test"),
+    ).one_or_none()
+    if sp is None:
+        abort(404)
+    return jsonify(_scheduled_payout_public(sp))
+
+
+@bp.get("/scheduled-payouts")
+def list_scheduled_payouts():
+    from ..models import ScheduledPayout
+    merchant = _auth()
+    q = ScheduledPayout.query.filter_by(
+        merchant_id=merchant.id, is_test=(g.api_mode == "test"))
+    status_f = request.args.get("status")
+    if status_f:
+        q = q.filter(ScheduledPayout.status == status_f)
+    limit, after, before = _parse_list_params()
+    if after:
+        q = q.filter(ScheduledPayout.created_at >= after)
+    if before:
+        q = q.filter(ScheduledPayout.created_at <= before)
+    rows = q.order_by(ScheduledPayout.id.desc()).limit(limit).all()
+    return jsonify(data=[_scheduled_payout_public(sp) for sp in rows])
+
+
 # ---------- subaccounts (split payments) ----------
 
 @bp.post("/subaccounts")
