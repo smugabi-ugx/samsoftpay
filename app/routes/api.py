@@ -102,6 +102,14 @@ def _check_timestamp() -> None:
         ts = int(ts_header)
     except ValueError:
         abort(400, description="X-Timestamp must be an integer Unix timestamp")
+    # Accept MILLISECONDS as well as seconds. Many clients send Date.now() (ms).
+    # A Unix SECONDS timestamp today is ~1.7e9; a MILLISECONDS one is ~1.7e12, so
+    # a value past 1e11 (year 5138 in seconds) is unambiguously ms — normalise it.
+    # This was the #1 integration blocker: it produced a spurious "timestamp too
+    # far in the future" on POST endpoints, while GET /v1/balance (which does not
+    # apply the replay guard at all) appeared to accept the same value.
+    if ts > 100_000_000_000:
+        ts //= 1000
     skew = int(time.time()) - ts
     if skew > _MAX_TIMESTAMP_SKEW:
         abort(400, description=f"request timestamp is {skew}s old — max allowed skew is {_MAX_TIMESTAMP_SKEW}s")
@@ -860,7 +868,10 @@ def _parse_bulk_items() -> list:
     ctype = (request.content_type or "")
     if "application/json" in ctype:
         body = request.get_json(silent=True) or {}
-        return body.get("payouts") or []
+        # Accept both root keys: `payouts` (authoritative contract) and `items`
+        # (used by an earlier integration doc). Two names for the same array was
+        # a needless integration snag — honour both.
+        return body.get("payouts") or body.get("items") or []
 
     csv_text = None
     if request.files:
