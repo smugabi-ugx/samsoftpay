@@ -8,6 +8,7 @@ Ready-to-use ways to drop Samsoftpay into a store or a codebase. Everything talk
 | Path | What it is | Status |
 |---|---|---|
 | `integrations/woocommerce/` | **WooCommerce payment gateway** (WordPress plugin, PHP) | ✅ ready to install |
+| `integrations/shopify/` | **Shopify Payments App** (Node/Express, offsite method) | ✅ starter built + tested — needs Shopify Partner approval to list |
 | `sdks/js/` | **Node SDK** (`samsoftpay`) | ✅ ready |
 | `sdks/python/` | **Python SDK** (`samsoftpay`) | ✅ ready |
 
@@ -34,10 +35,11 @@ These platforms don't let a third party add a payment method with a self-hosted 
 WooCommerce does — you integrate through **their** payment frameworks, which require onboarding/approval:
 
 - **Shopify:** the [Payments Apps API](https://shopify.dev/docs/apps/build/payments) — you build a
-  Shopify **app** that offers Samsoftpay as an offsite payment method. Shopify must approve the app,
-  and merchants install it from the App Store. The Samsoftpay side is the same API we already expose
-  (create a payment session → redirect to hosted checkout → confirm by webhook). **We can build the
-  Shopify app; going live needs Shopify Partner approval.**
+  Shopify **app** that offers Samsoftpay as an offsite payment method. **A working starter is now in
+  `integrations/shopify/`** (Node/Express: payment session → hosted checkout → `paymentSessionResolve`
+  on our webhook; 9/9 end-to-end tests pass). Deploy it, wire the Partner Dashboard URLs, and submit
+  for Shopify review — merchants then install it from the App Store. Shopify must approve the app
+  before it can take live money; the code and the flow are done.
 - **Wix:** the [Payment Provider SPI](https://dev.wix.com/docs/rest/business-solutions/payments) — you
   host a small service Wix calls to create/capture/refund a payment, which forwards to our API. Also
   requires registering as a Wix payment provider.
