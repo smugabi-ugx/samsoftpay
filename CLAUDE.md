@@ -303,11 +303,11 @@ client must NOT know it's Sam's platform). Pesapal built OpenFloat to compete wi
 - Tests that wait on the mock rail MUST use a temp FILE sqlite DB, not `:memory:`. The rail
   completes the charge on a timer thread, and an in-memory DB is per-connection — the thread
   writes into a different, empty database and the completion silently never lands.
-- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **d0e1f2a3b4c5**
+- Migrations: `flask db upgrade` (FLASK_APP=run.py). Current head = **e1f2a3b4c5d6**
   (chain: … → cd34ef56ab78 settlements → de45fa67bc89 disputes → ef56ab78cd90 txn
   indexes → fa67bc89de01 merchant_suspend → a1b2c3d4e5f6 merchant_limits/fee_override
-  → b8c9d0e1f2a3 signing_profiles → c9d0e1f2a3b4 payouts.reference → d0e1f2a3b4c5 scheduled_payouts (recurring
-  payroll autopilot). Signing profiles: per-vendor signing
+  → b8c9d0e1f2a3 signing_profiles → c9d0e1f2a3b4 payouts.reference → d0e1f2a3b4c5 scheduled_payouts → e1f2a3b4c5d6 bank_settlement
+  (withdrawal_requests.bank_reference). Signing profiles: per-vendor signing
   profiles + merchants.signing_profile_vendor; XY seeded, works from a built-in default too)).
 
 ## Tech stack & Render services
@@ -468,7 +468,7 @@ real sandbox payments. **Deferred engineering items live in the memory file
 `engineering-gaps-sweep-plan.md`** — run that orchestration next.
 
 ## POST-DEPLOY checklist (after a main deploy)
-1. `flask db current` → expect `d0e1f2a3b4c5` (scheduled_payouts; after payouts.reference)
+1. `flask db current` → expect `e1f2a3b4c5d6` (bank_settlement; after scheduled_payouts)
 2. `flask backfill-key-hashes` (once)
 3. open https://api.samsoftpay.com/healthz → `{"status":"ok","database":"up"}`
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to

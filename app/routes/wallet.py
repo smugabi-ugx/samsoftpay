@@ -524,6 +524,27 @@ def admin_approve_withdrawal(wr_id: int):
     sa = db.session.get(SettlementAccount, wr.settlement_account_id)
     merchant = db.session.get(Merchant, wr.merchant_id)
 
+    # BANK settlement — no automated rail. EARMARK the money now (available ->
+    # suspense) and leave it 'processing'; the operator makes the actual bank
+    # transfer and CONFIRMS it via /bank-complete, which releases the earmark.
+    if sa.account_type == "bank":
+        from ..services.bank_settlement import BankSettlementError, earmark_bank_withdrawal
+        try:
+            earmark_bank_withdrawal(wr)
+            wr.admin_notes = f"Approved by {current_user.email}; awaiting bank transfer."
+            db.session.commit()
+            flash(f"Bank withdrawal approved — UGX {wr.amount:,} earmarked. Now make the bank "
+                  f"transfer to {sa.bank_name or 'the bank'} acct {sa.account_number} "
+                  f"({sa.account_name}), then confirm it with the transfer reference below.",
+                  "success")
+        except BankSettlementError as exc:
+            db.session.rollback(); db.session.refresh(wr)
+            wr.status = "rejected"
+            wr.admin_notes = str(exc)
+            db.session.commit()
+            flash(f"Could not approve bank withdrawal: {exc}", "error")
+        return redirect(url_for("wallet.admin_withdrawals"))
+
     # Resolve the disbursement channel from an EXPLICIT allowlist. The old map
     # sent "bank" (and any unknown type) to MTN_MOMO using the settlement
     # account NUMBER as the recipient MSISDN — on the live rail that either
@@ -600,6 +621,51 @@ def admin_reject_withdrawal(wr_id: int):
     wr.processed_at = datetime.now(timezone.utc)
     db.session.commit()
     flash("Withdrawal rejected.", "info")
+    return redirect(url_for("wallet.admin_withdrawals"))
+
+
+@bp.post("/admin/withdrawals/<int:wr_id>/bank-complete")
+@login_required
+@admin_required
+def admin_bank_complete(wr_id: int):
+    """Confirm a BANK withdrawal's transfer is done — releases the earmark to
+    psp_float. Only valid for a 'processing' bank withdrawal."""
+    wr = db.session.get(WithdrawalRequest, wr_id) or abort(404)
+    db.session.refresh(wr, with_for_update=True)
+    if wr.status != "processing":
+        db.session.commit()
+        flash(f"Request is '{wr.status}' — only a processing bank withdrawal can be confirmed.", "warning")
+        return redirect(url_for("wallet.admin_withdrawals"))
+    ref = (request.form.get("bank_reference") or "").strip()
+    if not ref:
+        db.session.commit()
+        flash("A bank transfer reference is required to confirm.", "error")
+        return redirect(url_for("wallet.admin_withdrawals"))
+    from ..services.bank_settlement import settle_bank_withdrawal
+    settle_bank_withdrawal(wr, ref)
+    db.session.commit()
+    merchant = db.session.get(Merchant, wr.merchant_id)
+    _notify_withdrawal_paid(merchant, wr.amount, ref)   # best-effort
+    flash(f"Bank settlement confirmed (ref {ref}). The merchant has been paid.", "success")
+    return redirect(url_for("wallet.admin_withdrawals"))
+
+
+@bp.post("/admin/withdrawals/<int:wr_id>/bank-fail")
+@login_required
+@admin_required
+def admin_bank_fail(wr_id: int):
+    """The bank transfer could not be made — reverse the earmark back to the
+    merchant's available balance."""
+    wr = db.session.get(WithdrawalRequest, wr_id) or abort(404)
+    db.session.refresh(wr, with_for_update=True)
+    if wr.status != "processing":
+        db.session.commit()
+        flash(f"Request is '{wr.status}' — only a processing bank withdrawal can be reversed.", "warning")
+        return redirect(url_for("wallet.admin_withdrawals"))
+    from ..services.bank_settlement import reverse_bank_withdrawal
+    reverse_bank_withdrawal(wr, request.form.get("reason", "").strip())
+    db.session.commit()
+    flash("Bank withdrawal reversed — funds returned to the merchant's available balance.", "info")
     return redirect(url_for("wallet.admin_withdrawals"))
 
 

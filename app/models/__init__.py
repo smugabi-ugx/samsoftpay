@@ -694,6 +694,9 @@ class WithdrawalRequest(db.Model):
     status     = Column(String(20), default="pending", nullable=False, index=True)
     # pending | approved | processing | completed | rejected | cancelled
     payout_id  = Column(Integer, ForeignKey("payouts.id"), nullable=True)
+    # For BANK settlements (no automated rail): the operator's bank-transfer
+    # reference, recorded when they confirm the money left our bank.
+    bank_reference = Column(String(120), nullable=True)
     notes      = Column(Text, nullable=True)
     admin_notes= Column(Text, nullable=True)
     processed_at = Column(DateTime, nullable=True)
