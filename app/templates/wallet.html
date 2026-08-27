@@ -332,10 +332,10 @@
               {# No live Airtel disbursement rail exists — offering it here let a
                  merchant register a destination every payout to which fails. #}
               <option value="momo_airtel" disabled>Airtel Money — coming soon</option>
-              {# No bank disbursement rail yet — admin_approve_withdrawal only
-                 resolves momo_mtn, so a bank account would accept a withdrawal
-                 then hard-reject it at approval. Disable until a bank rail lands. #}
-              <option value="bank" disabled>Bank Account — coming soon</option>
+              {# Bank settlement is operator-confirmed (no automated rail yet):
+                 approval earmarks the funds; an operator makes the bank transfer
+                 and confirms it. Supported end-to-end. #}
+              <option value="bank">Bank Account</option>
             </select>
           </div>
           <div class="form-group">

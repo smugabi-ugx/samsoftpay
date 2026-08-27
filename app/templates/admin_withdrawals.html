@@ -116,7 +116,7 @@
   {% if all_wrs %}
   <div class="table-container">
     <table>
-      <thead><tr><th>ID</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Date</th><th>Notes</th></tr></thead>
+      <thead><tr><th>ID</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Date</th><th>Notes</th><th>Bank action</th></tr></thead>
       <tbody>
         {% for w in all_wrs %}
         <tr>
@@ -130,6 +130,25 @@
           </td>
           <td style="font-size:.875rem;color:var(--gray-500);">{{ w.created_at.strftime('%d %b %Y') }}</td>
           <td style="font-size:.8125rem;color:var(--gray-500);">{{ w.admin_notes[:40] ~ '…' if w.admin_notes and w.admin_notes|length > 40 else w.admin_notes or '—' }}</td>
+          <td>
+            {# A processing BANK withdrawal: operator makes the transfer, then confirms it here. #}
+            {% if w.status == 'processing' and w.settlement_account and w.settlement_account.account_type == 'bank' %}
+              <form method="POST" action="{{ url_for('wallet.admin_bank_complete', wr_id=w.id) }}"
+                    style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;margin-bottom:.3rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="text" name="bank_reference" placeholder="Bank transfer ref" required
+                       style="font-size:.75rem;padding:.25rem .4rem;border:1px solid #cbd5e1;border-radius:6px;width:130px;">
+                <button type="submit" class="btn btn-success" style="font-size:.72rem;padding:.25rem .5rem;">Confirm paid</button>
+              </form>
+              <form method="POST" action="{{ url_for('wallet.admin_bank_fail', wr_id=w.id) }}"
+                    onsubmit="return confirm('Reverse this bank withdrawal back to the merchant?')" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline" style="font-size:.72rem;padding:.25rem .5rem;">Couldn't pay</button>
+              </form>
+            {% elif w.status == 'completed' and w.bank_reference %}
+              <span style="font-size:.75rem;color:var(--gray-500);">ref {{ w.bank_reference }}</span>
+            {% else %}—{% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

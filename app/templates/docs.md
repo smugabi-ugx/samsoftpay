@@ -194,7 +194,7 @@ never overdraft.
 |---|---|
 | **Charge succeeds** (money in) | `+ (amount − 1.5% fee)` into `pending`, then to `available` after the settlement hold |
 | **Payout / refund** (money out) | `− (amount + 1.5% fee)` from `available`; a *failed* payout refunds amount + fee |
-| **Withdrawal** to your own MoMo | `− (amount + 1.5% fee)` from `available` (needs a verified account) |
+| **Withdrawal** to your own MoMo **or bank** | `− (amount + 1.5% fee)` from `available` (needs a verified account; bank settlements are operator-confirmed) |
 
 **Monthly statements (finance-grade reconciliation).** `GET /v1/statements/2026-08` returns a
 statement for the month as JSON; `GET /v1/statements/2026-08.pdf` returns a PDF. Every line carries
