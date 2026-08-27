@@ -531,6 +531,25 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
         </tbody>
       </table>
       <p>Amounts are in minor units, like everywhere else in this API. Currencies are always reported separately and never summed together.</p>
+
+      <h3>How your balance moves &amp; how to reconcile</h3>
+      <p>Your Samsoftpay balance is a real ledger we hold for you. It goes up when you collect and down when you pay out — every change is atomic and can never overdraft:</p>
+      <table class="param-table">
+        <thead><tr><th>Event</th><th>Effect on your balance</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Charge succeeds</strong> (money in)</td><td><code>+ (amount − 1.5% fee)</code> into <code>pending</code>, then to <code>available</code> after the settlement hold.</td></tr>
+          <tr><td><strong>Payout / refund</strong> (money out)</td><td><code>− (amount + 1.5% fee)</code> from <code>available</code>. A <em>failed</em> payout refunds amount + fee back.</td></tr>
+          <tr><td><strong>Withdrawal</strong> to your own MoMo</td><td><code>− (amount + 1.5% fee)</code> from <code>available</code> (needs a verified account).</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Keeping your app in sync (the reconciliation model):</strong></p>
+      <ul>
+        <li><strong><code>GET /v1/balance</code> is the source of truth.</strong> If your app keeps its own mirror balance or per-user wallets, they must reconcile to this figure.</li>
+        <li><strong>Update on webhooks, verify with balance.</strong> Each state change fires a signed webhook — <code>charge.succeeded</code> raises your mirror, <code>payout.succeeded</code>/<code>payout.failed</code> adjusts it — so you don't have to poll. Treat webhooks as the nudge and <code>GET /v1/balance</code> (or <code>GET /v1/charges</code> / <code>GET /v1/payouts</code>) as the authority when they disagree.</li>
+        <li><strong>Deductions are real-time.</strong> The moment a payout is accepted, <code>available</code> drops by amount + fee; your app reads the new figure immediately.</li>
+        <li><strong>Fees &amp; tax:</strong> the only Samsoftpay charge is the <strong>1.5%</strong> fee (min UGX 200, cap UGX 5,000) on each charge and payout. The 0.5% Mobile-Money levy is deducted by MTN at the rail (not by us); URA VAT applies to fees. So <em>reconcile against net (amount − fee)</em>, not gross.</li>
+      </ul>
+      <div class="callout">Golden rule: your internal wallets/records reconcile <strong>to <code>GET /v1/balance</code></strong>, mode-scoped by your key (a <code>sk_test_</code> key shows sandbox only). If <code>consistent</code> is ever <code>false</code>, the journal totals shown are still authoritative — tell us.</div>
     </div>
 
     <!-- Payouts -->
