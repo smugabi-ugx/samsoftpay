@@ -982,9 +982,15 @@ app.post("/webhooks/samsoftpay", express.raw({ type: "application/json" }), (req
       <code>SANDBOX HOLDER</code>. Full-scope keys only: a kiosk credential must not be able to
       enumerate wallet owners.</p>
 
-      <h3>Egress IPs</h3>
-      <p>Webhook deliveries originate from these static ranges. Allowlist them if your endpoint
-      is firewalled:</p>
+      <h3>Egress IPs (only if your endpoint is IP-firewalled)</h3>
+      <p><strong>Verify the signature, don't rely on IP.</strong> The reliable way to trust a webhook is
+      the <code>X-Samsoftpay-Signature</code> HMAC (see <a href="#webhook-verify">Verifying Webhooks</a>) — it
+      proves the request is really from us and can't be spoofed. That is all most integrators need.</p>
+      <p>Only if your webhook endpoint sits behind an <strong>IP allowlist</strong> do you need our outbound
+      ranges. These are the source addresses our servers <em>send from</em> — they are not websites, so you
+      can't open them in a browser. They can change if we move hosting region, so <strong>always keep
+      signature verification as your primary check</strong>; treat the allowlist as a convenience, not the
+      security boundary. Current outbound ranges:</p>
       <table class="param-table">
         <thead><tr><th>Range</th></tr></thead>
         <tbody>
