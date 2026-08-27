@@ -23,6 +23,30 @@ your own device watches for `succeeded` and acts itself (a POS or self-dispensin
 Sending a Mode-C order to a machine that dispenses itself would double-fire, so pick by *who acts*, not
 by whether there's a QR.
 
+## How you connect
+
+The whole integration is **two connections in opposite directions**:
+
+1. **To transact — YOUR server → US.** Your backend calls *our* endpoint to move money:
+   ```
+   POST https://api.samsoftpay.com/v1/charges
+   Authorization: Bearer sk_live_…        # your API key — proves YOU to US
+   ```
+   Same base URL for test and live; the key prefix picks the mode. **Always required** — we hold the
+   rails, so you call us to transact.
+
+2. **To get notified — US → YOUR server.** We POST a signed event to *your* public URL:
+   ```
+   POST https://www.yourdomain.com/webhooks/samsoftpay
+   X-Samsoftpay-Signature: …              # verify with your whsec_ — proves US to YOU
+   ```
+   Set on Account → Webhooks; must be your own reachable HTTPS host, never `api.samsoftpay.com`.
+   Optional — you can poll `GET /v1/charges/<id>` instead.
+
+**Two keys, don't mix them up:** `sk_live_`/`sk_test_` (your API key) proves *you → us* on every call;
+`whsec_` (webhook secret, from Account → Webhooks) verifies *us → you* on incoming webhooks. Different
+values, both per-account — you never need any Samsoftpay internal secret, only your own two.
+
 ## Quickstart
 
 You need exactly **two things**:
