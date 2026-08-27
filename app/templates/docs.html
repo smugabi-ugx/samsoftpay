@@ -764,6 +764,16 @@ order["qr_png_url"]   # or draw the QR yourself from order["qr_content"]</code><
       <p>Samsoftpay POSTs a JSON payload to your <code>webhook_url</code> whenever a charge or payout changes state. We retry up to 8 times with exponential backoff.</p>
       <p>Respond with any <strong>2xx</strong> status code within 5 seconds to acknowledge receipt.</p>
 
+      <div class="callout"><strong>Point the webhook URL at YOUR OWN backend — not at <code>api.samsoftpay.com</code>.</strong>
+      On Account → Webhooks, set it to your public HTTPS endpoint, e.g.
+      <code>https://www.yourdomain.com/webhooks/samsoftpay</code> (KarlPOS uses
+      <code>https://www.karlpos.com/webhooks/samsoftpay</code>). It must be a <strong>publicly reachable
+      HTTPS URL on a server you control</strong> — a deployed backend, never <code>localhost</code> or a
+      private/internal address (those are rejected). A common mistake is leaving it pointing at
+      Samsoftpay's own domain, which just 404s and queues undelivered events. Until it's a real
+      endpoint of yours, fall back to polling <code>GET /v1/charges/&lt;id&gt;</code> or
+      <code>GET /v1/payouts/&lt;id&gt;</code> — webhooks are the push convenience, not a requirement for correctness.</div>
+
       <h3>The Envelope</h3>
       <p>Every delivery is one JSON envelope, sent as <strong>canonical JSON with no spaces</strong>
       (the signature covers these exact bytes). Shown pretty-printed here for readability:</p>
