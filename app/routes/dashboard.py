@@ -694,9 +694,10 @@ def admin_flags():
             "updated_by": row.updated_by if row else None,
             "updated_at": row.updated_at if row else None,
         })
-    from ..services.settlement import get_hold_minutes
+    from ..services.settlement import get_hold_minutes, get_sandbox_hold_minutes
     return render_template("admin_flags.html", flags=flags,
-                           settlement_hold_minutes=get_hold_minutes())
+                           settlement_hold_minutes=get_hold_minutes(),
+                           sandbox_hold_minutes=get_sandbox_hold_minutes())
 
 
 @bp.post("/admin/flags/set")
@@ -723,6 +724,7 @@ def admin_set_settlement_hold():
     `available`. Admin-adjustable at runtime, no deploy. Bounded 0 min .. 30 days.
     Applies to money not yet past its hold; already-aged money sweeps next run."""
     from ..services import platform_flags as pf
+    scope = "sandbox" if request.form.get("scope") == "sandbox" else "live"
     try:
         minutes = int(request.form.get("minutes", ""))
     except (TypeError, ValueError):
@@ -731,10 +733,12 @@ def admin_set_settlement_hold():
     if not (0 <= minutes <= 43_200):
         flash("Settlement hold must be between 0 minutes and 30 days (43200 min).", "error")
         return redirect(url_for("dashboard.admin_flags"))
-    pf.set_flag(pf.SETTLEMENT_HOLD_MINUTES, str(minutes), updated_by=current_user.email)
-    _admin_log("platform.settlement_hold_set", None, by=current_user.email, minutes=minutes)
-    flash(f"Settlement hold is now {minutes} minute(s). New payments clear that fast; "
-          f"money already past its hold clears on the next sweep.", "success")
+    key = pf.SANDBOX_SETTLEMENT_HOLD_MINUTES if scope == "sandbox" else pf.SETTLEMENT_HOLD_MINUTES
+    pf.set_flag(key, str(minutes), updated_by=current_user.email)
+    _admin_log("platform.settlement_hold_set", None, by=current_user.email,
+               scope=scope, minutes=minutes)
+    flash(f"{scope.title()} settlement hold is now {minutes} minute(s). New payments "
+          f"clear that fast; money already past its hold clears on the next sweep.", "success")
     return redirect(url_for("dashboard.admin_flags"))
 
 
