@@ -14,6 +14,10 @@ from ..models import PlatformFlag, utcnow
 
 FREEZE_PAYOUTS = "freeze_payouts"
 MAINTENANCE_MODE = "maintenance_mode"
+# Numeric setting (not a toggle): how long a payment is held in `pending` before
+# the sweep releases it to withdrawable `available`. Admin-adjustable, no deploy.
+# Read via settlement.get_hold_minutes(); default 30 min. Stored as a string.
+SETTLEMENT_HOLD_MINUTES = "settlement_hold_minutes"
 
 # Whitelisted, admin-togglable flags (the /admin/flags switchboard). `enforced`
 # says where the flag actually bites; maintenance_mode is DELIBERATELY

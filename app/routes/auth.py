@@ -108,9 +108,105 @@ def signup():
     db.session.add(merchant)
     db.session.commit()
 
+    # Best-effort welcome email — a mail hiccup must never block signup.
+    try:
+        from ..services.email_service import send_email
+        send_email(
+            email, "Welcome to Samsoftpay",
+            f"<div style='font-family:Inter,sans-serif;max-width:480px;margin:0 auto;'>"
+            f"<h2 style='color:#0f172a;'>Welcome to Samsoftpay, {name} 👋</h2>"
+            f"<p style='color:#475569;'>Your account is ready. You can start accepting "
+            f"MTN Mobile Money payments right away — grab your API keys and test keys "
+            f"from <strong>Settings &amp; API Keys</strong>, or share a payment link.</p>"
+            f"<p style='color:#475569;'>Build against your <code>sk_test_</code> keys first, "
+            f"then flip to live. Questions? Just reply to this email.</p></div>",
+            f"Welcome to Samsoftpay, {name}. Your account is ready — get your API keys "
+            f"from Settings, build against test keys, then go live.")
+    except Exception:
+        current_app.logger.warning("welcome email failed for %s", email)
+
     session.permanent = True
     login_user(merchant, remember=True)
     return redirect(url_for("auth.account"))
+
+
+# ---------- self-service password reset ----------
+
+@bp.get("/forgot-password")
+def forgot_password_page():
+    return render_template("forgot_password.html")
+
+
+@bp.post("/forgot-password")
+@limiter.limit("5 per 15 minutes")
+def forgot_password():
+    """Email a 6-digit reset code. Response is IDENTICAL whether or not the email
+    exists (no account enumeration). The code reuses the OTP columns and expires
+    in 10 minutes."""
+    email = request.form.get("email", "").strip().lower()
+    merchant = Merchant.query.filter_by(email=email).first() if email else None
+    if merchant:
+        code = generate_otp()
+        merchant.otp_code = code
+        merchant.otp_expires_at = otp_expiry()
+        merchant.otp_attempts = 0
+        db.session.commit()
+        try:
+            send_otp(merchant.email, code, purpose="reset")   # best-effort (fallback logs it)
+        except Exception:
+            from flask import current_app
+            current_app.logger.warning("reset code email failed for %s", email)
+    # Always the same result — never reveal whether the account exists.
+    flash("If an account exists for that email, we've sent a reset code. "
+          "Enter it below with your new password.", "info")
+    return redirect(url_for("auth.reset_password_page", email=email))
+
+
+@bp.get("/reset-password")
+def reset_password_page():
+    return render_template("reset_password.html", email=request.args.get("email", ""))
+
+
+@bp.post("/reset-password")
+@limiter.limit("10 per 15 minutes")
+def reset_password():
+    from datetime import datetime, timezone
+    email    = request.form.get("email", "").strip().lower()
+    code     = request.form.get("code", "").strip()
+    password = request.form.get("password", "")
+
+    if len(password) < 8:
+        return render_template("reset_password.html", email=email,
+                               error="Password must be at least 8 characters.")
+
+    merchant = Merchant.query.filter_by(email=email).first() if email else None
+    valid = (
+        merchant is not None
+        and merchant.otp_code
+        and _otp_matches(merchant.otp_code, code)
+        and merchant.otp_expires_at
+        and datetime.now(timezone.utc) <= merchant.otp_expires_at.replace(tzinfo=timezone.utc)
+    )
+    if not valid:
+        # Count attempts on a real account so the code can't be brute-forced.
+        if merchant:
+            merchant.otp_attempts = (merchant.otp_attempts or 0) + 1
+            if merchant.otp_attempts >= _MAX_OTP_ATTEMPTS:
+                merchant.otp_code = None   # burn the code after too many tries
+            db.session.commit()
+        return render_template("reset_password.html", email=email,
+                               error="Invalid or expired code. Request a new one if needed.")
+
+    # Success — set the new password, burn the code, clear any lockout.
+    merchant.password_hash  = generate_password_hash(password)
+    merchant.otp_code       = None
+    merchant.otp_expires_at = None
+    merchant.otp_attempts   = 0
+    merchant.login_attempts = 0
+    merchant.locked_until   = None
+    db.session.commit()
+    flash("Password reset. Sign in with your new password.", "success")
+    return redirect(url_for("auth.login_page"))
 
 
 # ---------- email verification ----------

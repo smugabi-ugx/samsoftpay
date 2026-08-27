@@ -10,7 +10,7 @@ from ..celery_app import celery
 def auto_settlement_sweep() -> None:
     from ..services.settlement import sweep_to_available
     try:
-        moved = sweep_to_available(hold_hours=24)
+        moved = sweep_to_available()   # uses the admin-configured hold (default 30 min)
         if moved:
             total = sum(moved.values())
             print(f"settlement sweep: moved {total} across {len(moved)} merchant(s)")

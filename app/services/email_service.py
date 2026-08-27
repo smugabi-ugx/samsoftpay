@@ -64,6 +64,7 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
         "verification": "Verify your Samsoftpay account",
         "login":        "Your Samsoftpay login code",
         "transaction":  "Samsoftpay transaction confirmation code",
+        "reset":        "Reset your Samsoftpay password",
     }
     subject = subjects.get(purpose, "Your Samsoftpay security code")
 

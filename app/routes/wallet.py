@@ -15,6 +15,49 @@ bp = Blueprint("wallet", __name__)
 
 _WITHDRAWAL_FEE = 750   # UGX flat (same as standard payout)
 
+
+def _safe_email(to_email: str | None, subject: str, html: str, plain: str) -> None:
+    """Best-effort notification — a mail outage must NEVER break a money flow.
+    Wraps send_email so a failed/unconfigured mailer only logs, never raises."""
+    if not to_email:
+        return
+    from flask import current_app
+    try:
+        from ..services.email_service import send_email
+        send_email(to_email, subject, html, plain)
+    except Exception:
+        current_app.logger.warning("notification email to %s failed: %s", to_email, subject)
+
+
+def _admin_email() -> str | None:
+    from flask import current_app
+    return current_app.config.get("ADMIN_EMAIL") or current_app.config.get("ALERT_EMAIL")
+
+
+def _notify_withdrawal_requested(wr, merchant, amount: int) -> None:
+    """Ping the admin (so they don't have to poll the page) and confirm to the merchant."""
+    _safe_email(
+        _admin_email(), "New withdrawal request — Samsoftpay",
+        f"<p><strong>{merchant.name}</strong> ({merchant.email}) requested a withdrawal of "
+        f"<strong>UGX {amount:,}</strong> (ref {wr.public_id}).</p>"
+        f"<p>Review and approve it in <strong>Admin → Withdrawals</strong>.</p>",
+        f"{merchant.name} ({merchant.email}) requested UGX {amount:,} (ref {wr.public_id}). "
+        f"Approve in Admin -> Withdrawals.")
+    _safe_email(
+        merchant.email, "We received your withdrawal request",
+        f"<p>Hi {merchant.name},</p><p>We've received your withdrawal request for "
+        f"<strong>UGX {amount:,}</strong>. It's being processed — you'll get another email "
+        f"once the money is on its way.</p>",
+        f"We received your withdrawal request for UGX {amount:,}. You'll be notified once it's paid.")
+
+
+def _notify_withdrawal_paid(merchant, amount: int, payout_ref: str) -> None:
+    _safe_email(
+        merchant.email, "Your withdrawal is on its way",
+        f"<p>Hi {merchant.name},</p><p>Your withdrawal of <strong>UGX {amount:,}</strong> has been "
+        f"approved and sent to your mobile money account (ref {payout_ref}).</p>",
+        f"Your withdrawal of UGX {amount:,} has been approved and sent (ref {payout_ref}).")
+
 # ── Settlement accounts ────────────────────────────────────────────────────────
 
 @bp.get("/dashboard/wallet")
@@ -269,6 +312,8 @@ def request_withdrawal():
     db.session.add(wr)
     db.session.commit()
 
+    _notify_withdrawal_requested(wr, current_user, amount)   # best-effort; never blocks
+
     flash(f"Withdrawal request for UGX {amount:,} submitted. Processing within 1 business day.", "success")
     return redirect(url_for("wallet.wallet_home"))
 
@@ -316,7 +361,7 @@ def manual_sweep():
     # ("Settled UGX 29,550" while live available stayed 0). Measure the LIVE
     # delta directly; mention test-mode movement separately.
     live_before = _live_available()
-    moved = sweep_to_available(hold_hours=24)
+    moved = sweep_to_available()   # uses the admin-configured hold (default 30 min)
     my_moved = moved.get(current_user.id, 0) if isinstance(moved, dict) else 0
     live_delta = _live_available() - live_before
     test_delta = max(0, my_moved - live_delta)
@@ -428,6 +473,7 @@ def admin_approve_withdrawal(wr_id: int):
         wr.processed_at = datetime.now(timezone.utc)
         wr.admin_notes  = f"Approved by {current_user.email}. Payout: {payout.public_id}"
         db.session.commit()
+        _notify_withdrawal_paid(merchant, wr.amount, payout.public_id)   # best-effort
         flash(f"Withdrawal approved and payout {payout.public_id} created.", "success")
     except PayoutError as exc:
         wr.status     = "rejected"
