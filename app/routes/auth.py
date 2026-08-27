@@ -482,6 +482,14 @@ def account():
     # layer. Gating this page hard-redirected new signups to KYC and hid the
     # keys entirely — a critical onboarding blocker.
     from ..models import Payout, Transaction, TxnStatus, WebhookDelivery
+    # Ensure the merchant's webhook signing secret EXISTS before we render the
+    # Webhooks card. It used to be generated lazily on the first delivery, so an
+    # integrator setting up BEFORE any webhook fired saw "generated on first
+    # delivery" and had no secret to configure — you cannot verify a signature
+    # with a secret you were never given. Generate it eagerly here so it is
+    # always shown/copyable on the Account page.
+    from ..services.webhooks import merchant_signing_secret
+    merchant_signing_secret(current_user)
     txn_count = Transaction.query.filter_by(merchant_id=current_user.id).count()
     succeeded = Transaction.query.filter_by(
         merchant_id=current_user.id, status=TxnStatus.SUCCEEDED
