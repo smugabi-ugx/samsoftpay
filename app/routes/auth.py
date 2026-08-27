@@ -156,6 +156,15 @@ def forgot_password():
         except Exception:
             from flask import current_app
             current_app.logger.warning("reset code email failed for %s", email)
+    # If email delivery isn't configured, don't send the user to a code-entry
+    # page for a code that will never arrive. This global message reveals nothing
+    # about whether the account exists (it's the same for everyone while mail is
+    # down). The no-email recovery path is the CLI `flask reset-password <email>`.
+    from flask import current_app
+    if not current_app.config.get("MAIL_HOST"):
+        flash("Password reset by email isn't available right now. Please contact "
+              "support and we'll reset your password.", "info")
+        return redirect(url_for("auth.login_page"))
     # Always the same result — never reveal whether the account exists.
     flash("If an account exists for that email, we've sent a reset code. "
           "Enter it below with your new password.", "info")
@@ -343,9 +352,22 @@ def login():
             if merchant.login_attempts >= _MAX_LOGIN_ATTEMPTS:
                 merchant.locked_until = datetime.now(timezone.utc) + timedelta(minutes=_LOCK_MINUTES)
                 db.session.commit()
-                # Alert the account owner
-                send_otp(merchant.email, "LOCK",
-                         purpose="login")  # reuse channel; email_service handles subject
+                # Alert the account owner with a REAL security notice — not
+                # send_otp (which renders "LOCK" as a bogus verification code).
+                try:
+                    from ..services.email_service import send_email
+                    send_email(
+                        merchant.email,
+                        "Samsoftpay security alert: account locked",
+                        f"<p>Your Samsoftpay account was locked after "
+                        f"{_MAX_LOGIN_ATTEMPTS} failed sign-in attempts. It will unlock "
+                        f"automatically in {_LOCK_MINUTES} minutes. If this wasn't you, "
+                        f"reset your password once it unlocks.</p>",
+                        plain=(f"Your Samsoftpay account was locked after "
+                               f"{_MAX_LOGIN_ATTEMPTS} failed sign-in attempts; it unlocks "
+                               f"in {_LOCK_MINUTES} minutes."))
+                except Exception:
+                    pass
                 return render_template("login.html",
                     error=f"Account locked for {_LOCK_MINUTES} minutes after {_MAX_LOGIN_ATTEMPTS} failed attempts. A notification has been sent to your email.")
             db.session.commit()

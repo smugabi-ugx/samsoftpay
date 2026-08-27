@@ -784,11 +784,15 @@ def merchant_detail(merchant_id: int):
     # a merchant's "Total Volume" stopped growing at their 50th transaction.
     from sqlalchemy import func as safunc
     from ..models import TxnStatus
+    # LIVE money only (is_test=False) so these headline figures reconcile with the
+    # live balance hero above them — otherwise sandbox test charges (which the mock
+    # rail flips to SUCCEEDED) inflate "collected" while the balance excludes them.
     succeeded_count, succeeded_volume = (
         db.session.query(safunc.count(Transaction.id),
                          safunc.coalesce(safunc.sum(Transaction.amount), 0))
         .filter(Transaction.merchant_id == merchant_id,
-                Transaction.status == TxnStatus.SUCCEEDED)
+                Transaction.status == TxnStatus.SUCCEEDED,
+                Transaction.is_test.is_(False))
         .one()
     )
     payout_count = Payout.query.filter_by(merchant_id=merchant_id).count()
@@ -1409,19 +1413,26 @@ def bulk_payout_submit(merchant_id: int):
             error="No valid rows found in CSV.",
         )
 
-    total = sum(r[2] for r in rows)
+    # Include the per-payout flat fee in the pre-check — create_payout requires
+    # available >= amount + fee PER ROW, so a CSV summing to exactly the balance
+    # would pass here then fail partway with rows silently dropped.
+    from ..services.fees import calculate_payout_fee
+    per_fee = calculate_payout_fee(currency="UGX")
+    total_amount = sum(r[2] for r in rows)
+    total = total_amount + per_fee * len(rows)
     if total > available:
         return render_template(
             "bulk_payout.html", merchant=merchant, available=available,
             error=(
                 f"Insufficient funds. Available: UGX {available:,}, "
-                f"CSV total: UGX {total:,} across {len(rows)} payouts."
+                f"CSV needs UGX {total:,} (UGX {total_amount:,} + UGX {per_fee:,} fee "
+                f"x {len(rows)} payouts)."
             ),
         )
 
-    # Create the batch record and process each row.
-    # We do this inline for the demo. In production this would go to a job queue
-    # so the dashboard returns immediately and a worker processes the batch.
+    # Create the batch record and process each row inline. Fine for the modest
+    # CSV sizes the dashboard accepts; a very large batch should move to the
+    # Celery worker so the request returns immediately (tracked as a follow-up).
     batch = PayoutBatch(
         public_id=f"pbatch_{uuid.uuid4().hex[:14]}",
         merchant_id=merchant.id,
@@ -1454,6 +1465,14 @@ def bulk_payout_submit(merchant_id: int):
     batch.failed_count = failed
     db.session.commit()
 
+    # Never return to a normal dashboard implying everything sent — surface the
+    # real per-row outcome (some rows can fail on bad phone, KYC, or fee shortfall).
+    if failed:
+        flash(f"Bulk payout: {created} sent, {failed} failed of {len(rows)}. "
+              f"Failed rows were not paid — check the amounts/phones and retry them.",
+              "warning" if created else "error")
+    else:
+        flash(f"Bulk payout: all {created} payouts submitted.", "success")
     return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant.id))
 
 

@@ -157,7 +157,7 @@
       <h3 class="card-title"><i data-feather="check-circle"></i> Balance up to date</h3>
     </div>
     <p class="text-muted" style="font-size:.875rem;">
-      Nothing is pending settlement right now. Customer payments appear here while they confirm on the rail, then move to your Available balance automatically after the 24-hour hold.
+      Nothing is pending settlement right now. Customer payments appear here while they confirm on the rail, then move to your Available balance automatically after the settlement hold.
     </p>
   </div>
   {% endif %}
@@ -332,7 +332,10 @@
               {# No live Airtel disbursement rail exists — offering it here let a
                  merchant register a destination every payout to which fails. #}
               <option value="momo_airtel" disabled>Airtel Money — coming soon</option>
-              <option value="bank">Bank Account</option>
+              {# No bank disbursement rail yet — admin_approve_withdrawal only
+                 resolves momo_mtn, so a bank account would accept a withdrawal
+                 then hard-reject it at approval. Disable until a bank rail lands. #}
+              <option value="bank" disabled>Bank Account — coming soon</option>
             </select>
           </div>
           <div class="form-group">
@@ -434,7 +437,7 @@
       </a>
     </div>
     <p class="text-muted" style="font-size:.8125rem;margin-bottom:.75rem;">
-      Charges become available <strong>24 hours</strong> after they complete; the sweep runs
+      Charges become available after a <strong>short settlement hold</strong> once they complete; the sweep runs
       hourly. Every release is recorded below — if one looks more than 2 hours late,
       contact support. Also via <code>GET /v1/settlements</code>.
     </p>
@@ -451,7 +454,7 @@
       {% endfor %}
     </div>
     {% else %}
-    <div class="text-muted" style="font-size:.8125rem;">No settlements yet — your first one lands about 24 hours after your first successful charge.</div>
+    <div class="text-muted" style="font-size:.8125rem;">No settlements yet — your first one lands after the settlement hold on your first successful charge.</div>
     {% endif %}
   </div>
 
