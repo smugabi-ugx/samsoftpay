@@ -749,12 +749,17 @@ def merchant_detail(merchant_id: int):
     if not merchant_or_admin(merchant_id):
         abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
-    txns = (
+    # Fetch one extra row to know whether there IS a next page — the load-more
+    # control was gated on a hardcoded 25 while the page size is 5, so it never
+    # appeared. activity_has_more drives it honestly.
+    _txn_rows = (
         Transaction.query.filter_by(merchant_id=merchant_id)
         .order_by(Transaction.id.desc())   # id-desc = stable load-more cursor
-        .limit(_ACTIVITY_PAGE)             # small first page — infinite scroll loads more
+        .limit(_ACTIVITY_PAGE + 1)
         .all()
     )
+    activity_has_more = len(_txn_rows) > _ACTIVITY_PAGE
+    txns = _txn_rows[:_ACTIVITY_PAGE]
     payouts = (
         Payout.query.filter_by(merchant_id=merchant_id)
         .order_by(Payout.created_at.desc())
@@ -802,11 +807,27 @@ def merchant_detail(merchant_id: int):
     open_disputes = Dispute.query.filter_by(
         merchant_id=merchant_id, status="open").count()
 
+    # Chart distributions from the FULL live history (GROUP BY), not the 5-row
+    # activity slice — the doughnuts were reading only the most-recent 5 rows.
+    status_counts = dict(
+        db.session.query(Transaction.status, safunc.count(Transaction.id))
+        .filter(Transaction.merchant_id == merchant_id, Transaction.is_test.is_(False))
+        .group_by(Transaction.status).all())
+    channel_counts = dict(
+        db.session.query(Transaction.channel, safunc.count(Transaction.id))
+        .filter(Transaction.merchant_id == merchant_id, Transaction.is_test.is_(False))
+        .group_by(Transaction.channel).all())
+    chart_status = {getattr(k, "value", str(k)): v for k, v in status_counts.items()}
+    chart_channel = {getattr(k, "value", str(k)): v for k, v in channel_counts.items()}
+
     return render_template(
         "merchant_detail.html",
         open_disputes=open_disputes,
         merchant=merchant,
         txns=txns,
+        activity_has_more=activity_has_more,
+        chart_status=chart_status,
+        chart_channel=chart_channel,
         payouts=payouts,
         links=links,
         pending_balance=-pending.cached_balance if pending else 0,
@@ -1417,16 +1438,16 @@ def bulk_payout_submit(merchant_id: int):
     # available >= amount + fee PER ROW, so a CSV summing to exactly the balance
     # would pass here then fail partway with rows silently dropped.
     from ..services.fees import calculate_payout_fee
-    per_fee = calculate_payout_fee(currency="UGX")
     total_amount = sum(r[2] for r in rows)
-    total = total_amount + per_fee * len(rows)
+    total_fees = sum(calculate_payout_fee(amount=r[2], currency="UGX") for r in rows)
+    total = total_amount + total_fees
     if total > available:
         return render_template(
             "bulk_payout.html", merchant=merchant, available=available,
             error=(
                 f"Insufficient funds. Available: UGX {available:,}, "
-                f"CSV needs UGX {total:,} (UGX {total_amount:,} + UGX {per_fee:,} fee "
-                f"x {len(rows)} payouts)."
+                f"CSV needs UGX {total:,} (UGX {total_amount:,} + UGX {total_fees:,} "
+                f"in 1.5% fees across {len(rows)} payouts)."
             ),
         )
 

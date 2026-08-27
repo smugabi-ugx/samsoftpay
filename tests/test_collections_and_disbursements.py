@@ -123,7 +123,7 @@ def main():
         # forgetting the payout fee, and never failed because the test died
         # earlier and its later assertions were never reached.
         from app.services.fees import calculate_payout_fee
-        payout_fee = calculate_payout_fee(currency="UGX")
+        payout_fee = calculate_payout_fee(amount=50_000, currency="UGX")  # 1.5% of 50k = 750
         expected = 98_500 - 50_000 - payout_fee
         assert avail_now == expected, (
             f"available: expected {expected} (98,500 - 50,000 - {payout_fee} payout fee), "

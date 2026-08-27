@@ -339,7 +339,7 @@
     </div>
     {% endfor %}
   </div>
-  {% if txns|length >= 25 %}
+  {% if activity_has_more %}
   <div id="activity-sentinel"></div>
   <div style="text-align:center;padding:.75rem 0 .25rem;">
     <button id="activity-load-more" class="btn btn-outline"
@@ -504,13 +504,11 @@
 <script>
   if (window.feather) feather.replace({ 'stroke-width': 2 });
 
-  // Charts — built inline to avoid SQLAlchemy serialisation issues
-  const statusCounts = {};
-  const channelCounts = {};
-  {% for t in txns %}
-  statusCounts["{{ t.status.value }}"]  = (statusCounts["{{ t.status.value }}"]  || 0) + 1;
-  channelCounts["{{ t.channel.value }}"] = (channelCounts["{{ t.channel.value }}"] || 0) + 1;
-  {% endfor %}
+  // Charts use the FULL live history (GROUP BY aggregates from the server), not
+  // the 5-row activity slice — otherwise the doughnuts only reflected the most
+  // recent handful of transactions.
+  const statusCounts  = {{ chart_status|tojson }};
+  const channelCounts = {{ chart_channel|tojson }};
 
   // Colors carry MEANING for statuses: succeeded must always be green and
   // failed always red. Assigning a rotating palette by key-insertion order

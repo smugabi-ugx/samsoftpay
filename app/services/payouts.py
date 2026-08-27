@@ -117,7 +117,7 @@ def create_payout(
     # amount stranded in suspense and the payout stuck PENDING forever.
     adapter = _get_disbursement_adapter(channel)
 
-    fee = calculate_payout_fee(currency=currency)
+    fee = calculate_payout_fee(amount=amount, currency=currency)
 
     # Which ledger this payout draws on. A test key spends the sandbox balance,
     # so integration testing can never drain a merchant's real funds. Resolved

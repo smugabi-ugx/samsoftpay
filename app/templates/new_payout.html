@@ -26,8 +26,8 @@
     <input type="number" name="amount" required min="1" placeholder="10000"
            style="width:100%; padding:0.6rem; border:1px solid #ddd; border-radius:3px; font-size:1rem;">
     <p style="font-size:0.82rem; color:#666; margin:0.4rem 0 0;">
-      A flat <strong>UGX 750</strong> fee is added, so <strong>amount + 750</strong> is debited from your
-      available balance. Most you can send now: <strong>UGX {{ "{:,}".format(available - 750 if available > 750 else 0) }}</strong>.
+      A <strong>1.5%</strong> fee (min UGX 200, cap UGX 5,000) is added, so <strong>amount + fee</strong> is
+      debited from your available balance. No other charges apply besides URA taxation where relevant.
     </p>
   </div>
 
