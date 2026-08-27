@@ -23,6 +23,38 @@ the single endpoint (it also still accepts a flat `phone`/`name` for CSV). The
 
 ---
 
+## 0b. Why a payout result had NO id (your "null payout id" issue) — IMPORTANT
+
+A payout gets its `pout_…` id **only once it is actually created as a resource**.
+SamsoftPay validates first and, if the request cannot become a payout, it is
+rejected **before** any id or record exists. So there are two distinct outcomes —
+please branch on them:
+
+| Result | id | Meaning | What to do |
+|---|---|---|---|
+| **Rejected before creation** | `null` / absent, with an `error`/`failure_reason` | The payout was never created (bad schema, **insufficient wallet balance**, wrong key scope). No record exists on SamsoftPay — correctly. | Read the `error`; fix and retry. |
+| **Created, then rail outcome** | `pout_…` present | The payout exists; it will reach `succeeded` or `failed` (e.g. `recipient_not_found`) — a `failed` payout STILL has its `pout_…` id and a `failure_reason`. | Store the id; track via webhook/poll. |
+
+**The null ids you saw today were "rejected before creation."** The two causes
+that match "withdrawals attempted today with no id and no record":
+
+1. **The bulk schema bug** — every item hit `invalid item: 'phone'` (fixed in this
+   change), so nothing was created. Re-test after this deploys.
+2. **Empty sandbox wallet** — a payout needs `available` funds (amount + UGX 750
+   fee). With a zero balance every payout is rejected `insufficient available
+   balance` **before** an id is minted.
+
+### Funding the sandbox wallet so payouts actually create + succeed
+In sandbox you must have `available` balance before payroll can run. Get it by:
+- A **sandbox charge / wallet top-up** (money IN with a `sk_test_` key) that settles
+  to `available` (settlement is fast in sandbox), **or**
+- Ask SamsoftPay to **credit your sandbox `available` balance** for testing.
+
+Check it any time with `GET /v1/balance` (§10) — `available` must be ≥ `Σ amounts + Σ fees`.
+Once funded, every accepted payout returns a `pout_…` id immediately.
+
+---
+
 ## 1. Authentication (§3) ✅
 ```http
 Authorization: Bearer <SECRET_KEY>
