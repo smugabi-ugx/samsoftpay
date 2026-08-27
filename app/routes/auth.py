@@ -706,7 +706,7 @@ def first_setup():
         email=m.email, password=one_time_password)
 
 
-@bp.get("/admin/verify-user/<int:merchant_id>")
+@bp.post("/admin/verify-user/<int:merchant_id>")
 @login_required
 def admin_verify_user(merchant_id: int):
     """Emergency: manually verify any user's email. Admin only."""
