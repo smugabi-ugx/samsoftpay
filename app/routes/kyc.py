@@ -300,6 +300,14 @@ def submit():
                                error=f"Missing: {', '.join(missing)}")
     app.status = "submitted"
     app.submitted_at = datetime.now(timezone.utc)
+    # On a RESUBMIT after a rejection, clear the merchant's 'rejected' KYC status
+    # back to 'pending' — otherwise the home page keeps showing the red "needs
+    # changes" banner while every Edit/Submit control (gated on status=='draft')
+    # is gone, stranding the merchant for the whole re-review window.
+    from ..models import Merchant
+    m = db.session.get(Merchant, app.merchant_id)
+    if m and m.kyc_status == "rejected":
+        m.kyc_status = "pending"
     _touch(app)
     return redirect(url_for("kyc.kyc_home"))
 

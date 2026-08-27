@@ -481,6 +481,7 @@ class Payout(db.Model):
     is_test = Column(Boolean, default=False, nullable=False)
     recipient_phone = Column(String(20), nullable=False)
     recipient_name = Column(String(200), nullable=True)
+    reference = Column(String(120), nullable=True, index=True)   # merchant's business reference (echoed back + in webhooks)
     rail_reference = Column(String(120), nullable=True, index=True)
     failure_reason = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)

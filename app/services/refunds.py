@@ -33,6 +33,42 @@ class RefundError(Exception):
     pass
 
 
+def reconcile_failed_refund_payout(payout) -> None:
+    """When a REFUND's disbursement FAILS at the rail, re-open the original charge.
+
+    refund_charge marked the charge REFUNDED, returned the platform's charge fee to
+    the merchant (_fee_return(+1)), then created this payout to pay the customer.
+    complete_payout's failure path already reverses THIS payout's own earmark — but
+    on its own that leaves the charge-fee return standing (merchant over-credited,
+    psp_revenue short) and the charge stuck REFUNDED (a retry returns
+    'already_refunded' — the customer could never be refunded again without DB
+    surgery). So here we reverse the charge-fee return and set the charge back to
+    SUCCEEDED so the merchant can retry. The early-release from hold STAYS — that
+    money is legitimately the merchant's, now settled. Runs INSIDE the payout-
+    failure transaction (caller commits), so it's atomic with the reversal.
+    """
+    from ..models import AccountType, TxnStatus
+    from . import ledger as _ledger
+    txn = Transaction.query.filter_by(refund_payout_id=payout.id).one_or_none()
+    if txn is None or txn.status != TxnStatus.REFUNDED:
+        return
+    fee_back = int(txn.fee_amount or 0)
+    mode = bool(txn.is_test)
+    if fee_back > 0:
+        rev = _ledger.get_or_create_account(
+            type=AccountType.PSP_REVENUE, merchant_id=None, currency=txn.currency, is_test=mode)
+        avail = _ledger.get_or_create_account(
+            type=AccountType.MERCHANT_AVAILABLE, merchant_id=txn.merchant_id,
+            currency=txn.currency, is_test=mode)
+        # Reverse of _fee_return(+1): platform takes its charge fee back, merchant
+        # available drops by the same — sums to zero, psp_revenue made whole.
+        _ledger.post([(rev, -fee_back), (avail, +fee_back)], currency=txn.currency,
+                     memo=f"refund fee-return reversed (refund disbursement failed) {txn.public_id}")
+    txn.status = TxnStatus.SUCCEEDED
+    txn.refunded_at = None
+    txn.refund_payout_id = None
+
+
 def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     """Initiate a refund for a succeeded charge.
 

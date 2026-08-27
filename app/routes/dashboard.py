@@ -954,7 +954,11 @@ def _txn_filters(q, *, model):
     f = {"q": (request.args.get("q") or "").strip(),
          "status": request.args.get("status") or "",
          "channel": request.args.get("channel") or "",
-         "mode": request.args.get("mode") or "",
+         # Default to LIVE so the Transactions page (and its Collected total)
+         # reconciles with the home dashboard, which is live-only. Sandbox test
+         # charges (flipped SUCCEEDED by the mock rail) otherwise inflate the
+         # figure. Pass ?mode=test explicitly to see sandbox rows.
+         "mode": request.args.get("mode") or "live",
          "after": request.args.get("after") or "",
          "before": request.args.get("before") or ""}
 

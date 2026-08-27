@@ -115,7 +115,7 @@ Account page and receive signed events instead. Charge statuses:
 | `POST /v1/charges` | Collect money from a customer (MTN MoMo live; Airtel/card sandbox-only until those rails launch) |
 | `GET /v1/charges/<id>` | Retrieve one charge |
 | `GET /v1/charges` | List/search charges (cursor pagination; filters: `status`, `reference`, `created_after`, `created_before`, `limit` 1–100) |
-| `POST /v1/charges/<id>/refund` | Refund a succeeded charge (net of the original fee; full-scope key only) |
+| `POST /v1/charges/<id>/refund` | Refund a succeeded charge — customer gets the FULL amount; full-scope key only |
 | `POST /v1/payouts` | Send money to a mobile-money wallet (full-scope key only) |
 | `POST /v1/payouts/bulk` | Many payouts in one call (full-scope key only) |
 | `GET /v1/payouts` | List payouts |
