@@ -258,6 +258,21 @@ happens with real money:
 A failed payout refunds the amount **and** the fee to your available balance, and fires the
 `payout.failed` webhook.
 
+### Funding your sandbox wallet
+
+A **payout or refund needs available balance** (`amount + fee`) or it is rejected before a
+`pout_` id exists — a fresh sandbox starts empty. Add **test money** (separate test ledger, never
+withdrawable, disappears at production go-live) either way:
+
+- **One click:** Dashboard → **Wallet → Add test funds**. No KYC needed to test — add as much as
+  you need, instantly, then run payouts/refunds against it.
+- **Or take a sandbox payment:** create a charge with an `sk_test_` key and an ordinary test
+  number; it settles in seconds and credits your sandbox `available` (minus the fee).
+
+Check with `GET /v1/balance` — `available` must be ≥ `Σ amounts + Σ fees` before payroll/bulk runs.
+Going live is one line: swap `sk_test_` → `sk_live_`. Same URL, endpoints and webhooks; sandbox
+balances never cross into live.
+
 ### Pre-flight a destination (Hakikisha)
 
 `GET /v1/resolve-account?phone=0771234567` returns `{"msisdn", "active", "registered_name"}`:
