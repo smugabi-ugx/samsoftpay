@@ -150,6 +150,20 @@ def _paths() -> dict:
                 "responses": {"200": _obj("BalanceResponse"), "401": _err("Auth")},
             },
         },
+        "/v1/statements/{period}": {
+            "get": {
+                "tags": ["Balance"], "summary": "Monthly reconciliation statement",
+                "description": "Finance-grade statement for a calendar month. `GET /v1/statements/2026-08` returns JSON; append `.pdf` (`/v1/statements/2026-08.pdf`) for a PDF. Each line carries YOUR reference, our id, and the MTN rail reference; opening/closing balances reconcile to GET /v1/balance. Mode-scoped by key.",
+                "security": _BEARER,
+                "parameters": [{"name": "period", "in": "path", "required": True,
+                                "schema": {"type": "string"}, "example": "2026-08",
+                                "description": "YYYY-MM, optionally with a .pdf suffix."}],
+                "responses": {"200": {"description": "Statement JSON (or a PDF when .pdf is used)",
+                                      "content": {"application/json": {"schema": {"type": "object"}},
+                                                  "application/pdf": {}}},
+                              "400": _err("period must be YYYY-MM"), "401": _err("Auth")},
+            },
+        },
         "/v1/resolve-account": {
             "get": {
                 "tags": ["Payouts"], "summary": "Resolve a Mobile-Money account (pre-payout check)",

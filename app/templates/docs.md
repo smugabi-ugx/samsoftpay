@@ -196,6 +196,13 @@ never overdraft.
 | **Payout / refund** (money out) | `− (amount + 1.5% fee)` from `available`; a *failed* payout refunds amount + fee |
 | **Withdrawal** to your own MoMo | `− (amount + 1.5% fee)` from `available` (needs a verified account) |
 
+**Monthly statements (finance-grade reconciliation).** `GET /v1/statements/2026-08` returns a
+statement for the month as JSON; `GET /v1/statements/2026-08.pdf` returns a PDF. Every line carries
+**your reference, our id (`txn_`/`pout_`), and the MTN rail reference**, and the opening/closing
+balances reconcile to `GET /v1/balance` — so a finance team can tie every shilling to both their own
+books and MTN's records. Samsoftpay also **emails each merchant their statement on the 1st of the
+month**. (Merchants can also download it from Dashboard → Wallet.)
+
 **Keeping your app in sync:**
 
 - **`GET /v1/balance` is the source of truth.** If your app keeps its own mirror balance or per-user

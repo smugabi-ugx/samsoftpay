@@ -432,9 +432,19 @@
   <div class="card">
     <div class="card-header">
       <h3 class="card-title"><i data-feather="clock"></i> Settlements</h3>
-      <a href="{{ url_for('wallet.statement_csv') }}" class="btn btn-outline" style="font-size:.75rem;padding:.3rem .625rem;">
-        <i data-feather="download"></i> Statement (CSV)
-      </a>
+      <span style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;">
+        <a href="{{ url_for('wallet.statement_csv') }}" class="btn btn-outline" style="font-size:.75rem;padding:.3rem .625rem;">
+          <i data-feather="download"></i> Statement (CSV)
+        </a>
+        <form method="GET" onsubmit="event.preventDefault(); if(this.p.value){window.location=this.dataset.base.replace('MONTH', this.p.value);}"
+              data-base="{{ url_for('wallet.statement_pdf', period='MONTH') }}"
+              style="display:flex;gap:.3rem;align-items:center;">
+          <input type="month" name="p" required style="font-size:.75rem;padding:.28rem .4rem;border:1px solid #cbd5e1;border-radius:6px;">
+          <button type="submit" class="btn btn-outline" style="font-size:.75rem;padding:.3rem .625rem;">
+            <i data-feather="file-text"></i> Monthly PDF
+          </button>
+        </form>
+      </span>
     </div>
     <p class="text-muted" style="font-size:.8125rem;margin-bottom:.75rem;">
       Charges become available after a <strong>short settlement hold</strong> once they complete; the sweep runs
