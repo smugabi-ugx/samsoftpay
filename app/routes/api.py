@@ -347,7 +347,8 @@ def list_charges():
     """List this merchant's charges, newest first. Cursor pagination
     (limit + starting_after=<charge id>), mode-scoped to the key (a test key
     sees only test charges), never another merchant's rows. Filters: status,
-    reference, created_after/created_before (ISO 8601)."""
+    reference, phone, email, created_after/created_before (ISO 8601)."""
+    import re as _re
     from ..models import TxnStatus
     merchant = _auth()
     q = Transaction.query.filter_by(
@@ -362,6 +363,18 @@ def list_charges():
     ref = request.args.get("reference")
     if ref:
         q = q.filter(Transaction.merchant_reference == ref)
+
+    # Reconciliation filters (query-by-customer). Phone matches on the LAST 9
+    # digits so 0780…, 256780… and +256 780… all resolve to the same subscriber;
+    # digits-only, so no SQL-wildcard injection. Email is case-insensitive exact.
+    phone = request.args.get("phone")
+    if phone:
+        last9 = _re.sub(r"\D", "", phone)[-9:]
+        if last9:
+            q = q.filter(Transaction.customer_phone.ilike(f"%{last9}"))
+    email = request.args.get("email")
+    if email:
+        q = q.filter(Transaction.customer_email.ilike(email.strip()))
 
     limit, after, before = _parse_list_params()
     if after:
