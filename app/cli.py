@@ -483,6 +483,115 @@ def register(app: Flask) -> None:
                       f"Refund the customer or re-run with --redispense once you have "
                       f"confirmed no product came out.")
 
+    @app.cli.command("signing-profiles")
+    def signing_profiles():
+        """List machine-vendor signing profiles (Machine Integration Standard)."""
+        from .models import SigningProfile
+        with app.app_context():
+            rows = SigningProfile.query.order_by(SigningProfile.vendor).all()
+            print("DB signing profiles:")
+            if not rows:
+                print("  (none — XY runs from the built-in default profile)")
+            for r in rows:
+                print(f"  {r.vendor:12} {r.display_name}  legacy={r.is_legacy_shim} "
+                      f"order={r.sign_order} replay={r.replay_window_seconds}s "
+                      f"body={r.dispense_body_style}")
+            print("Built-in defaults (used when no row): "
+                  "xy (legacy shim), _default (clean Standard v1)")
+
+    @app.cli.command("signing-profile-set")
+    @click.argument("vendor")
+    @click.option("--display-name", default=None)
+    @click.option("--non-signed", default=None,
+                  help="comma list of fields EXCLUDED from the sign base")
+    @click.option("--alias", "aliases", multiple=True,
+                  help="canonical=alt spelling pair (repeatable)")
+    @click.option("--order", type=click.Choice(["alpha", "alpha_swap"]), default=None)
+    @click.option("--swap", "swaps", multiple=True,
+                  help="a,b key pair swapped for alpha_swap (repeatable)")
+    @click.option("--replay-window", type=int, default=None,
+                  help="seconds; 0 disables the freshness/replay check")
+    @click.option("--dispense-path", default=None)
+    @click.option("--body-style", default=None)
+    @click.option("--extra", "extras", multiple=True,
+                  help="key=value extra dispense-body field (repeatable)")
+    @click.option("--legacy/--no-legacy", "legacy", default=None)
+    def signing_profile_set(vendor, display_name, non_signed, aliases, order, swaps,
+                            replay_window, dispense_path, body_style, extras, legacy):
+        """Create or edit a vendor signing profile.
+
+        A NEW profile starts from the CLEAN Standard v1 (strict alphabetical, no
+        aliases, 5-min replay window) and applies your overrides — so a new
+        machine vendor conforms to us, not the other way round.
+        """
+        import json as _json
+        from .models import SigningProfile
+        from .services.signing import CLEAN_PROFILE
+        vendor = vendor.strip().lower()
+        with app.app_context():
+            row = SigningProfile.query.filter_by(vendor=vendor).first()
+            created = row is None
+            if created:
+                row = SigningProfile(
+                    vendor=vendor,
+                    display_name=display_name or f"{vendor} machine vendor",
+                    non_signed_fields=_json.dumps(sorted(CLEAN_PROFILE.non_signed)),
+                    field_aliases="{}",
+                    sign_order="alpha", sign_order_swaps="[]",
+                    replay_window_seconds=CLEAN_PROFILE.replay_window_seconds,
+                    dispense_path=CLEAN_PROFILE.dispense_path,
+                    dispense_body_style=CLEAN_PROFILE.dispense_body_style,
+                    dispense_extra=_json.dumps(CLEAN_PROFILE.dispense_extra),
+                    is_legacy_shim=False)
+                db.session.add(row)
+            if display_name is not None:
+                row.display_name = display_name
+            if non_signed is not None:
+                row.non_signed_fields = _json.dumps(
+                    [f.strip() for f in non_signed.split(",") if f.strip()])
+            if aliases:
+                row.field_aliases = _json.dumps(dict(a.split("=", 1) for a in aliases))
+            if order is not None:
+                row.sign_order = order
+            if swaps:
+                row.sign_order_swaps = _json.dumps([list(s.split(",", 1)) for s in swaps])
+            if replay_window is not None:
+                row.replay_window_seconds = replay_window
+            if dispense_path is not None:
+                row.dispense_path = dispense_path
+            if body_style is not None:
+                row.dispense_body_style = body_style
+            if extras:
+                row.dispense_extra = _json.dumps(dict(e.split("=", 1) for e in extras))
+            if legacy is not None:
+                row.is_legacy_shim = legacy
+            db.session.commit()
+            print(f"{'Created' if created else 'Updated'} signing profile '{vendor}': "
+                  f"{row.display_name} (order={row.sign_order}, "
+                  f"replay={row.replay_window_seconds}s, body={row.dispense_body_style}).")
+
+    @app.cli.command("unlock")
+    @click.argument("email")
+    def unlock_account(email):
+        """Unblock a merchant stuck at email verification / locked out of OTP.
+
+        Clears the lockout, marks the email verified, and resets the OTP attempt
+        counter — the no-email escape hatch when SMTP did not deliver a code or a
+        user burned their attempts. Lets them log in and use the sandbox at once.
+        """
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant with email {email}")
+                return
+            m.email_verified = True
+            m.locked_until = None
+            m.otp_attempts = 0
+            m.otp_code = None
+            db.session.commit()
+            print(f"Unlocked + verified: {m.name} <{m.email}> (id={m.id}). "
+                  f"They can log in now.")
+
     @app.cli.command("disable-2fa")
     @click.argument("email", required=False)
     def disable_2fa(email):

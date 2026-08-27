@@ -110,6 +110,28 @@ and `settled` (boolean). Each release is a first-class record on `GET /v1/settle
 dashboard's Settlements table. **Escalation threshold:** if a settlement is more than 2 hours
 late, contact support with the charge id. You should never have to discover a delay yourself.
 
+## Bring your own machine (Machine Integration Standard v1)
+
+Any machine vendor can integrate for Mode C, not just one supplier. After a payment we send a
+signed dispense command; your machine reports the real outcome to a signed callback:
+
+```
+sign = MD5(secret + timestamp + reqData)   # reqData = k1=v1&k2=v2&…, fields sorted alphabetically
+```
+
+**Certify against us before go-live** — post one sample signed callback and we confirm it verifies:
+
+```
+POST /v1/vending/conformance
+{ "payload": { …the exact callback JSON… }, "sign": "<what your firmware produced>" }
+-> { "ok": true, "vendor": "…" }                      # you're aligned
+-> { "ok": false, "expected_reqData_any_of": [ … ] }  # shows the exact base(s) we expect
+```
+
+It moves no money, changes no state, and dispenses nothing — iterate until `ok:true`. Your vendor
+signing profile (which fields are signed, key ordering, replay window) is **configuration on our
+side**, so onboarding a new machine is a profile, not a platform code change.
+
 ## Webhooks: the operations contract
 
 Configure `webhook_url` on your Account page. Samsoftpay POSTs a signed JSON envelope on every

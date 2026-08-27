@@ -98,6 +98,21 @@
 </div>
 {% endif %}
 
+<!-- Self-serve sandbox test funds (test ledger only — never real money) -->
+<div class="alert" style="margin-bottom:1.5rem;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+  <i data-feather="beaker" style="color:#6366f1;flex-shrink:0;"></i>
+  <div style="flex:1;min-width:180px;">
+    <strong>Sandbox test funds.</strong>
+    <span style="color:#64748b;font-size:.875rem;">Instantly add TEST money to your sandbox balance so you can try payouts and refunds. This is <em>not</em> real money and can never be withdrawn.</span>
+  </div>
+  <form method="POST" action="{{ url_for('wallet.sandbox_fund') }}" style="display:flex;gap:.5rem;align-items:center;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="number" name="amount" value="1000000" min="1000" max="10000000" step="1000"
+           style="width:130px;padding:.5rem .625rem;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;">
+    <button type="submit" class="btn btn-primary" style="white-space:nowrap;">Add test funds</button>
+  </form>
+</div>
+
 <!-- ══ Tab navigation ══ -->
 <div class="tabbar">
   <button data-tab="balance"><i data-feather="pie-chart"></i> Balance</button>

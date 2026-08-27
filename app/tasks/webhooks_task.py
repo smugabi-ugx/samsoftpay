@@ -52,7 +52,12 @@ def deliver_webhook(self, delivery_id: int) -> None:
         db.session.commit()
         return
     try:
-        resp = requests.post(
+        # safe_post pins the validated public IP for the connection (closes the
+        # DNS-rebinding window) and applies allow_redirects=False. A SsrfBlocked
+        # (host re-resolved non-public) is caught by the except below and retried
+        # harmlessly — it can never reach an internal service.
+        from ..services.url_guard import safe_post
+        resp = safe_post(
             delivery.url,
             data=delivery.payload,
             headers={
@@ -60,7 +65,6 @@ def deliver_webhook(self, delivery_id: int) -> None:
                 "X-Samsoftpay-Signature": delivery.signature,
             },
             timeout=5,
-            allow_redirects=False,
         )
         delivery.last_response_code = resp.status_code
         if 200 <= resp.status_code < 300:

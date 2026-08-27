@@ -170,7 +170,12 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
             wh.last_response_code = 0
             continue
         try:
-            resp = requests.post(
+            # safe_post PINS the validated public IP for the connection, closing
+            # the DNS-rebinding window between the is_public_http_url check above
+            # and the actual TCP connect (guard and request used to re-resolve
+            # independently). allow_redirects=False is applied inside safe_post.
+            from .url_guard import SsrfBlocked, safe_post
+            resp = safe_post(
                 wh.url,
                 data=wh.payload,
                 headers={
@@ -178,7 +183,6 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
                     "X-Samsoftpay-Signature": wh.signature,
                 },
                 timeout=5,
-                allow_redirects=False,   # a 302 to an internal URL must not be followed
             )
             wh.last_response_code = resp.status_code
             if 200 <= resp.status_code < 300:
@@ -190,6 +194,13 @@ def deliver_pending_webhooks(*, limit: int = 50) -> int:
                 # Keep only a short snippet for debugging a failing endpoint.
                 wh.last_response_body = (resp.text or "")[:200]
                 wh.next_attempt_at = now + _backoff(wh.attempts)
+        except SsrfBlocked:
+            # Host re-resolved to a non-public address at delivery time — treat as
+            # a hard failure, never let the worker touch an internal service.
+            wh.status = "failed"
+            wh.last_response_code = 0
+            wh.last_response_body = "blocked: url resolved to a non-public address"
+            wh.next_attempt_at = now + _backoff(wh.attempts)
         except requests.RequestException as exc:
             wh.status = "failed"
             wh.last_response_body = str(exc)[:200]
