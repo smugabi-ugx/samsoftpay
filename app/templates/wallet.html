@@ -407,7 +407,7 @@
                  placeholder="Minimum UGX 5,000">
           <div class="form-hint">
             Available: <strong>UGX {{ "{:,}".format(available) }}</strong> ·
-            Fee: UGX {{ "{:,}".format(withdrawal_fee) }} ·
+            Fee: <strong>1.5%</strong> (min UGX 200, cap UGX 5,000) ·
             Max withdrawal: UGX {{ "{:,}".format([available - withdrawal_fee, 0]|max) }}
           </div>
         </div>

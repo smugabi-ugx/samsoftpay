@@ -537,7 +537,7 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
     <div class="docs-section" id="payouts">
       <h2><i data-feather="send" style="width:22px;height:22px;color:var(--primary);"></i> Payouts</h2>
       <p>Send money out to a recipient's mobile money wallet. The merchant must have sufficient available balance.</p>
-      <div class="callout">A flat <strong>UGX 750</strong> fee applies per payout. This is deducted from the merchant's available balance along with the payout amount. If the payout fails, both are fully refunded.</div>
+      <div class="callout">A <strong>1.5%</strong> fee (min UGX 200, cap UGX 5,000) applies per payout — the same rate as collections, no flat fee. It is deducted from the merchant's available balance along with the payout amount; if the payout fails, both are fully refunded. (No other charges apply besides URA taxation where relevant.)</div>
 
       <h3>Create a Payout</h3>
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/payouts</div>

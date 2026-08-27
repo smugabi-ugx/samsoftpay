@@ -40,7 +40,7 @@ that match "withdrawals attempted today with no id and no record":
 
 1. **The bulk schema bug** — every item hit `invalid item: 'phone'` (fixed in this
    change), so nothing was created. Re-test after this deploys.
-2. **Empty sandbox wallet** — a payout needs `available` funds (amount + UGX 750
+2. **Empty sandbox wallet** — a payout needs `available` funds (amount + the 1.5%
    fee). With a zero balance every payout is rejected `insufficient available
    balance` **before** an id is minted.
 
@@ -218,8 +218,8 @@ Use **`available`** to decide if payroll can run. **`total_required = Σ amounts
 journal — treat as a signal to reconcile, not to pay.
 
 ## 11. Fees (§18) ✅
-- Flat **UGX 750** per payout on MTN MoMo today. No per-channel/per-account
-  variation currently (MTN is the only live payout rail).
+- **1.5%** per payout (min UGX 200, cap UGX 5,000) on MTN MoMo — the same rate as
+  collections, **no flat fee**. No other charges beyond applicable URA taxation.
 - **Bulk = charged per item.** A **failed payout refunds the fee in full** (amount
   + fee returned to `available`). Fees ARE deducted from `available` on payout.
 

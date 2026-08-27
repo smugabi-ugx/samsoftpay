@@ -4,7 +4,7 @@ from ..models import Channel
 COLLECTION_RATE = 0.015     # 1.5%
 COLLECTION_MIN  = 200       # UGX — floor so micro-txns are worth processing
 COLLECTION_CAP  = 5_000     # UGX — ceiling to stay competitive on large amounts
-PAYOUT_FLAT_FEE = 750       # UGX flat per payout (industry norm for disbursements)
+PAYOUT_RATE     = 0.015     # 1.5% — payouts priced the same as collections (no flat fee)
 
 
 def calculate_fee(*, amount: int, channel: Channel, currency: str = "UGX",
@@ -30,8 +30,10 @@ def calculate_fee(*, amount: int, channel: Channel, currency: str = "UGX",
     raise ValueError(f"no fee rule for channel {channel}")
 
 
-def calculate_payout_fee(*, currency: str = "UGX") -> int:
-    """Flat fee charged per payout regardless of amount."""
+def calculate_payout_fee(*, amount: int, currency: str = "UGX") -> int:
+    """Payout fee: 1.5% of amount, min UGX 200, cap UGX 5,000 — the SAME rate as
+    collections. There is no flat fee. The only other deduction is URA taxation
+    where it applies (see services/tax.py)."""
     if currency != "UGX":
         raise ValueError(f"unsupported currency: {currency}")
-    return PAYOUT_FLAT_FEE
+    return min(max(COLLECTION_MIN, int(amount * PAYOUT_RATE)), COLLECTION_CAP)

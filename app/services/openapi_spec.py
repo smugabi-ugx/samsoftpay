@@ -108,7 +108,7 @@ def _paths() -> dict:
         "/v1/payouts": {
             "post": {
                 "tags": ["Payouts"], "summary": "Create a payout",
-                "description": "Disburse to a recipient's Mobile Money wallet. FULL key only (collections-only keys are 403'd). A flat fee applies; a failed payout refunds amount+fee.",
+                "description": "Disburse to a recipient's Mobile Money wallet. FULL key only (collections-only keys are 403'd). Fee is 1.5% (min UGX 200, cap UGX 5,000), same as collections — no flat fee; a failed payout refunds amount+fee. No charges beyond applicable URA taxation.",
                 "security": _BEARER, "parameters": [_H_TIMESTAMP, _H_IDEM],
                 "requestBody": _body("PayoutCreate"),
                 "responses": {"201": _obj("Payout"), "400": _err("Invalid / insufficient available balance"),

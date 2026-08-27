@@ -13,7 +13,8 @@ from ..utils import admin_required, verified_required
 
 bp = Blueprint("wallet", __name__)
 
-_WITHDRAWAL_FEE = 750   # UGX flat (same as standard payout)
+# Withdrawal fee = the standard payout fee: 1.5% (min UGX 200, cap UGX 5,000),
+# computed per-amount via calculate_payout_fee. No flat fee.
 
 
 def _safe_email(to_email: str | None, subject: str, html: str, plain: str) -> None:
@@ -135,7 +136,9 @@ def wallet_home():
     return render_template("wallet.html",
         accounts=accounts, withdrawals=withdrawals,
         available=available, pending=pending,
-        withdrawal_fee=_WITHDRAWAL_FEE,
+        # Conservative flat estimate for the input max only (1.5% capped at 5,000);
+        # the server computes the exact per-amount fee on submit.
+        withdrawal_fee=min(max(200, int(available * 0.015)), 5000),
         topups=topups,
         settlements=settlements,
         payouts_paused_reason=payouts_paused_reason,
@@ -344,9 +347,11 @@ def request_withdrawal():
         merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail_acct.cached_balance if avail_acct else 0
-    total_needed = amount + _WITHDRAWAL_FEE
+    from ..services.fees import calculate_payout_fee
+    fee = calculate_payout_fee(amount=amount, currency="UGX")   # 1.5%, same as a payout
+    total_needed = amount + fee
     if available < total_needed:
-        flash(f"Insufficient available balance. You have UGX {available:,} — need UGX {total_needed:,} (amount + UGX {_WITHDRAWAL_FEE:,} fee).", "error")
+        flash(f"Insufficient available balance. You have UGX {available:,} — need UGX {total_needed:,} (amount + UGX {fee:,} 1.5% fee).", "error")
         return redirect(url_for("wallet.wallet_home"))
 
     # Create withdrawal request — admin approves and triggers the actual payout
@@ -355,7 +360,7 @@ def request_withdrawal():
         merchant_id           = current_user.id,
         settlement_account_id = sa.id,
         amount                = amount,
-        fee_amount            = _WITHDRAWAL_FEE,
+        fee_amount            = fee,
         status                = "pending",
     )
     db.session.add(wr)

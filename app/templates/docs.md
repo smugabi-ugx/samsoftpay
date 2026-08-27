@@ -128,7 +128,8 @@ Account page and receive signed events instead. Charge statuses:
 | `GET /v1/resolve-account?phone=…` | Confirm a payout destination BEFORE money moves: MTN's own `active` answer + `registered_name` (full-scope keys only) |
 
 Fees: charges 1.5% (min UGX 200, cap UGX 5,000), returned in the `fee` field. You receive
-`amount - fee`. Payouts: flat UGX 750, fully refunded with the amount if the payout fails.
+`amount - fee`. Payouts: the same 1.5% (min UGX 200, cap UGX 5,000), fully refunded with the
+amount if the payout fails. No flat fee and no other charges besides URA taxation where relevant.
 All amounts are integers in minor units (whole UGX).
 
 ### Settlement timing (set your watch by it)
