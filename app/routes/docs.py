@@ -22,7 +22,9 @@ import html as _htmlmod
 import os
 import re as _re
 
-from flask import Blueprint, Response, render_template
+import json as _json
+
+from flask import Blueprint, Response, render_template, request
 from markupsafe import Markup
 
 bp = Blueprint("docs", __name__)
@@ -36,6 +38,7 @@ _LLMS_TXT = """\
 
 - [API documentation (HTML)](https://api.samsoftpay.com/docs): full integration guide for humans
 - [API documentation (Markdown)](https://api.samsoftpay.com/docs.md): the same docs as raw markdown — the agent-friendly variant, ideal for LLMs and programmatic consumption
+- [OpenAPI 3.1 spec (JSON)](https://api.samsoftpay.com/openapi.json): the machine-readable schema of every endpoint, parameter, request/response and webhook — load it directly as tools or generate a client
 - [API changelog (HTML)](https://api.samsoftpay.com/docs/changelog): every API-visible change, newest first, with the stability promise (response shapes are additive-only; webhook events are only ever added)
 - [API changelog (Markdown)](https://api.samsoftpay.com/docs/changelog.md): the same changelog as raw markdown
 
@@ -171,3 +174,19 @@ def changelog():
 def changelog_markdown():
     return Response(_read_changelog_md(), mimetype="text/markdown",
                     headers={"Content-Type": "text/markdown; charset=utf-8"})
+
+
+@bp.get("/openapi.json")
+def openapi_json():
+    """Machine-readable OpenAPI 3.1 spec — the agent/codegen entry point."""
+    from ..services.openapi_spec import build_openapi
+    spec = build_openapi(request.host_url)
+    return Response(_json.dumps(spec), mimetype="application/json",
+                    headers={"Content-Type": "application/json; charset=utf-8",
+                             "Access-Control-Allow-Origin": "*"})
+
+
+# Alias under /docs for discoverability.
+@bp.get("/docs/openapi.json")
+def openapi_json_docs():
+    return openapi_json()
