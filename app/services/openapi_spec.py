@@ -70,8 +70,9 @@ def _paths() -> dict:
                 "security": _BEARER, "parameters": [_H_TIMESTAMP, _H_IDEM],
                 "requestBody": _body("ChargeCreate"),
                 "responses": {"201": _obj("Charge"), "400": _err("Invalid request"),
-                              "401": _err("Missing/invalid key"), "402": _err("Rail refused"),
-                              "409": _err("Idempotency key in flight"), "429": _err("Rate limited")},
+                              "401": _err("Missing/invalid key"),
+                              "409": _err("Idempotency key in flight"), "429": _err("Rate limited"),
+                              "502": _err("Transient rail failure — retry with the same Idempotency-Key")},
             },
             "get": {
                 "tags": ["Charges"], "summary": "List charges",
@@ -99,8 +100,8 @@ def _paths() -> dict:
         "/v1/charges/{id}/refund": {
             "post": {
                 "tags": ["Charges"], "summary": "Refund a charge",
-                "description": "Refunds the customer in full via disbursement. Requires a FULL key and available balance. Split charges are not refundable yet (400).",
-                "security": _BEARER, "parameters": [_path_id("txn_…"), _H_TIMESTAMP, _H_IDEM],
+                "description": "Refunds the customer the FULL original amount via disbursement (the platform returns its charge fee to the merchant, so the merchant's net cost is only the payout fee). Requires a FULL key and available balance. Idempotent by design: a retry of an already-refunded charge returns 400 already_refunded (no Idempotency-Key needed). Split charges are not refundable yet (400).",
+                "security": _BEARER, "parameters": [_path_id("txn_…"), _H_TIMESTAMP],
                 "responses": {"202": _obj("RefundResult"), "400": _err("Already refunded / insufficient available / split charge"),
                               "403": _err("Collections-only key"), "404": _err("Not found")},
             },
@@ -177,7 +178,7 @@ def _paths() -> dict:
         "/v1/vending/orders/{id}": {
             "get": {
                 "tags": ["Vending"], "summary": "Retrieve a vending order",
-                "security": _BEARER, "parameters": [_path_id("vnd_…")],
+                "security": _BEARER, "parameters": [_path_id("lnk_…")],
                 "responses": {"200": _obj("VendingOrder"), "404": _err("Not found")},
             },
         },
@@ -255,6 +256,7 @@ def _webhooks() -> dict:
         "payout.failed": hook("payout.failed", "Payout"),
         "vending.dispensed": hook("vending.dispensed", "VendingOrder"),
         "vending.dispense_failed": hook("vending.dispense_failed", "VendingOrder"),
+        "dispute.opened": hook("dispute.opened", "Charge"),
     }
 
 
@@ -281,9 +283,9 @@ def _components() -> dict:
                 "amount": dict(money, description="Fixed share of the net (amount − fee)."),
                 "bps": {"type": "integer", "description": "Basis points of the net (100 = 1%)."}},
                 "required": ["subaccount"]},
-            "ChargeCreate": {"type": "object", "required": ["amount", "customer"], "properties": {
+            "ChargeCreate": {"type": "object", "required": ["amount", "channel", "customer"], "properties": {
                 "amount": money, "currency": {"type": "string", "default": "UGX"},
-                "channel": {"type": "string", "default": "mtn_momo", "enum": ["mtn_momo"]},
+                "channel": {"type": "string", "enum": ["mtn_momo"], "description": "Required. mtn_momo is the only live rail."},
                 "customer": {"$ref": "#/components/schemas/Customer"},
                 "reference": {"type": "string", "description": "Your idempotent business reference."},
                 "split": {"type": "array", "items": {"$ref": "#/components/schemas/Split"}}}},
@@ -292,10 +294,12 @@ def _components() -> dict:
                 "status": {"type": "string", "enum": ["pending", "authorized", "succeeded", "failed", "refunded"]},
                 "amount": money, "fee": money, "currency": {"type": "string"},
                 "channel": {"type": "string"}, "mode": {"type": "string", "enum": ["test", "live"]},
-                "merchant_reference": {"type": ["string", "null"]},
-                "customer_phone": {"type": ["string", "null"]},
+                "reference": {"type": ["string", "null"], "description": "Your merchant reference."},
+                "rail_reference": {"type": ["string", "null"]},
                 "failure_reason": {"type": ["string", "null"]},
-                "created_at": ts, "completed_at": ts}},
+                "created_at": ts, "completed_at": ts,
+                "settled": {"type": "boolean", "description": "True once swept from the hold to available."},
+                "available_on": dict(ts, description="When the funds become withdrawable.")}},
             "RefundResult": {"type": "object", "properties": {
                 "charge_id": {"type": "string"}, "status": {"type": "string", "const": "refunded"},
                 "refund": {"type": "object", "properties": {
@@ -355,7 +359,7 @@ def _components() -> dict:
                 "goods": {"type": "array", "items": {"type": "object"}},
                 "reference": {"type": "string"}, "success_url": {"type": "string"}}},
             "VendingOrder": {"type": "object", "properties": {
-                "order_id": {"type": "string", "example": "vnd_…"}, "amount": money,
+                "order_id": {"type": "string", "example": "lnk_…"}, "amount": money,
                 "currency": {"type": "string"}, "machine": {"type": "string"},
                 "payment_status": {"type": "string"}, "vending_status": {"type": "string"},
                 "qr_png_url": {"type": "string"}, "qr_svg_url": {"type": "string"},
@@ -366,7 +370,7 @@ def _components() -> dict:
             "ConformanceResult": {"type": "object", "properties": {
                 "ok": {"type": "boolean"}, "vendor": {"type": "string"}, "profile": {"type": "string"},
                 "expected_reqData_any_of": {"type": "array", "items": {"type": "string"}}}},
-            "SubaccountCreate": {"type": "object", "required": ["name", "payout_phone"], "properties": {
+            "SubaccountCreate": {"type": "object", "required": ["name"], "properties": {
                 "name": {"type": "string"}, "payout_phone": {"type": "string"},
                 "external_ref": {"type": "string"}}},
             "Subaccount": {"type": "object", "properties": {

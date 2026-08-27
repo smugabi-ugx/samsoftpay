@@ -476,8 +476,9 @@ console.log(data); // {id: "txn_abc123", status: "authorized", ...}</code></pre>
 
       <h3>Exact <code>charge.failed</code> payloads</h3>
       <p>Each failure number produces a <code>charge.failed</code> webhook whose <code>data</code>
-      is exactly this shape (identical to <code>GET /v1/charges/&lt;id&gt;</code>). Build your
-      error handling against these exact payloads:</p>
+      carries the core charge fields (id, amount, fee, currency, channel, status, reference,
+      failure_reason, completed_at) plus <code>mode</code>. Build your error handling against these
+      exact payloads:</p>
       <p style="margin-bottom:.25rem;"><code>256700000001</code>:</p>
 <pre><code>{
   "id": "txn_9f2c41d8a3b7e615",
@@ -692,15 +693,18 @@ print(data["url"])  # Share this link with your customer</code></pre>
     <div class="docs-section" id="refunds">
       <h2><i data-feather="corner-up-left" style="width:22px;height:22px;color:var(--primary);"></i> Refunds</h2>
       <span class="endpoint-badge post">POST</span> <code>/v1/charges/&lt;id&gt;/refund</code>
-      <p style="margin-top:.75rem;">Returns the money to the customer's mobile-money account via a
-      disbursement. The refund is <strong>net of the original processing fee</strong>: a UGX 5,000
-      charge with a UGX 200 fee refunds UGX 4,800. Requires a <strong>full</strong> secret key,
-      <code>Idempotency-Key</code> and <code>X-Timestamp</code>.</p>
+      <p style="margin-top:.75rem;">Returns money to the customer's mobile-money account via a
+      disbursement. The customer is refunded the <strong>full original amount</strong> (a UGX 5,000
+      charge refunds UGX 5,000) — the platform gives its charge fee back to the merchant, so the
+      merchant's net cost of a refund is only the payout fee, never the customer's money. Requires a
+      <strong>full</strong> secret key and <code>X-Timestamp</code>. It is idempotent by design (no
+      <code>Idempotency-Key</code> needed): a retry of an already-refunded charge returns
+      <code>400 already_refunded</code>.</p>
       <pre><code>HTTP 202
 {
   "charge_id": "txn_...",
   "status": "refunded",
-  "refund": { "id": "pout_...", "amount": 4800, "status": "pending" }
+  "refund": { "id": "pout_...", "amount": 5000, "status": "authorized" }
 }</code></pre>
       <p>Refunding twice returns <code>400 {"error": "already_refunded"}</code>. A charge that was
       created with a <code>split</code> cannot be refunded through this endpoint yet.

@@ -406,13 +406,14 @@ def list_charges():
 @bp.post("/charges/<public_id>/refund")
 @limiter.limit("10 per minute")
 def refund_charge_route(public_id: str):
-    """Refund a succeeded charge.
+    """Refund a succeeded charge — the customer gets the FULL original amount.
 
-    Now carries the same replay guard as every other money POST — it was the
-    one exception to the module's own "Idempotency-Key required on all POSTs"
-    contract, on the endpoint where a replayed request pays out real money.
-    The refund itself is additionally guarded by the REFUNDED claim inside
-    refund_charge, so this is defense in depth, not the only gate.
+    Idempotent by design without an Idempotency-Key: refund_charge row-locks the
+    charge and claims it REFUNDED before creating the disbursement, so a retried
+    request finds it already REFUNDED and returns 400 already_refunded rather than
+    paying twice. Needs a FULL key + X-Timestamp. (If the refund's disbursement
+    later FAILS at the rail, the charge is re-opened to SUCCEEDED so it can be
+    retried — see refunds.reconcile_failed_refund_payout.)
     """
     from ..services.refunds import RefundError, refund_charge
 
@@ -498,6 +499,7 @@ def create_payout_route():
             recipient_phone=recipient_phone,
             recipient_name=recipient.get("name"),
             channel=channel,
+            reference=(str(body.get("reference"))[:120] if body.get("reference") else None),
         )
     except PayoutError as exc:
         body_out = {"error": str(exc)}
@@ -545,6 +547,7 @@ def _payout_public(p) -> dict:
         currency=p.currency,
         channel=p.channel.value,
         recipient_phone=p.recipient_phone,
+        reference=p.reference,
         rail_reference=p.rail_reference,
         failure_reason=p.failure_reason,
         created_at=p.created_at.isoformat() if p.created_at else None,
@@ -1066,6 +1069,7 @@ def create_bulk_payout():
             payout = create_payout(
                 merchant=merchant, amount=amount, currency="UGX",
                 recipient_phone=phone, recipient_name=name, channel=channel,
+                reference=(str(ref)[:120] if ref else None),
             )
             out = {
                 "id": payout.public_id,

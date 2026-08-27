@@ -72,6 +72,7 @@ def create_payout(
     recipient_phone: str,
     recipient_name: str | None = None,
     channel: Channel = Channel.MTN_MOMO,
+    reference: str | None = None,
 ) -> Payout:
     # Admin "view as" (support impersonation) is STRICTLY read-only. The
     # before_request guard already blocks the POST, but re-check at the money
@@ -181,6 +182,7 @@ def create_payout(
         is_test=is_test,
         recipient_phone=recipient_phone,
         recipient_name=recipient_name,
+        reference=(reference or None),
     )
     db.session.add(payout)
     db.session.flush()
@@ -341,6 +343,12 @@ def complete_payout(
         )
         payout.status = PayoutStatus.FAILED
         payout.failure_reason = reason or "unknown"
+        # If this payout WAS a refund's customer disbursement, re-open the charge
+        # (reverse the charge-fee return, set it back to SUCCEEDED) so the merchant
+        # isn't over-credited and can retry. No-op for ordinary payouts. Atomic
+        # with the reversal above (committed together below).
+        from .refunds import reconcile_failed_refund_payout
+        reconcile_failed_refund_payout(payout)
 
     payout.completed_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -392,6 +400,7 @@ def _queue_payout_webhook(payout) -> None:
             "fee": payout.fee_amount,
             "currency": payout.currency,
             "recipient_phone": payout.recipient_phone,
+            "reference": payout.reference,
             "rail_reference": payout.rail_reference,
             "failure_reason": payout.failure_reason,
             "completed_at": payout.completed_at.isoformat() if payout.completed_at else None,
