@@ -923,12 +923,22 @@ def create_bulk_payout():
     for i, item in enumerate(items):
         try:
             amount = int(item["amount"])
-            phone = str(item["phone"]).strip()
-            name = item.get("name")
+            # Accept BOTH the nested recipient:{phone,name} shape (same as the
+            # single POST /v1/payouts endpoint) AND a flat phone/name on the item
+            # (convenient for CSV). Backbone hit "invalid item: 'phone'" because
+            # bulk previously required the flat form only while the single
+            # endpoint documents the nested form — the two must agree.
+            recipient = item.get("recipient") or {}
+            phone = str(item.get("phone") or recipient.get("phone") or "").strip()
+            if not phone:
+                raise KeyError("phone")
+            name = item.get("name") or recipient.get("name")
             ref = str(item.get("reference") or f"{client_key}-{i}")
             channel = Channel(item.get("channel", "mtn_momo"))
         except (KeyError, ValueError, TypeError) as exc:
-            results.append({"index": i, "ok": False, "error": f"invalid item: {exc}"})
+            results.append({"index": i, "ok": False,
+                            "reference": item.get("reference"),
+                            "error": f"invalid item: {exc}"})
             continue
 
         # Per-item idempotency keyed by the caller's reference.
