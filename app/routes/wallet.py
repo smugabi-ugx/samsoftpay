@@ -142,6 +142,36 @@ def wallet_home():
     )
 
 
+_SANDBOX_FUND_CAP = 10_000_000   # UGX per click
+
+
+@bp.post("/dashboard/wallet/sandbox-fund")
+@login_required
+def sandbox_fund():
+    """Self-serve TEST money: instantly credit the merchant's SANDBOX available
+    balance (Stripe-style test funds). is_test=True ledger ONLY — it can never
+    mint real withdrawable funds — so an integrator can test payouts/refunds
+    (which need `available` >= amount + fee) without first building a top-up flow.
+    """
+    from ..services import ledger
+    try:
+        amount = int(request.form.get("amount") or 1_000_000)
+    except (TypeError, ValueError):
+        amount = 1_000_000
+    amount = max(1_000, min(amount, _SANDBOX_FUND_CAP))
+    m = db.session.get(Merchant, current_user.id)
+    rail = ledger.get_or_create_account(
+        type=AccountType.RAIL_CLEARING, merchant_id=None, currency="UGX", is_test=True)
+    avail = ledger.get_or_create_account(
+        type=AccountType.MERCHANT_AVAILABLE, merchant_id=m.id, currency="UGX", is_test=True)
+    ledger.post([(rail, +amount), (avail, -amount)], currency="UGX",
+                memo=f"self-serve sandbox test funds ({m.email})")
+    db.session.commit()
+    flash(f"Added UGX {amount:,} to your SANDBOX (test) balance. Test money only — "
+          f"it can never be withdrawn as real funds.", "success")
+    return redirect(url_for("wallet.wallet_home"))
+
+
 @bp.get("/dashboard/wallet/statement.csv")
 @login_required
 @verified_required

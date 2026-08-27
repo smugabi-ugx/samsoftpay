@@ -570,6 +570,28 @@ def register(app: Flask) -> None:
                   f"{row.display_name} (order={row.sign_order}, "
                   f"replay={row.replay_window_seconds}s, body={row.dispense_body_style}).")
 
+    @app.cli.command("unlock")
+    @click.argument("email")
+    def unlock_account(email):
+        """Unblock a merchant stuck at email verification / locked out of OTP.
+
+        Clears the lockout, marks the email verified, and resets the OTP attempt
+        counter — the no-email escape hatch when SMTP did not deliver a code or a
+        user burned their attempts. Lets them log in and use the sandbox at once.
+        """
+        with app.app_context():
+            m = Merchant.query.filter_by(email=email).first()
+            if not m:
+                print(f"No merchant with email {email}")
+                return
+            m.email_verified = True
+            m.locked_until = None
+            m.otp_attempts = 0
+            m.otp_code = None
+            db.session.commit()
+            print(f"Unlocked + verified: {m.name} <{m.email}> (id={m.id}). "
+                  f"They can log in now.")
+
     @app.cli.command("disable-2fa")
     @click.argument("email", required=False)
     def disable_2fa(email):
