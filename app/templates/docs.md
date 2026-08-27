@@ -47,6 +47,12 @@ The whole integration is **two connections in opposite directions**:
 `whsec_` (webhook secret, from Account → Webhooks) verifies *us → you* on incoming webhooks. Different
 values, both per-account — you never need any Samsoftpay internal secret, only your own two.
 
+**Building with an AI coding agent? Integrate in minutes, not days.** Point Codex, Claude, OpenCode,
+Kimi — or any coding agent — at `/openapi.json` (full OpenAPI 3.1 spec, loadable as tools) and
+`/docs.md` (this guide), discoverable via `/docs/llms.txt`. The agent gets the complete contract and
+tests against the deterministic sandbox with self-serve test funds. **Once your account's KYC is
+verified (green), you're cleared to move live money** — that is the only gate to go live.
+
 ## Quickstart
 
 You need exactly **two things**:
