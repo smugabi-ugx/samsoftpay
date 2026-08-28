@@ -9,6 +9,7 @@ from flask_login import current_user, login_required
 # cannon (and a cost sink against MTN).
 from ..extensions import db, limiter
 from ..models import Bill, BillCategory, TaxConfiguration
+from ..pagination import page_arg
 from ..services.tax import calculate, get_merchant_tax
 from ..utils import verified_required
 
@@ -53,17 +54,18 @@ _CATEGORIES = [
 @login_required
 @verified_required
 def list_bills():
-    bills = (Bill.query
-             .filter_by(merchant_id=current_user.id)
-             .order_by(Bill.created_at.desc())
-             .limit(200).all())
+    pag = (Bill.query
+           .filter_by(merchant_id=current_user.id)
+           .order_by(Bill.created_at.desc())
+           .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    bills = pag.items
     tax_cfg = TaxConfiguration.query.filter_by(merchant_id=current_user.id).first()
     stats = {
         "active":  Bill.query.filter_by(merchant_id=current_user.id, status="active").count(),
         "paid":    Bill.query.filter_by(merchant_id=current_user.id, status="paid").count(),
         "overdue": Bill.query.filter_by(merchant_id=current_user.id, status="overdue").count(),
     }
-    return render_template("bills.html", bills=bills, tax_cfg=tax_cfg,
+    return render_template("bills.html", bills=bills, pag=pag, tax_cfg=tax_cfg,
                            stats=stats, categories=_CATEGORIES)
 
 

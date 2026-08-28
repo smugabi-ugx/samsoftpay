@@ -10,6 +10,7 @@
 {% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 
 {% if payouts_paused_reason %}
 <div class="alert alert-warning" style="margin-bottom:1rem;">
@@ -463,6 +464,7 @@
       </div>
       {% endfor %}
     </div>
+    {{ pager(st_pag, param='page_st') }}
     {% else %}
     <div class="text-muted" style="font-size:.8125rem;">No settlements yet — your first one lands after the settlement hold on your first successful charge.</div>
     {% endif %}
@@ -498,6 +500,7 @@
         </div>
         {% endfor %}
       </div>
+      {{ pager(tu_pag, param='page_tu') }}
       {% else %}
       <div class="text-muted" style="font-size:.8125rem;">No top-ups yet.</div>
       {% endif %}
@@ -535,6 +538,7 @@
         </div>
         {% endfor %}
       </div>
+      {{ pager(wd_pag, param='page_wd') }}
       {% else %}
       <div style="text-align:center;padding:2rem;color:var(--gray-500);">
         <i data-feather="inbox" style="width:32px;height:32px;margin-bottom:.75rem;"></i>

@@ -5,6 +5,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from flask_login import current_user, login_required
 
 from ..extensions import db
+from ..pagination import page_arg
 from ..models import (
     Account, AccountType, Merchant, Payout, PayoutStatus,
     PaymentLink, SettlementAccount, TopUpRequest, TxnStatus, WithdrawalRequest,
@@ -69,10 +70,11 @@ def wallet_home():
     # LIVE money action (withdraw, add settlement account, sweep) keeps its own
     # @verified_required, so live money still needs KYC.
     accounts   = SettlementAccount.query.filter_by(merchant_id=current_user.id).all()
-    withdrawals = (WithdrawalRequest.query
-                   .filter_by(merchant_id=current_user.id)
-                   .order_by(WithdrawalRequest.created_at.desc())
-                   .limit(20).all())
+    wd_pag = (WithdrawalRequest.query
+              .filter_by(merchant_id=current_user.id)
+              .order_by(WithdrawalRequest.created_at.desc())
+              .paginate(page=page_arg("page_wd"), per_page=15, error_out=False))
+    withdrawals = wd_pag.items
     avail_acct = Account.query.filter_by(
         merchant_id=current_user.id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
@@ -99,18 +101,20 @@ def wallet_home():
     sandbox_pending   = -test_pending_acct.cached_balance if test_pending_acct else 0
     sandbox_balance   = sandbox_available + sandbox_pending
 
-    topups = (TopUpRequest.query
+    tu_pag = (TopUpRequest.query
               .filter_by(merchant_id=current_user.id)
               .order_by(TopUpRequest.created_at.desc())
-              .limit(10).all())
+              .paginate(page=page_arg("page_tu"), per_page=10, error_out=False))
+    topups = tu_pag.items
 
     # First-class settlements (live ledger): every release of pending ->
     # available, newest first — the "you can set a watch by it" table.
     from ..models import Settlement
-    settlements = (Settlement.query
-                   .filter_by(merchant_id=current_user.id, is_test=False)
-                   .order_by(Settlement.id.desc())
-                   .limit(15).all())
+    st_pag = (Settlement.query
+              .filter_by(merchant_id=current_user.id, is_test=False)
+              .order_by(Settlement.id.desc())
+              .paginate(page=page_arg("page_st"), per_page=15, error_out=False))
+    settlements = st_pag.items
 
     # NO SILENT HOLDS (Flutterwave counterexample: a merchant who discovers a
     # frozen balance without warning never leaves money in again). If this
@@ -134,13 +138,13 @@ def wallet_home():
                 "is unaffected.")
 
     return render_template("wallet.html",
-        accounts=accounts, withdrawals=withdrawals,
+        accounts=accounts, withdrawals=withdrawals, wd_pag=wd_pag,
         available=available, pending=pending,
         # Conservative flat estimate for the input max only (1.5% capped at 5,000);
         # the server computes the exact per-amount fee on submit.
         withdrawal_fee=min(max(200, int(available * 0.015)), 5000),
-        topups=topups,
-        settlements=settlements,
+        topups=topups, tu_pag=tu_pag,
+        settlements=settlements, st_pag=st_pag,
         payouts_paused_reason=payouts_paused_reason,
         sandbox_balance=sandbox_balance,
         sandbox_available=sandbox_available,
@@ -466,20 +470,27 @@ def manual_sweep():
 @login_required
 @admin_required
 def admin_withdrawals():
-    pending_wrs = (WithdrawalRequest.query
+    pending_pag = (WithdrawalRequest.query
                    .filter_by(status="pending")
-                   .order_by(WithdrawalRequest.created_at.asc()).all())
-    all_wrs = (WithdrawalRequest.query
-               .order_by(WithdrawalRequest.created_at.desc()).limit(50).all())
-    unverified = (SettlementAccount.query
-                  .filter_by(is_verified=False)
-                  .order_by(SettlementAccount.created_at.asc()).all())
+                   .order_by(WithdrawalRequest.created_at.asc())
+                   .paginate(page=page_arg("page_pd"), per_page=50, error_out=False))
+    pending_wrs = pending_pag.items
+    all_pag = (WithdrawalRequest.query
+               .order_by(WithdrawalRequest.created_at.desc())
+               .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    all_wrs = all_pag.items
+    unverified_pag = (SettlementAccount.query
+                      .filter_by(is_verified=False)
+                      .order_by(SettlementAccount.created_at.asc())
+                      .paginate(page=page_arg("page_uv"), per_page=50, error_out=False))
+    unverified = unverified_pag.items
     # Name lookup for the tables — the template used to show raw merchant ids,
     # which forced the admin to cross-reference by hand before approving money.
     ids = {w.merchant_id for w in pending_wrs} | {w.merchant_id for w in all_wrs} | {a.merchant_id for a in unverified}
     merchant_names = {m.id: m.name for m in Merchant.query.filter(Merchant.id.in_(ids)).all()} if ids else {}
     return render_template("admin_withdrawals.html",
         pending_wrs=pending_wrs, all_wrs=all_wrs, unverified=unverified,
+        pending_pag=pending_pag, all_pag=all_pag, unverified_pag=unverified_pag,
         merchant_names=merchant_names)
 
 
@@ -876,9 +887,15 @@ def topup_bank():
 @admin_required
 def admin_topups():
     from ..models import TopUpRequest
-    pending   = TopUpRequest.query.filter_by(status="pending").order_by(TopUpRequest.created_at.asc()).all()
-    all_items = TopUpRequest.query.order_by(TopUpRequest.created_at.desc()).limit(50).all()
-    return render_template("admin_topups.html", pending=pending, all_items=all_items)
+    pending_pag = (TopUpRequest.query.filter_by(status="pending")
+                   .order_by(TopUpRequest.created_at.asc())
+                   .paginate(page=page_arg("page_pd"), per_page=50, error_out=False))
+    pending = pending_pag.items
+    all_pag = (TopUpRequest.query.order_by(TopUpRequest.created_at.desc())
+               .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    all_items = all_pag.items
+    return render_template("admin_topups.html", pending=pending, all_items=all_items,
+        pending_pag=pending_pag, all_pag=all_pag)
 
 
 @bp.post("/admin/topups/<int:req_id>/approve")

@@ -125,6 +125,7 @@
 {% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 
 <!-- ── ACCOUNT HERO (Capital One style) ── -->
 <div class="acct-hero">
@@ -420,7 +421,7 @@
 
   {% if payouts %}
   <div style="padding:0 .25rem;">
-    {% for p in payouts[:10] %}
+    {% for p in payouts %}
     <div class="activity-row">
       <div class="activity-icon" style="background:rgba(99,102,241,.08);">📤</div>
       <div class="activity-info">
@@ -436,6 +437,7 @@
     </div>
     {% endfor %}
   </div>
+  {{ pager(po_pag, param='page_po') }}
   {% else %}
   <div class="empty-state">
     <div class="empty-state-icon">📤</div>
@@ -487,6 +489,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(lk_pag, param='page_lk') }}
   {% else %}
   <div class="empty-state">
     <div class="empty-state-icon">🔗</div>

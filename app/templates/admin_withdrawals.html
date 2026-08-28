@@ -10,6 +10,7 @@
 {% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 {# Local flash block removed: base.html now renders flashes for every page
    (with correct success/error/info styling) — keeping this one would show
    each message twice. #}
@@ -48,6 +49,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(unverified_pag, param='page_uv') }}
 </div>
 {% endif %}
 
@@ -102,6 +104,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(pending_pag, param='page_pd') }}
 </div>
 {% else %}
 <div class="card" style="text-align:center;padding:2rem;color:var(--gray-500);">
@@ -154,6 +157,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(all_pag, param='page') }}
   {% else %}
   <p class="text-muted">No withdrawals yet.</p>
   {% endif %}

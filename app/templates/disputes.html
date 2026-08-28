@@ -2,6 +2,7 @@
 {% block title %}Disputes{% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 <div class="page-header">
   <h1 class="page-title">Disputes</h1>
   <p class="page-subtitle">Problems customers reported on your payments — respond within 72 hours.</p>
@@ -56,6 +57,7 @@
     </div>
     {% endfor %}
   </div>
+  {{ pager(pag, param='page') }}
   {% else %}
   <div class="text-muted" style="font-size:.875rem;">No disputes — customers can file one from the
     "Report a problem" link on any payment receipt.</div>

@@ -1,0 +1,20 @@
+{# Shared server-side pagination control. Usage:
+     {% from '_pagination.html' import pager %}
+     {{ pager(some_pag) }}                      → uses ?page=
+     {{ pager(wd_pag, param='page_wd') }}        → a page with several lists
+     {{ pager(pag, qs=qs) }}                     → preserve other filters (qs = "status=x&ref=y")
+   Renders nothing unless there is more than one page, so it stays invisible on
+   short lists. `pag` is a Flask-SQLAlchemy Pagination object. #}
+{% macro pager(pag, param='page', qs='') %}
+{% if pag and pag.pages and pag.pages > 1 %}
+<div class="sp-pager" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:1rem;flex-wrap:wrap;">
+  <div style="color:var(--gray-500,#6b7280);font-size:.85rem;">
+    Page {{ pag.page }} of {{ pag.pages }} · {{ "{:,}".format(pag.total) }} total
+  </div>
+  <div style="display:flex;gap:.5rem;">
+    {% if pag.has_prev %}<a class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .8rem;" href="?{{ param }}={{ pag.prev_num }}{% if qs %}&{{ qs }}{% endif %}">← Newer</a>{% endif %}
+    {% if pag.has_next %}<a class="btn btn-outline" style="font-size:.8125rem;padding:.4rem .8rem;" href="?{{ param }}={{ pag.next_num }}{% if qs %}&{{ qs }}{% endif %}">Older →</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}

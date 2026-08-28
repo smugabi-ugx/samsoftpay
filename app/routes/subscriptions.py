@@ -4,6 +4,7 @@ from flask_login import current_user, login_required
 
 from ..extensions import db, limiter
 from ..models import Channel, Subscription, SubscriptionPlan
+from ..pagination import page_arg
 from ..services.subscriptions_service import (
     cancel_subscription,
     create_plan,
@@ -142,8 +143,10 @@ def plan_subscribers(plan_id: int):
     plan = SubscriptionPlan.query.filter_by(
         id=plan_id, merchant_id=current_user.id
     ).first_or_404()
-    subs = (Subscription.query.filter_by(plan_id=plan_id)
-            .order_by(Subscription.created_at.desc()).all())
+    pag = (Subscription.query.filter_by(plan_id=plan_id)
+           .order_by(Subscription.created_at.desc())
+           .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    subs = pag.items
     # Per-subscriber payment history (read-only), so the merchant can see money
     # actually collected — the audit flagged the page as a "dead end".
     from ..models import Transaction, TxnStatus
@@ -164,7 +167,7 @@ def plan_subscribers(plan_id: int):
             "last_paid_at": last.completed_at if last else None,
         }
     return render_template("subscription_subscribers.html", plan=plan, subs=subs,
-                           pay=pay, collected_total=collected_total)
+                           pag=pag, pay=pay, collected_total=collected_total)
 
 
 @bp.post("/dashboard/subscriptions/<int:sub_id>/cancel")

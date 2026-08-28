@@ -39,6 +39,7 @@
 {% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 
 {# Flash messages (key rotation etc.) are rendered ONCE by base.html, above this
    block. This page used to render its own copy too, so every message appeared
@@ -365,6 +366,7 @@ print(resp.json())
         </tbody>
       </table>
     </div>
+    {{ pager(pag, param='page') }}
     <div class="form-hint">A resend delivers the original signed event to your current endpoint — receivers dedupe on the event id, so it's always safe. Also available as <code>POST /v1/webhooks/&lt;event_id&gt;/resend</code>.</div>
   </div>
   {% endif %}

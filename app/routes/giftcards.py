@@ -4,6 +4,7 @@ from flask_login import current_user, login_required
 
 from ..extensions import db
 from ..models import Account, AccountType, GiftCard
+from ..pagination import page_arg
 from ..services.giftcards import create_gift_card
 from ..utils import verified_required
 
@@ -30,9 +31,11 @@ bp = Blueprint("giftcards", __name__, url_prefix="/dashboard/gift-cards")
 @verified_required
 def list_cards():
     from ..utils import merchant_or_admin
-    cards = GiftCard.query.filter_by(merchant_id=current_user.id)\
-        .order_by(GiftCard.created_at.desc()).limit(100).all()
-    return render_template("giftcards.html", cards=cards)
+    pag = GiftCard.query.filter_by(merchant_id=current_user.id)\
+        .order_by(GiftCard.created_at.desc())\
+        .paginate(page=page_arg("page"), per_page=50, error_out=False)
+    cards = pag.items
+    return render_template("giftcards.html", cards=cards, pag=pag)
 
 
 @bp.post("/create")

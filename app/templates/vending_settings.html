@@ -40,6 +40,7 @@
 {% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 <h1 style="margin-bottom:.35rem;">Vending machines</h1>
 <p style="color:#666; margin-bottom:1.5rem; max-width:64ch;">
   Let a vending machine take Mobile Money. The machine shows a QR, the customer
@@ -269,6 +270,7 @@
       </tbody>
     </table>
   </div>
+  {{ pager(pag, param='page') }}
   {% else %}
     <div class="empty">No vending orders yet.</div>
   {% endif %}
