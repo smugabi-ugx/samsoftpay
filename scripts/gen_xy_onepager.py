@@ -47,7 +47,7 @@ def build() -> str:
     pdf.cell(W, 6, a("Samsoftpay x XY Vending - Integration Spec"), align="C")
     pdf.set_xy(14, 20.5)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(W, 5, a("Scan-to-pay (MTN Mobile Money) -> dispense. The machine shows a QR; it never touches money or cards."), align="C")
+    pdf.cell(W, 5, a("Scan-to-pay -> dispense. The machine shows a Samsoftpay QR; it never touches money or cards."), align="C")
     pdf.set_text_color(*DARK)
 
     state = {"y": 31}
@@ -69,13 +69,14 @@ def build() -> str:
 
     # ---- What it is ----
     h("What the payment method is")
-    p("Samsoftpay is a payment gateway in Uganda using MTN Mobile Money (MoMo). The customer scans a QR "
-      "shown on the machine and approves the payment on their own phone. No card, no cash, no bank data on "
-      "the machine - the QR opens Samsoftpay's secure checkout page.")
+    p("Samsoftpay is a payment gateway in Uganda. The customer scans a Samsoftpay QR shown on the machine and "
+      "completes payment on their own phone, choosing their method on the Samsoftpay page (Mobile Money today; "
+      "more methods such as Airtel and cards are added centrally, with NO change to the machine). No card, no "
+      "cash, no bank data on the machine - the QR opens Samsoftpay's secure checkout page.")
 
     # ---- Flow diagram ----
     h("Business process / how the consumer proceeds")
-    steps = ["1. Select\nproduct", "2. Machine\nshows QR", "3. Scan &\npay (MoMo)",
+    steps = ["1. Select\nproduct", "2. Machine\nshows QR", "3. Scan &\npay on phone",
              "4. Samsoftpay\nconfirms", "5. Machine\ndispenses"]
     n = len(steps)
     gap = 4
@@ -113,12 +114,13 @@ def build() -> str:
         state["y"] = pdf.get_y() + 2.4
 
     qa("1. What is the payment method?",
-       "MTN Mobile Money, shown as a Samsoftpay QR. The machine only displays a QR and dispenses on success.")
+       "A Samsoftpay QR. The customer pays on their phone (Mobile Money today; Airtel and cards added centrally "
+       "later, with no machine change). The machine only displays a QR and dispenses on success.")
     qa("2. What is the business process?",
        "Select -> QR -> customer pays on their phone -> Samsoftpay confirms -> machine dispenses (the 5 steps above).")
     qa("3. How does the consumer proceed?",
-       "Scan the QR with the phone camera or MoMo app -> confirm the phone number -> approve with the MoMo PIN "
-       "-> the machine dispenses. No app install, no card, no cash.")
+       "Scan the QR with the phone camera or a payment app -> choose the method and confirm -> approve on the "
+       "phone -> the machine dispenses. No app install, no card or cash at the machine.")
 
     # ---- How to connect to the API ----
     h("How to connect to the Samsoftpay API")

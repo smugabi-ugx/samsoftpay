@@ -119,7 +119,7 @@ def signup():
             f"<div style='font-family:Inter,sans-serif;max-width:480px;margin:0 auto;'>"
             f"<h2 style='color:#0f172a;'>Welcome to Samsoftpay, {name} 👋</h2>"
             f"<p style='color:#475569;'>Your account is ready. You can start accepting "
-            f"MTN Mobile Money payments right away — grab your API keys and test keys "
+            f"Mobile Money payments right away — grab your API keys and test keys "
             f"from <strong>Settings &amp; API Keys</strong>, or share a payment link.</p>"
             f"<p style='color:#475569;'>Build against your <code>sk_test_</code> keys first, "
             f"then flip to live. Questions? Just reply to this email.</p></div>",
