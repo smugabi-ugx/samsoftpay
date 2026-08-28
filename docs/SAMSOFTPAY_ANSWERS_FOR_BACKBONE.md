@@ -102,6 +102,23 @@ per-merchant rate override, so a bespoke rate is a config change, not a code cha
 separate tax line — but the reason is that a *payout* carries no VAT, and our fee is
 VAT-inclusive; VAT is not a component we bolt onto the 1.5%.)
 
+**Collections vs payouts — how VAT differs:** "collections" bundles two separate things,
+and only the fee is treated identically to payouts.
+
+| | Salary **payout** (money-out) | **Collection**/charge (money-in) |
+|---|---|---|
+| **Our 1.5% fee** (min 200, cap 5,000) | VAT-inclusive; SamsoftPay remits the fee's VAT to URA | **Same** — VAT-inclusive; we remit the fee's VAT |
+| **The transaction itself** | No VAT — a salary is not a VATable supply | **May** carry the **merchant's own** 18% VAT (their sale of goods/services), already **included in the price** |
+| **Who remits the transaction VAT** | N/A | The **merchant** (the seller) — never SamsoftPay |
+| **What our ledger does** | Debits `amount + fee` only | Credits the merchant `amount`, takes only our `fee` — we **never** add or withhold the merchant's sale VAT |
+
+So collections are **not** "VAT-free" the way payouts are: our *fee* carries VAT the same
+way (inclusive, we remit), and the *sale* may carry the **merchant's** VAT, which stays
+entirely the merchant's to account for. SamsoftPay's receipt engine can *show* that VAT
+breakdown on the customer's receipt if the merchant switches it on (off by default), purely
+so the consumer gets a proper tax receipt — it does not mean SamsoftPay collects or remits
+the merchant's sale VAT.
+
 ---
 
 ## 3. Small API questions
