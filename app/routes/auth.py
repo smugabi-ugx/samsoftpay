@@ -15,6 +15,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..extensions import db, limiter
 from ..models import Merchant
+from ..pagination import page_arg
 from ..services.email_service import generate_otp, otp_expiry, send_otp
 from ..utils import verified_required
 
@@ -524,8 +525,10 @@ def account():
     # signed payload; parse just enough to label the row.
     import json as _json
     deliveries = []
-    for wh in (WebhookDelivery.query.filter_by(merchant_id=current_user.id)
-               .order_by(WebhookDelivery.id.desc()).limit(20).all()):
+    wh_pag = (WebhookDelivery.query.filter_by(merchant_id=current_user.id)
+              .order_by(WebhookDelivery.id.desc())
+              .paginate(page=page_arg("page"), per_page=15, error_out=False))
+    for wh in wh_pag.items:
         try:
             env = _json.loads(wh.payload)
         except ValueError:
@@ -569,6 +572,7 @@ def account():
         succeeded=succeeded,
         payout_count=payout_count,
         deliveries=deliveries,
+        pag=wh_pag,
         golive=golive,
     )
 

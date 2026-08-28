@@ -3,6 +3,7 @@
 {% block title %}Reconciliation Report{% endblock %}
 
 {% block content %}
+{% from '_pagination.html' import pager %}
 <div class="page-header" style="display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 1rem;">
   <div>
     <h1 class="page-title">Reconciliation Report</h1>
@@ -281,6 +282,7 @@
     </div>
     {% endfor %}
   </div>
+  {{ pager(pag, param='page') }}
   {% else %}
   <div style="display:flex;align-items:center;gap:.5rem;color:var(--success);font-size:.9rem;padding:.5rem 0;">
     <i data-feather="check-circle" style="width:18px;height:18px;"></i>

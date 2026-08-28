@@ -13,6 +13,7 @@ from ..models import (
     Transaction,
     WebhookDelivery,
 )
+from ..pagination import page_arg
 from ..services.reconciliation import run_reconciliation
 from ..utils import admin_required, merchant_or_admin, verified_required
 
@@ -97,8 +98,9 @@ def index():
 @login_required
 @admin_required
 def admin_index():
-    merchants = Merchant.query.all()
-    return render_template("index.html", merchants=merchants)
+    pag = Merchant.query.paginate(page=page_arg("page"), per_page=50, error_out=False)
+    merchants = pag.items
+    return render_template("index.html", merchants=merchants, pag=pag)
 
 
 @bp.get("/dashboard")
@@ -760,18 +762,18 @@ def merchant_detail(merchant_id: int):
     )
     activity_has_more = len(_txn_rows) > _ACTIVITY_PAGE
     txns = _txn_rows[:_ACTIVITY_PAGE]
-    payouts = (
+    po_pag = (
         Payout.query.filter_by(merchant_id=merchant_id)
         .order_by(Payout.created_at.desc())
-        .limit(50)
-        .all()
+        .paginate(page=page_arg("page_po"), per_page=10, error_out=False)
     )
-    links = (
+    payouts = po_pag.items
+    lk_pag = (
         PaymentLink.query.filter_by(merchant_id=merchant_id)
         .order_by(PaymentLink.created_at.desc())
-        .limit(20)
-        .all()
+        .paginate(page=page_arg("page_lk"), per_page=10, error_out=False)
     )
+    links = lk_pag.items
     pending = Account.query.filter_by(
         merchant_id=merchant_id, type=AccountType.MERCHANT_PENDING, is_test=False
     ).first()
@@ -829,7 +831,9 @@ def merchant_detail(merchant_id: int):
         chart_status=chart_status,
         chart_channel=chart_channel,
         payouts=payouts,
+        po_pag=po_pag,
         links=links,
+        lk_pag=lk_pag,
         pending_balance=-pending.cached_balance if pending else 0,
         available_balance=-available.cached_balance if available else 0,
         webhooks=webhooks,
@@ -1117,14 +1121,14 @@ def vending_settings(merchant_id: int):
         abort(403)
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
 
-    orders = (
+    pag = (
         PaymentLink.query
         .filter(PaymentLink.merchant_id == merchant_id,
                 PaymentLink.vending_meta.isnot(None))
         .order_by(PaymentLink.created_at.desc())
-        .limit(25)
-        .all()
+        .paginate(page=page_arg("page"), per_page=25, error_out=False)
     )
+    orders = pag.items
     # Pair each order with its machine + payment status for the table.
     # Batch-load the orders' transactions in ONE query instead of one .get()
     # per row (N+1).
@@ -1150,6 +1154,7 @@ def vending_settings(merchant_id: int):
         "vending_settings.html",
         merchant=merchant,
         rows=rows,
+        pag=pag,
         machines=machines,
         # Never render the secret itself — only whether one exists, and where
         # it came from, so the merchant can tell their own key from ours.
@@ -1507,11 +1512,12 @@ def bulk_payout_submit(merchant_id: int):
 def reconciliation():
     from ..models import ReconException
     report = run_reconciliation()
-    recon_exceptions = (ReconException.query.filter_by(status="open")
-                        .order_by(ReconException.severity, ReconException.created_at.desc())
-                        .limit(200).all())
+    pag = (ReconException.query.filter_by(status="open")
+           .order_by(ReconException.severity, ReconException.created_at.desc())
+           .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    recon_exceptions = pag.items
     return render_template("reconciliation.html", report=report,
-                           recon_exceptions=recon_exceptions)
+                           recon_exceptions=recon_exceptions, pag=pag)
 
 
 @bp.post("/admin/reconciliation/run-mtn")
@@ -1568,12 +1574,13 @@ def disputes_page(merchant_id: int):
         abort(403)
     from ..models import Dispute
     merchant = db.session.get(Merchant, merchant_id) or abort(404)
-    disputes = (db.session.query(Dispute, Transaction)
-                .join(Transaction, Dispute.transaction_id == Transaction.id)
-                .filter(Dispute.merchant_id == merchant_id)
-                .order_by(Dispute.id.desc())
-                .limit(100).all())
-    return render_template("disputes.html", merchant=merchant, disputes=disputes)
+    _disputes_q = (db.session.query(Dispute, Transaction)
+                   .join(Transaction, Dispute.transaction_id == Transaction.id)
+                   .filter(Dispute.merchant_id == merchant_id)
+                   .order_by(Dispute.id.desc()))
+    pag = db.paginate(_disputes_q, page=page_arg("page"), per_page=50, error_out=False)
+    disputes = pag.items
+    return render_template("disputes.html", merchant=merchant, disputes=disputes, pag=pag)
 
 
 @bp.post("/dashboard/<int:merchant_id>/disputes/<int:dispute_id>/close")

@@ -14,6 +14,7 @@ from werkzeug.utils import secure_filename
 
 from ..extensions import db
 from ..models import KYCApplication, KYCDirector, KYCDocument
+from ..pagination import page_arg
 # NOTE: KYC routes are @login_required only, NEVER @verified_required — a
 # merchant doing KYC is by definition not yet verified, and verified_required
 # redirects the unverified to kyc_home, so gating kyc_home itself created an
@@ -336,8 +337,10 @@ def admin_list():
     from ..utils import admin_required as _ar
     if current_user.role != "admin":
         abort(403)
-    apps = KYCApplication.query.order_by(KYCApplication.submitted_at.desc()).all()
-    return render_template("kyc/admin_list.html", apps=apps)
+    pag = (KYCApplication.query.order_by(KYCApplication.submitted_at.desc())
+           .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    apps = pag.items
+    return render_template("kyc/admin_list.html", apps=apps, pag=pag)
 
 
 @bp.get("/admin/<int:app_id>")
