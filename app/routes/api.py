@@ -1028,8 +1028,12 @@ def create_bulk_payout():
             ref = str(item.get("reference") or f"{client_key}-{i}")
             channel = Channel(item.get("channel", "mtn_momo"))
         except (KeyError, ValueError, TypeError) as exc:
+            # Echo a non-null reference even on a malformed row (fall back to the
+            # same client_key-index the valid path synthesises) so the caller can
+            # always match results by `reference`, not only by array index.
+            _iref = item.get("reference") if isinstance(item, dict) else None
             results.append({"index": i, "ok": False,
-                            "reference": item.get("reference"),
+                            "reference": str(_iref) if _iref else f"{client_key}-{i}",
                             "error": f"invalid item: {exc}"})
             continue
 
@@ -1104,10 +1108,18 @@ def create_bulk_payout():
     accepted = sum(1 for r in results if r.get("ok"))
     log_event("payout.bulk", merchant_id=merchant.id, resource_id=batch_id,
               detail={"total": len(items), "accepted": accepted})
-    return jsonify(
+    resp = jsonify(
         batch_id=batch_id, total=len(items), accepted=accepted,
         failed=len(items) - accepted, results=results,
-    ), 200
+    )
+    # Batch-level Idempotent-Replayed: set ONLY when every item in this call was a
+    # replay of a prior successful payout — i.e. this retry disbursed nothing new.
+    # (Per-item replays are always signalled in the body as `replayed: true`; this
+    # header is the whole-batch convenience an integrator can key on to be certain
+    # a retry sent no money — Backbone Q3c.)
+    if results and all(r.get("replayed") for r in results):
+        resp.headers["Idempotent-Replayed"] = "true"
+    return resp, 200
 
 
 # ---------- scheduled payouts / payroll (money-OUT autopilot) ----------
@@ -1459,6 +1471,74 @@ def get_payment_link(public_id: str):
         allow_multiple_uses=link.allow_multiple_uses,
         transaction_status=txn_status,
         url=url_for("checkout.checkout_page", public_id=link.public_id, _external=True),
+    )
+
+
+def _payment_link_public(link) -> dict:
+    """Public shape for a payment link — identical fields to GET /<id> so a list
+    row and a fetched row are interchangeable, plus created_at for ordering."""
+    from flask import url_for
+    from ..models import Transaction
+    txn_status = None
+    if link.transaction_id:
+        t = db.session.get(Transaction, link.transaction_id)
+        if t:
+            txn_status = t.status.value
+    return dict(
+        id=link.public_id,
+        amount=link.amount,
+        currency=link.currency,
+        description=link.description,
+        reference=link.reference,
+        is_active=link.is_active,
+        allow_multiple_uses=link.allow_multiple_uses,
+        transaction_status=txn_status,
+        created_at=link.created_at.isoformat() if link.created_at else None,
+        url=url_for("checkout.checkout_page", public_id=link.public_id, _external=True),
+    )
+
+
+@bp.get("/payment-links")
+def list_payment_links():
+    """List this merchant's payment links, newest first.
+
+    Same cursor pagination and mode-scoping as GET /charges (limit +
+    starting_after=<link id>, envelope {object,data,has_more,next_cursor}); a
+    test key sees only test links. Optional filter: reference. Built because an
+    integrator that failed to record a created link id had no way to find it
+    again — an unrecorded link is still payable but invisible (Backbone Q3b).
+    Before this, GET /v1/payment-links returned 405 (only POST was bound)."""
+    from ..models import PaymentLink
+    merchant = _auth()
+    q = PaymentLink.query.filter_by(
+        merchant_id=merchant.id, is_test=(g.api_mode == "test"))
+
+    ref = request.args.get("reference")
+    if ref:
+        q = q.filter(PaymentLink.reference == ref)
+
+    limit, after, before = _parse_list_params()
+    if after:
+        q = q.filter(PaymentLink.created_at >= after)
+    if before:
+        q = q.filter(PaymentLink.created_at <= before)
+
+    starting_after = request.args.get("starting_after")
+    if starting_after:
+        cursor = PaymentLink.query.filter_by(
+            public_id=starting_after, merchant_id=merchant.id).one_or_none()
+        if cursor is None:
+            abort(400, description="invalid starting_after cursor")
+        q = q.filter(PaymentLink.id < cursor.id)
+
+    rows = q.order_by(PaymentLink.id.desc()).limit(limit + 1).all()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    return jsonify(
+        object="list",
+        data=[_payment_link_public(r) for r in rows],
+        has_more=has_more,
+        next_cursor=(rows[-1].public_id if rows and has_more else None),
     )
 
 

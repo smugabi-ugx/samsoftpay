@@ -180,6 +180,19 @@ def _paths() -> dict:
                 "requestBody": _body("PaymentLinkCreate"),
                 "responses": {"201": _obj("PaymentLink"), "400": _err("Invalid (e.g. non-http success_url)")},
             },
+            "get": {
+                "tags": ["Payment Links"], "summary": "List payment links",
+                "description": "Your links, newest first, mode-scoped to the key. Same cursor pagination as List charges. Each row includes transaction_status (null until the link is paid).",
+                "security": _BEARER,
+                "parameters": [
+                    _q("reference", "Filter by your merchant reference"),
+                    _q("created_after", "ISO-8601 lower bound"),
+                    _q("created_before", "ISO-8601 upper bound"),
+                    _q("limit", "1–100 (default 20)", typ="integer"),
+                    _q("starting_after", "Cursor: pass a previous next_cursor"),
+                ],
+                "responses": {"200": _list("PaymentLink"), "401": _err("Auth")},
+            },
         },
         "/v1/vending/orders": {
             "post": {
