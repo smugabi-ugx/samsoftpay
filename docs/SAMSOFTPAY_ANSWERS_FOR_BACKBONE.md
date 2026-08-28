@@ -87,6 +87,21 @@ or above ~333k hits the cap). If you want a negotiated volume rate for payroll a
 scale, raise it with the SamsoftPay commercial contact — the platform supports a
 per-merchant rate override, so a bespoke rate is a config change, not a code change.
 
+**VAT — the exact position, for your client's board:**
+> For salary payouts, SamsoftPay deducts only the amount plus a **1.5% service fee**
+> (minimum UGX 200, capped at UGX 5,000 per payment) — nothing else. Salary
+> disbursements are **not a VATable supply**, so no VAT is added to or withheld from a
+> payout. Our **1.5% service fee is quoted VAT-inclusive**: SamsoftPay is VAT-registered
+> (**TIN 1031035883**) and accounts for the VAT within that fee to URA. The **18% VAT**
+> you may otherwise see in the platform applies only to a **merchant's own sales of
+> goods/services (money-in)**, where it is the VAT already included in the price, shown
+> on the customer's receipt and **remitted by that merchant** — it is **not** part of,
+> nor added on top of, our payout fee.
+
+(So your earlier reading was right that the ledger deducts only `amount + fee` with no
+separate tax line — but the reason is that a *payout* carries no VAT, and our fee is
+VAT-inclusive; VAT is not a component we bolt onto the 1.5%.)
+
 ---
 
 ## 3. Small API questions
