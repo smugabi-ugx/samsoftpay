@@ -582,6 +582,12 @@ def set_webhook_url():
     events). Same SSRF guard as signup; resends then target the new URL."""
     m = db.session.get(Merchant, current_user.id)
     url = (request.form.get("webhook_url") or "").strip()
+    # mode = "test" targets the SANDBOX endpoint (webhook_url_test); anything else
+    # (default) is the live/default endpoint. Sandbox events deliver to the test
+    # URL when set, so they never reach a merchant's production receiver.
+    mode = "test" if request.form.get("mode") == "test" else "live"
+    col = "webhook_url_test" if mode == "test" else "webhook_url"
+    label = "Sandbox webhook endpoint" if mode == "test" else "Webhook endpoint"
     if url:
         from ..services.url_guard import is_public_http_url, is_self_addressed_url
         if len(url) > 500 or not is_public_http_url(url):
@@ -595,15 +601,17 @@ def set_webhook_url():
                   "where you receive events. As set, we'd just POST to ourselves "
                   "and every delivery would 404.", "danger")
             return redirect(url_for("auth.account") + "#webhooks")
-        m.webhook_url = url
-        msg = "Webhook endpoint updated. Send a test event to confirm it 200s."
+        setattr(m, col, url)
+        msg = f"{label} updated. Send a test event to confirm it 200s."
     else:
-        m.webhook_url = None
-        msg = "Webhook endpoint removed — events will not be delivered until you set one."
+        setattr(m, col, None)
+        msg = (f"{label} removed."
+               + (" Sandbox events now fall back to your live endpoint." if mode == "test"
+                  else " Events will not be delivered until you set one."))
     db.session.commit()
     from ..services.audit import log_event
     log_event("webhook.url_changed", merchant_id=m.id,
-              detail={"set": bool(url)})
+              detail={"set": bool(url), "mode": mode})
     db.session.commit()
     flash(msg, "success" if url else "info")
     return redirect(url_for("auth.account") + "#webhooks")

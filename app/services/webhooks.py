@@ -48,19 +48,54 @@ def sign_payload(payload: str, secret: str) -> str:
     return hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 
-def merchant_signing_secret(merchant) -> str:
-    """The merchant's own whsec_ secret, generated lazily if missing.
+def merchant_signing_secret(merchant, is_test: bool = False) -> str:
+    """The merchant's own whsec_ secret for the given mode, generated lazily.
 
     Outbound deliveries are signed PER MERCHANT so each merchant can verify
     them (shown in Account settings). The global WEBHOOK_SIGNING_SECRET is
     inbound-only — it authenticates rail callbacks that mark money succeeded,
     so it must never be handed to merchants.
+
+    Mode: a test event routed to a SEPARATE sandbox endpoint (webhook_url_test
+    set) is signed with `webhook_secret_test`; live events — and test events
+    that fall back to the single live URL — use `webhook_secret`.
     """
+    import secrets as _secrets
+    if is_test and getattr(merchant, "webhook_url_test", None):
+        if not getattr(merchant, "webhook_secret_test", None):
+            merchant.webhook_secret_test = "whsec_" + _secrets.token_urlsafe(32)
+            db.session.commit()
+        return merchant.webhook_secret_test
     if not getattr(merchant, "webhook_secret", None):
-        import secrets as _secrets
         merchant.webhook_secret = "whsec_" + _secrets.token_urlsafe(32)
         db.session.commit()
     return merchant.webhook_secret
+
+
+def target_for(merchant, is_test: bool):
+    """Resolve (url, secret) for a delivery of the given mode.
+
+    Live (or a test event when no sandbox URL is configured) -> the single
+    webhook_url + webhook_secret. A test event WITH webhook_url_test set ->
+    that URL + its own secret, so sandbox traffic never hits the live endpoint.
+    Returns (None, None) when no URL is configured for that mode.
+    """
+    if is_test and getattr(merchant, "webhook_url_test", None):
+        return merchant.webhook_url_test, merchant_signing_secret(merchant, is_test=True)
+    url = getattr(merchant, "webhook_url", None)
+    if not url:
+        return None, None
+    return url, merchant_signing_secret(merchant, is_test=False)
+
+
+def _delivery_is_test(wh) -> bool:
+    """Recover a delivery's mode from its signed payload's `data.mode` field —
+    the mode is stamped into the envelope at enqueue, so a resend can retarget
+    to the correct per-mode endpoint without a separate column."""
+    try:
+        return json.loads(wh.payload).get("data", {}).get("mode") == "test"
+    except Exception:
+        return False
 
 
 def verify_signature(payload: str, signature: str, secret: str) -> bool:
@@ -79,7 +114,14 @@ def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = No
     bytes we send; re-serialising differently on the receiving side would break
     verification.
     """
-    if not merchant or not getattr(merchant, "webhook_url", None):
+    if not merchant:
+        return False
+    # Route by the event's OWN mode (stamped into data.mode by charge_event_data
+    # et al.), so a sandbox event goes to the sandbox endpoint when one is set —
+    # and never to the live endpoint (Backbone Q5).
+    is_test = (data.get("mode") == "test")
+    url, secret = target_for(merchant, is_test)
+    if not url:
         return False
 
     # Envelope carries an event id + unix timestamp so a receiver can DEDUPE
@@ -92,11 +134,10 @@ def enqueue(merchant, event: str, data: dict, *, transaction_id: int | None = No
         "data": data,
     }
     payload = json.dumps(envelope, separators=(",", ":"))
-    secret = merchant_signing_secret(merchant)
     delivery = WebhookDelivery(
         merchant_id=merchant.id,
         transaction_id=transaction_id,
-        url=merchant.webhook_url,
+        url=url,
         payload=payload,
         signature=sign_payload(payload, secret),
         next_attempt_at=utcnow(),
@@ -127,12 +168,18 @@ def resend_delivery(wh) -> None:
     if wh.attempts >= 8:
         wh.attempts = 0
     # The #1 recovery case is "my endpoint URL was wrong" — deliver to the
-    # merchant's CURRENT url, not the one stored at enqueue time. Safe: the
-    # signature covers the payload bytes, not the destination.
+    # merchant's CURRENT url for THIS delivery's mode, not the one stored at
+    # enqueue time. Re-sign the (unchanged) payload bytes with that mode's
+    # secret so a delivery that now targets the sandbox endpoint is signed with
+    # the sandbox secret. Safe: the envelope id in the payload is unchanged, so
+    # the receiver still dedupes; only the signing key follows the target.
     from ..models import Merchant
     m = db.session.get(Merchant, wh.merchant_id)
-    if m is not None and getattr(m, "webhook_url", None):
-        wh.url = m.webhook_url
+    if m is not None:
+        url, secret = target_for(m, _delivery_is_test(wh))
+        if url:
+            wh.url = url
+            wh.signature = sign_payload(wh.payload, secret)
     db.session.commit()
     # Best-effort immediate attempt, same pattern as enqueue().
     try:

@@ -121,6 +121,13 @@ class Merchant(UserMixin, db.Model):
     # secret was never exposed) and exposing it would have let anyone forge
     # inbound "payment succeeded" callbacks. Key separation.
     webhook_secret = Column(String(80), nullable=True)
+    # OPTIONAL separate SANDBOX webhook endpoint + secret. webhook_url/secret
+    # above are the LIVE (and default) target; when webhook_url_test is set,
+    # test-mode events deliver there instead, signed with webhook_secret_test —
+    # so sandbox events never reach a merchant's production endpoint. When it's
+    # unset, test events fall back to webhook_url (prior single-URL behaviour).
+    webhook_url_test = Column(String(500), nullable=True)
+    webhook_secret_test = Column(String(80), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
     is_active = Column(Boolean, default=True, nullable=False)
     # Admin suspend audit (is_active stays the source of truth; api._auth and

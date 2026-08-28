@@ -279,7 +279,8 @@ print(resp.json())
   </p>
   <form method="POST" action="{{ url_for('auth.set_webhook_url') }}" class="form-group">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="form-label">Endpoint</label>
+    <input type="hidden" name="mode" value="live">
+    <label class="form-label">Live endpoint (<code>sk_live_</code> events)</label>
     <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
       <input name="webhook_url" type="url" maxlength="500" class="form-input"
              style="flex:1;min-width:220px;font-size:.875rem;"
@@ -287,10 +288,10 @@ print(resp.json())
              value="{{ current_user.webhook_url or '' }}">
       <button type="submit" class="btn btn-primary" style="font-size:.8125rem;padding:.5rem .875rem;">Save</button>
     </div>
-    <div class="form-hint">Must be a public https endpoint on <strong>your own</strong> server (not a SamsoftPay address). Changing it repoints future resends to the new URL.</div>
+    <div class="form-hint">Must be a public https endpoint on <strong>your own</strong> server (not a SamsoftPay address). Changing it repoints future resends to the new URL. If no sandbox endpoint is set below, <code>sk_test_</code> events also come here.</div>
   </form>
   <div class="form-group" style="margin-bottom:0;">
-    <label class="form-label">Webhook Signing Secret</label>
+    <label class="form-label">Live signing secret</label>
     <div class="api-key-display">
       <code id="whsec" class="secret-maskable" data-real="{{ current_user.webhook_secret or 'generated on first delivery' }}">••••••••••••••••••••</code>
       <button class="copy-btn" onclick="toggleKey('whsec', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
@@ -298,6 +299,32 @@ print(resp.json())
     </div>
     <div class="form-hint">Yours alone — never shared across merchants, and safe to put in your server's env.</div>
   </div>
+
+  <!-- Optional separate SANDBOX endpoint: keeps sk_test_ events off the live receiver -->
+  <form method="POST" action="{{ url_for('auth.set_webhook_url') }}" class="form-group" style="margin-top:1.25rem;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="mode" value="test">
+    <label class="form-label">Sandbox endpoint (<code>sk_test_</code> events) — optional</label>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+      <input name="webhook_url" type="url" maxlength="500" class="form-input"
+             style="flex:1;min-width:220px;font-size:.875rem;"
+             placeholder="https://staging.your-server.example/webhooks/samsoftpay"
+             value="{{ current_user.webhook_url_test or '' }}">
+      <button type="submit" class="btn btn-outline" style="font-size:.8125rem;padding:.5rem .875rem;">Save</button>
+    </div>
+    <div class="form-hint">Set this to keep sandbox events off your production receiver. Signed with the sandbox secret below. Leave blank and <code>sk_test_</code> events fall back to the live endpoint (each event's <code>mode</code> field says which).</div>
+  </form>
+  {% if current_user.webhook_url_test %}
+  <div class="form-group" style="margin-bottom:0;">
+    <label class="form-label">Sandbox signing secret</label>
+    <div class="api-key-display">
+      <code id="whsec_test" class="secret-maskable" data-real="{{ current_user.webhook_secret_test or 'generated on first sandbox delivery' }}">••••••••••••••••••••</code>
+      <button class="copy-btn" onclick="toggleKey('whsec_test', this)" title="Show/hide"><i data-feather="eye" style="width:14px;height:14px;"></i></button>
+      <button class="copy-btn" onclick="copyKey('whsec_test', this)"><i data-feather="copy" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div class="form-hint">Verifies sandbox deliveries only. Different from the live secret above.</div>
+  </div>
+  {% endif %}
 
   {% if current_user.webhook_url %}
   <form method="POST" action="{{ url_for('auth.send_test_webhook') }}" style="margin-top:1rem;">
