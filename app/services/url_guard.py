@@ -67,6 +67,35 @@ def is_public_http_url(url: str | None) -> bool:
     return all(_ip_is_public(a) for a in addrs)
 
 
+# Hosts that belong to THIS platform. A merchant webhook pointed at our OWN API
+# host is not an SSRF (api.samsoftpay.com is a perfectly public address, so the
+# SSRF guard above waves it through) — it is a self-delivery loop: we POST the
+# event to ourselves, the merchant's real receiver never sees it, and every
+# attempt 404s. Backbone hit exactly this: they saved
+# https://api.samsoftpay.com/webhooks/samsoftpay and we retried against
+# ourselves for two days. Reject it at save time.
+_OWN_HOST_SUFFIXES = ("samsoftpay.com", "samsoftpay.onrender.com")
+
+
+def is_self_addressed_url(url: str | None, extra_hosts=()) -> bool:
+    """True if url's host is one of Samsoftpay's own platform hosts (so delivering
+    to it would POST to ourselves). Matches the exact host or any subdomain of a
+    known own-domain, case-insensitively. `extra_hosts` lets a caller add the
+    configured BASE_URL host for environments on a different domain."""
+    if not url:
+        return False
+    try:
+        host = (urlparse(url).hostname or "").lower().rstrip(".")
+    except Exception:
+        return False
+    if not host:
+        return False
+    candidates = set(_OWN_HOST_SUFFIXES) | {
+        str(h).lower().rstrip(".") for h in extra_hosts if h
+    }
+    return any(host == c or host.endswith("." + c) for c in candidates)
+
+
 def _resolve_public_ip(host: str, port: int | None, scheme: str) -> str | None:
     """Resolve host to ONE validated globally-routable IP, or None. Fail-closed."""
     try:

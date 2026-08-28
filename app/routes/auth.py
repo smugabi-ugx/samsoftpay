@@ -5,7 +5,7 @@ import secrets
 from urllib.parse import urlparse
 
 from flask import (
-    Blueprint, abort, flash, jsonify, redirect, render_template,
+    Blueprint, abort, current_app, flash, jsonify, redirect, render_template,
     request, session, url_for,
 )
 from flask_login import (
@@ -64,9 +64,11 @@ def signup():
     raw_webhook = request.form.get("webhook_url", "").strip()
     # SSRF guard: a scheme check alone let http://169.254.169.254 (cloud
     # metadata) / internal hosts through. Resolve and require a public IP.
-    from ..services.url_guard import is_public_http_url
-    if raw_webhook and not is_public_http_url(raw_webhook):
-        raw_webhook = ""   # drop private/internal/unresolvable webhook targets
+    from ..services.url_guard import is_public_http_url, is_self_addressed_url
+    _own = urlparse(current_app.config.get("BASE_URL", "")).hostname
+    if raw_webhook and (not is_public_http_url(raw_webhook)
+                        or is_self_addressed_url(raw_webhook, (_own,) if _own else ())):
+        raw_webhook = ""   # drop private/internal/unresolvable/self-addressed targets
     webhook_url = raw_webhook or None
 
     error = None
@@ -581,10 +583,17 @@ def set_webhook_url():
     m = db.session.get(Merchant, current_user.id)
     url = (request.form.get("webhook_url") or "").strip()
     if url:
-        from ..services.url_guard import is_public_http_url
+        from ..services.url_guard import is_public_http_url, is_self_addressed_url
         if len(url) > 500 or not is_public_http_url(url):
             flash("That URL can't receive webhooks — it must be a public "
                   "https:// endpoint (not an internal or private address).", "danger")
+            return redirect(url_for("auth.account") + "#webhooks")
+        _own = urlparse(current_app.config.get("BASE_URL", "")).hostname
+        if is_self_addressed_url(url, (_own,) if _own else ()):
+            flash("That points at Samsoftpay's own API host — your webhook URL "
+                  "must be YOUR server's public https:// endpoint, the address "
+                  "where you receive events. As set, we'd just POST to ourselves "
+                  "and every delivery would 404.", "danger")
             return redirect(url_for("auth.account") + "#webhooks")
         m.webhook_url = url
         msg = "Webhook endpoint updated. Send a test event to confirm it 200s."
