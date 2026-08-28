@@ -1542,6 +1542,31 @@ def list_payment_links():
     )
 
 
+# ---------- account identity ----------
+
+@bp.get("/me")
+def whoami():
+    """Identify the account behind this API key in one call: its public
+    identifiers, the mode the key operates in, and KYC status. Lets an
+    integrator label which account (and which mode) a key belongs to without
+    guessing — e.g. a platform reconciling several client keys. Read-only,
+    moves no money, mode-scoped (a test key reports its test public key)."""
+    merchant = _auth()
+    pub = merchant.test_public_key if g.api_mode == "test" else merchant.public_key
+    return jsonify(
+        object="account",
+        id=merchant.handle or pub,          # stable public identifier for this account
+        handle=merchant.handle,
+        public_key=pub,
+        name=merchant.name,
+        mode=g.api_mode,
+        scope=getattr(g, "key_scope", "full"),   # "full" | "collections"
+        kyc_status=merchant.kyc_status,
+        verified=(merchant.kyc_status == "verified"),
+        webhook_configured=bool(merchant.webhook_url or merchant.webhook_url_test),
+    )
+
+
 # ---------- balance ----------
 
 @bp.get("/balance")

@@ -142,6 +142,14 @@ def _paths() -> dict:
                               "403": _err("Collections-only key")},
             },
         },
+        "/v1/me": {
+            "get": {
+                "tags": ["Balance"], "summary": "Identify the account behind the key",
+                "description": "Returns the account's public identifiers (id/handle/public_key), the key's mode and scope, and KYC status. One call to label which account and mode a key belongs to.",
+                "security": _BEARER,
+                "responses": {"200": _obj("Account"), "401": _err("Auth")},
+            },
+        },
         "/v1/balance": {
             "get": {
                 "tags": ["Balance"], "summary": "Per-currency balance",
@@ -323,6 +331,17 @@ def _components() -> dict:
             "Error": {"type": "object", "properties": {
                 "error": {"type": "string", "description": "Human-readable message; also a stable code where relevant."},
                 "request_id": {"type": "string"}}},
+            "Account": {"type": "object", "properties": {
+                "object": {"type": "string", "const": "account"},
+                "id": {"type": "string", "description": "Stable public identifier for this account (handle, or public key)."},
+                "handle": {"type": "string", "nullable": True},
+                "public_key": {"type": "string", "example": "pk_live_…"},
+                "name": {"type": "string"},
+                "mode": {"type": "string", "enum": ["test", "live"]},
+                "scope": {"type": "string", "enum": ["full", "collections"]},
+                "kyc_status": {"type": "string", "enum": ["pending", "verified", "rejected"]},
+                "verified": {"type": "boolean"},
+                "webhook_configured": {"type": "boolean"}}},
             "Customer": {"type": "object", "properties": {
                 "phone": {"type": "string", "example": "256700123456"},
                 "email": {"type": "string"}}, "required": ["phone"]},
