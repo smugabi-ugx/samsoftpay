@@ -4,19 +4,35 @@ Revision ID: d0e1f2a3b4c5
 Revises: c9d0e1f2a3b4
 Create Date: 2026-08-28
 
-The money-OUT mirror of subscription billing. Inline sa.Enum(name='channel')
-reuses the existing type (SQLAlchemy's ENUM._on_table_create runs with
-checkfirst=True, so Postgres skips the duplicate CREATE TYPE and SQLite builds
-it inline) — the same pattern proven by efbce9790912 / d4e5f6a7b8c9.
+The money-OUT mirror of subscription billing.
+
+The `channel` enum TYPE already exists in every real database — it is created
+once by the first migration (9ef3bb747c8b) and extended by b5c6d7e8f9a0. An
+incremental `flask db upgrade` (what runs on every deploy) does NOT reliably
+skip the duplicate `CREATE TYPE channel` that op.create_table would otherwise
+emit, so it aborted with "type 'channel' already exists" and FAILED EVERY
+DEPLOY from this migration onward. `create_type=False` makes the column
+reference the existing type without trying to (re)create it — safe on fresh
+Postgres (the type is created earlier in the chain) and a no-op on SQLite
+(which has no enum types). See tests/test_migration_channel_enum.py.
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "d0e1f2a3b4c5"
 down_revision = "c9d0e1f2a3b4"
 branch_labels = None
 depends_on = None
+
+
+_CHANNEL_VALUES = ("MTN_MOMO", "AIRTEL_MONEY", "CARD", "VISA", "CRYPTO")
+# On Postgres, reference the EXISTING `channel` type without re-creating it
+# (create_type=False) — the type is made once by 9ef3bb747c8b. On SQLite the
+# generic Enum renders as VARCHAR+CHECK, so there is no type to clash.
+_channel = sa.Enum(*_CHANNEL_VALUES, name="channel").with_variant(
+    postgresql.ENUM(*_CHANNEL_VALUES, name="channel", create_type=False), "postgresql")
 
 
 def upgrade():
@@ -28,9 +44,7 @@ def upgrade():
         sa.Column("name", sa.String(200), nullable=True),
         sa.Column("amount", sa.BigInteger(), nullable=False),
         sa.Column("currency", sa.String(3), nullable=False, server_default="UGX"),
-        sa.Column("channel",
-                  sa.Enum("MTN_MOMO", "AIRTEL_MONEY", "CARD", "VISA", "CRYPTO", name="channel"),
-                  nullable=False, server_default="MTN_MOMO"),
+        sa.Column("channel", _channel, nullable=False, server_default="MTN_MOMO"),
         sa.Column("interval", sa.String(20), nullable=False),
         sa.Column("recipients", sa.Text(), nullable=False),
         sa.Column("max_per_recipient", sa.BigInteger(), nullable=True),
