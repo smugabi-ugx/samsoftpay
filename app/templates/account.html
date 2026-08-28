@@ -268,6 +268,15 @@ print(resp.json())
     <code>X-Samsoftpay-Signature</code> is an HMAC-SHA256 of the raw body using
     <strong>your signing secret below</strong>.
   </p>
+  <p class="text-muted mb-3" style="font-size:.8125rem;border-left:3px solid var(--warning,#d97706);padding-left:.75rem;">
+    <strong>This is YOUR server's address — where you receive events.</strong>
+    It is <em>not</em> the SamsoftPay API you call to create charges/payouts
+    (<code>https://api.samsoftpay.com</code>). Putting our API host here makes us
+    POST to ourselves and every delivery 404s. Use your own domain (e.g.
+    <code>https://api.yourcompany.com/webhooks/samsoftpay</code>) or, while testing
+    locally, a tunnel: <code>ngrok http 3000</code> /
+    <code>cloudflared tunnel --url http://localhost:3000</code>.
+  </p>
   <form method="POST" action="{{ url_for('auth.set_webhook_url') }}" class="form-group">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="form-label">Endpoint</label>
@@ -278,7 +287,7 @@ print(resp.json())
              value="{{ current_user.webhook_url or '' }}">
       <button type="submit" class="btn btn-primary" style="font-size:.8125rem;padding:.5rem .875rem;">Save</button>
     </div>
-    <div class="form-hint">Must be a public https endpoint. Changing it repoints future deliveries and resends.</div>
+    <div class="form-hint">Must be a public https endpoint on <strong>your own</strong> server (not a SamsoftPay address). Changing it repoints future resends to the new URL.</div>
   </form>
   <div class="form-group" style="margin-bottom:0;">
     <label class="form-label">Webhook Signing Secret</label>
