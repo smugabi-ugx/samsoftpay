@@ -29,12 +29,16 @@ def verified_required(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        from flask import flash, redirect, url_for
+        from flask import redirect, url_for
         if not current_user.is_authenticated:
             abort(401)
         if current_user.role == "admin" or current_user.kyc_status == "verified":
             return f(*args, **kwargs)
-        flash("Complete business verification to unlock this feature.", "info")
+        # Redirect to the KYC page WITHOUT flashing: the destination page's own
+        # header ("Complete verification to unlock live money") + status banner
+        # already say this. A flash here rendered as an in-flow notice ON TOP of
+        # that page, duplicating the message and pushing the real content down
+        # (reported as the KYC page's "dumping area for notifications").
         return redirect(url_for("kyc.kyc_home"))
     return decorated
 

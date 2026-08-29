@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>{% block title %}Samsoftpay{% endblock %} | Uganda Payment Gateway</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
+  <link rel="icon" type="image/png" sizes="256x256" href="{{ url_for('static', filename='img/logo.png') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#2e3192">
 
   <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
@@ -26,8 +26,8 @@
          merchant's checkout (tokens.css) and their dashboard (this file) wore
          two different purples. Only the darker/lighter steps of that SAME
          indigo ramp are declared locally. Do not re-add a --primary line. */
-      --primary-dark:#4338ca; --primary-light:#6366f1;
-      --secondary:#8b5cf6; --success:#10b981; --warning:#f59e0b;
+      --primary-dark:#262a7a; --primary-light:#4d51b8;
+      --secondary:#6a63d9; --success:#10b981; --warning:#f59e0b;
       --danger:#ef4444; --info:#3b82f6;
       --dark:#0f172a;
       --gray-50:#f8fafc; --gray-100:#f1f5f9; --gray-200:#e2e8f0;
@@ -36,7 +36,7 @@
       --gray-900:#0f172a;
       /* Flattened: was a 2019-era periwinkle-to-violet ramp that matched
          neither tokens.css nor the landing page. One brand hue now. */
-      --gradient-primary:linear-gradient(135deg,#4f46e5 0%,#4338ca 100%);
+      --gradient-primary:linear-gradient(135deg,#2e3192 0%,#262a7a 100%);
       --gradient-success:linear-gradient(135deg,#10b981 0%,#059669 100%);
       --gradient-info:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%);
       --shadow-sm:0 1px 2px rgba(0,0,0,.05);
@@ -69,7 +69,7 @@
       z-index:9999;transform-origin:left;transform:scaleX(0);
       transition:transform .25s var(--ease),opacity .4s;
       border-radius:0 3px 3px 0;
-      box-shadow:0 0 8px rgba(79,70,229,.5);
+      box-shadow:0 0 8px rgba(46, 49, 146,.5);
     }
     #nprogress.loading{transform:scaleX(.85);}
     #nprogress.done{transform:scaleX(1);opacity:0;}
@@ -95,7 +95,7 @@
     .toast-icon svg{width:16px;height:16px;}
     .toast.success .toast-icon{background:rgba(16,185,129,.12);color:var(--success);}
     .toast.error   .toast-icon{background:rgba(239,68,68,.12);color:var(--danger);}
-    .toast.info    .toast-icon{background:rgba(79,70,229,.12);color:var(--primary);}
+    .toast.info    .toast-icon{background:rgba(46, 49, 146,.12);color:var(--primary);}
     .toast.warning .toast-icon{background:rgba(245,158,11,.12);color:var(--warning);}
     .toast-msg{flex:1;line-height:1.45;}
     .toast-close{background:none;border:none;cursor:pointer;color:var(--gray-400);padding:0;line-height:1;font-size:1.125rem;transition:color .15s;}
@@ -178,11 +178,11 @@
       position:relative;overflow:hidden;
     }
     .nav-link svg{width:17px;height:17px;flex-shrink:0;transition:transform .2s var(--ease);}
-    .nav-link:hover{color:var(--primary);background:rgba(79,70,229,.06);}
+    .nav-link:hover{color:var(--primary);background:rgba(46, 49, 146,.06);}
     .nav-link:hover svg{transform:scale(1.1);}
     .nav-link:active{transform:scale(.98);}
     .nav-link.active{
-      color:var(--primary);background:rgba(79,70,229,.08);font-weight:600;
+      color:var(--primary);background:rgba(46, 49, 146,.08);font-weight:600;
     }
     .nav-link.active::after{
       content:'';position:absolute;left:0;top:20%;bottom:20%;
@@ -281,7 +281,7 @@
       width:50px;height:50px;border-radius:15px;
       background:var(--gradient-primary);
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 4px 16px rgba(79,70,229,.4);
+      box-shadow:0 4px 16px rgba(46, 49, 146,.4);
       transition:all .2s var(--ease);
       text-decoration:none;flex-shrink:0;
     }
@@ -351,7 +351,7 @@
       background:var(--gray-50);
     }
     .stat-icon svg{width:18px;height:18px;}
-    .stat-icon.primary{background:rgba(79,70,229,.1);color:var(--primary);}
+    .stat-icon.primary{background:rgba(46, 49, 146,.1);color:var(--primary);}
     .stat-icon.success{background:rgba(16,185,129,.1);color:var(--success);}
     .stat-icon.warning{background:rgba(245,158,11,.1);color:var(--warning);}
     .stat-icon.info{background:rgba(59,130,246,.1);color:var(--info);}
@@ -446,9 +446,9 @@
     .btn:hover svg{transform:scale(1.1);}
     .btn-primary{
       background:var(--gradient-primary);color:white;
-      box-shadow:0 2px 8px rgba(79,70,229,.25);
+      box-shadow:0 2px 8px rgba(46, 49, 146,.25);
     }
-    .btn-primary:hover{box-shadow:0 6px 20px rgba(79,70,229,.4);transform:translateY(-1px);}
+    .btn-primary:hover{box-shadow:0 6px 20px rgba(46, 49, 146,.4);transform:translateY(-1px);}
     .btn-primary:active{transform:scale(.97);}
     .btn-success{background:var(--gradient-success);color:white;box-shadow:0 2px 8px rgba(16,185,129,.25);}
     .btn-success:hover{box-shadow:0 6px 20px rgba(16,185,129,.4);transform:translateY(-1px);}
@@ -457,7 +457,7 @@
       background:white;color:var(--primary);
       border:2px solid var(--primary);box-shadow:none;
     }
-    .btn-outline:hover{background:var(--primary);color:white;transform:translateY(-1px);box-shadow:0 6px 20px rgba(79,70,229,.3);}
+    .btn-outline:hover{background:var(--primary);color:white;transform:translateY(-1px);box-shadow:0 6px 20px rgba(46, 49, 146,.3);}
     .btn-group{display:flex;gap:.75rem;flex-wrap:wrap;}
 
     /* Loading spinner on button */
@@ -484,7 +484,7 @@
     }
     .form-input:focus,.form-select:focus,.form-textarea:focus{
       outline:none;border-color:var(--primary);
-      box-shadow:0 0 0 3px rgba(79,70,229,.1);
+      box-shadow:0 0 0 3px rgba(46, 49, 146,.1);
     }
     .form-input::placeholder{color:var(--gray-400);}
     .form-textarea{resize:vertical;min-height:90px;}
@@ -605,12 +605,12 @@
       background:var(--gradient-primary);color:white;
       border:none;cursor:pointer;z-index:199;
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 4px 16px rgba(79,70,229,.4);
+      box-shadow:0 4px 16px rgba(46, 49, 146,.4);
       opacity:0;transform:translateY(10px) scale(.9);
       transition:all .25s var(--ease);pointer-events:none;
     }
     #scroll-top.visible{opacity:1;transform:none;pointer-events:all;}
-    #scroll-top:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(79,70,229,.5);}
+    #scroll-top:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(46, 49, 146,.5);}
     #scroll-top:active{transform:scale(.93);}
     #scroll-top svg{width:18px;height:18px;}
 
@@ -700,7 +700,7 @@
   <header class="mobile-header">
     <a class="mobile-brand"
        href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}">
-      <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
       <span>Samsoftpay</span>
     </a>
     <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -719,7 +719,7 @@
         <!-- Logo: landing if guest, merchant dashboard if logged in -->
         <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) if current_user.is_authenticated else url_for('dashboard.index') }}"
            class="logo">
-          <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
+          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
           <span class="logo-text-main">Samsoftpay</span>
         </a>
         <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">
@@ -861,7 +861,7 @@
         <!-- Brand = Home: tapping the logo always returns to the dashboard -->
         <a href="{{ url_for('dashboard.merchant_detail', merchant_id=current_user.id) }}"
            style="display:inline-flex;align-items:center;gap:.45rem;text-decoration:none;color:inherit;" title="Go to dashboard">
-          <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Samsoftpay">
+          <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Samsoftpay">
           <span>Samsoftpay</span>
         </a>
         {% if request.endpoint != 'auth.account' and request.endpoint != 'dashboard.merchant_detail' %}
@@ -900,7 +900,7 @@
             {% if tone == 'error' %}background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#b91c1c;
             {% elif tone == 'success' %}background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#047857;
             {% elif tone == 'warning' %}background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#92400e;
-            {% else %}background:rgba(79,70,229,.07);border:1px solid rgba(79,70,229,.2);color:#4338ca;{% endif %}">
+            {% else %}background:rgba(46, 49, 146,.07);border:1px solid rgba(46, 49, 146,.2);color:#262a7a;{% endif %}">
             <span aria-hidden="true">{% if tone == 'error' %}✕{% elif tone == 'success' %}✓{% elif tone == 'warning' %}⚠{% else %}ℹ{% endif %}</span>
             {{ message }}
           </div>

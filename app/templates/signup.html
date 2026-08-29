@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Create Account | Samsoftpay</title>
-  <meta name="theme-color" content="#4f46e5">
+  <meta name="theme-color" content="#2e3192">
   <link rel="icon" type="image/png" href="/static/img/favicon.png">
   <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      /* One brand purple across checkout, dashboard and auth: #4f46e5. */
-      --p:#4f46e5;--pd:#4338ca;
+      /* One brand purple across checkout, dashboard and auth: #2e3192. */
+      --p:#2e3192;--pd:#262a7a;
       --ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;
       --success:#10b981;--danger:#ef4444;
       --ease:cubic-bezier(.4,0,.2,1);
@@ -65,7 +65,7 @@
     .flash-error  {background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.2); color:#b91c1c;}
     .flash-success{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);color:#047857;}
     .flash-warning{background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); color:#92400e;}
-    .flash-info   {background:rgba(79,70,229,.07); border:1px solid rgba(79,70,229,.2);  color:#4338ca;}
+    .flash-info   {background:rgba(46, 49, 146,.07); border:1px solid rgba(46, 49, 146,.2);  color:#262a7a;}
 
     /* Fields */
     .field{margin-bottom:1rem;}
@@ -77,7 +77,7 @@
       transition:border-color .2s var(--ease),box-shadow .2s var(--ease);
       -webkit-appearance:none;
     }
-    .field input:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 3px rgba(79,70,229,.12);}
+    .field input:focus{outline:none;border-color:var(--p);box-shadow:0 0 0 3px rgba(46, 49, 146,.12);}
     .field input::placeholder{color:#cbd5e1;}
 
     /* Submit */
@@ -96,7 +96,7 @@
       opacity:0;transition:opacity .3s;
     }
     .submit:hover::after{opacity:1;}
-    .submit:hover{transform:translateY(-1px);background:var(--pd);box-shadow:0 8px 24px rgba(79,70,229,.35);}
+    .submit:hover{transform:translateY(-1px);background:var(--pd);box-shadow:0 8px 24px rgba(46, 49, 146,.35);}
     .submit:active{transform:scale(.98);}
 
     /* Terms */
@@ -123,7 +123,7 @@
 
   <div class="card-head">
     <a href="/" class="brand">
-      <img src="/static/img/logo.svg" alt="Samsoftpay">
+      <img src="/static/img/logo.png" alt="Samsoftpay">
       <span class="brand-name">Samsoftpay</span>
     </a>
     <span class="signin-link">Have an account? <a href="{{ url_for('auth.login_page') }}">Sign in</a></span>
