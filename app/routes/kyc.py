@@ -377,6 +377,8 @@ def admin_review(app_id: int):
             app.status = "draft"
             app.reviewer_notes = m.reverify_reason
             db.session.commit()
+            from ..services.emails import email_kyc_decision
+            email_kyc_decision(m, "reverify", m.reverify_reason)
         return redirect(url_for("kyc.admin_detail", app_id=app_id))
     if action in ("approve", "reject"):
         app.reviewer_notes = request.form.get("notes", "").strip()
@@ -402,6 +404,10 @@ def admin_review(app_id: int):
             if m:
                 m.kyc_status = "rejected"
         db.session.commit()
+        if m:
+            from ..services.emails import email_kyc_decision
+            email_kyc_decision(m, "approved" if action == "approve" else "rejected",
+                               app.reviewer_notes or "")
     return redirect(url_for("kyc.admin_detail", app_id=app_id))
 
 

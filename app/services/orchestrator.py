@@ -298,6 +298,11 @@ def complete_transaction(
         if not txn.is_test and (txn.customer_email or txn.customer_phone):
             from .receipts import send_receipt
             send_receipt(txn)
+        # Tell the MERCHANT they collected money (send_receipt only emails the
+        # customer). Best-effort, never raises, live only.
+        if not txn.is_test:
+            from .emails import email_merchant_payment_received
+            email_merchant_payment_received(txn)
 
     # Subscription dunning bridge — runs on BOTH outcomes: a failed subscription
     # charge (the common insufficient-funds case, which resolves async here) goes
