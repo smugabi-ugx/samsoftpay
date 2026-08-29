@@ -498,6 +498,36 @@ class ReconException(db.Model):
     )
 
 
+class AnomalyEvent(db.Model):
+    """A detected fraud/abuse anomaly, persisted so an admin can REVIEW it — not
+    only be paged. The existing anomaly scans (payout drain, refund outliers)
+    page a human via send_alert; this table is the in-app feed + the audit trail
+    a bank's compliance review asks for ('show me your monitoring records').
+
+    One OPEN row per (kind, merchant_id, subject) — a persisting condition
+    updates last_seen_at instead of spamming a new row every scan. Resolving a
+    row lets a later recurrence open a fresh one.
+    """
+    __tablename__ = "anomaly_events"
+    id = Column(Integer, primary_key=True)
+    kind = Column(String(60), nullable=False, index=True)
+    # charge: failed_charge_storm | failed_charge_storm_phone | charge_velocity | large_charge
+    # payout: merchant_hourly_cap | destination_daily_cap | merchant_baseline_deviation | platform_panic
+    # refund: refund_outlier
+    category = Column(String(20), nullable=False, default="charge", index=True)  # charge|payout|refund|platform
+    severity = Column(String(20), nullable=False, default="warning")             # warning|critical
+    merchant_id = Column(Integer, ForeignKey("merchants.id"), nullable=True, index=True)
+    subject = Column(String(120), nullable=True)     # phone / txn id / "platform"
+    metric = Column(BigInteger, nullable=True)       # the count or amount that tripped it
+    detail = Column(String(500), nullable=True)
+    dedupe_key = Column(String(200), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="open", index=True)      # open|resolved|dismissed
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(120), nullable=True)
+    created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
+    last_seen_at = Column(DateTime, default=utcnow, nullable=False)
+
+
 class Payout(db.Model):
     """A disbursement from the PSP to a merchant (or other recipient).
 

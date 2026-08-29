@@ -808,6 +808,9 @@
           <a href="{{ url_for('dashboard.reconciliation') }}" class="nav-link {% if request.endpoint == 'dashboard.reconciliation' %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="check-circle"></i><span>Reconciliation</span>
           </a>
+          <a href="{{ url_for('dashboard.anomalies') }}" class="nav-link {% if request.endpoint == 'dashboard.anomalies' %}active{% endif %}" onclick="closeSidebar()">
+            <i data-feather="alert-triangle"></i><span>Anomaly Monitor</span>
+          </a>
           <a href="{{ url_for('dashboard.admin_flags') }}" class="nav-link {% if request.endpoint == 'dashboard.admin_flags' %}active{% endif %}" onclick="closeSidebar()">
             <i data-feather="flag"></i><span>Platform Flags</span>
           </a>
