@@ -55,7 +55,11 @@ def main():
     ap.add_argument("--sweep", type=str, default="1,2,4,8", help="comma list of worker counts")
     ap.add_argument("--pool", type=int, default=0, help="DB_POOL_SIZE (0 = maxsweep+4)")
     ap.add_argument("--db", type=str, default="", help="DATABASE_URL override (else env, else temp sqlite)")
+    ap.add_argument("--test", type=str, default="all", choices=["ledger", "races", "all"],
+                    help="ledger=contention sweep; races=exactly-once under concurrency; all=both")
     args = ap.parse_args()
+    do_ledger = args.test in ("ledger", "all")
+    do_races = args.test in ("races", "all")
 
     sweep = [int(x) for x in args.sweep.split(",") if x.strip()]
     pool = args.pool or (max(sweep) + 4)
@@ -88,7 +92,7 @@ def main():
     from app import create_app
     from app.extensions import db
     from app.models import (AccountType, Channel, JournalEntry, Merchant,
-                            Transaction, TxnStatus)
+                            PaymentLink, Transaction, TxnStatus)
     from app.services import ledger, orchestrator
 
     # Don't let the success-path webhook enqueue block on a missing broker.
@@ -138,49 +142,111 @@ def main():
                 db.session.remove()
         return time.perf_counter() - t0
 
-    print(f"\n{'workers':>8} {'completions':>12} {'wall_s':>8} {'thru/s':>9} "
-          f"{'p50_ms':>8} {'p95_ms':>8} {'p99_ms':>8} {'errors':>7}")
-    print("-" * 74)
     results = []
-    for c in sweep:
-        ids = seed(args.charges)
-        lat, errs = [], 0
-        t0 = time.perf_counter()
-        with ThreadPoolExecutor(max_workers=c) as ex:
-            for r in ex.map(lambda i: _safe(complete_one, i), ids):
-                if r is None:
-                    errs += 1
-                else:
-                    lat.append(r)
-        wall = time.perf_counter() - t0
-        thru = len(lat) / wall if wall else 0
-        results.append((c, thru))
-        print(f"{c:>8} {len(ids):>12} {wall:>8.2f} {thru:>9.1f} "
-              f"{_percentile(lat,50)*1000:>8.1f} {_percentile(lat,95)*1000:>8.1f} "
-              f"{_percentile(lat,99)*1000:>8.1f} {errs:>7}")
+    if do_ledger:
+        print("\n=== LEDGER CONTENTION SWEEP (singleton rail_clearing / psp_revenue) ===")
+        print(f"{'workers':>8} {'completions':>12} {'wall_s':>8} {'thru/s':>9} "
+              f"{'p50_ms':>8} {'p95_ms':>8} {'p99_ms':>8} {'errors':>7}")
+        print("-" * 74)
+        for c in sweep:
+            ids = seed(args.charges)
+            lat, errs = [], 0
+            t0 = time.perf_counter()
+            with ThreadPoolExecutor(max_workers=c) as ex:
+                for r in ex.map(lambda i: _safe(complete_one, i), ids):
+                    if r is None:
+                        errs += 1
+                    else:
+                        lat.append(r)
+            wall = time.perf_counter() - t0
+            thru = len(lat) / wall if wall else 0
+            results.append((c, thru))
+            print(f"{c:>8} {len(ids):>12} {wall:>8.2f} {thru:>9.1f} "
+                  f"{_percentile(lat,50)*1000:>8.1f} {_percentile(lat,95)*1000:>8.1f} "
+                  f"{_percentile(lat,99)*1000:>8.1f} {errs:>7}")
 
-    # --- Correctness under load: the invariant must still hold ---
+    # --- Correctness under load: the ledger invariant must still hold ---
     with app.app_context():
         mism = ledger.assert_balances_match()
         by_cur = db.session.query(func.sum(JournalEntry.amount)).scalar()
     print("\n[invariant] cached_balance vs journal-recompute mismatches:", len(mism), "(want 0)")
     print("[invariant] global journal sum:", int(by_cur or 0), "(want 0)")
 
-    # --- Verdict hint ---
-    base = results[0][1] if results else 0
-    top = results[-1][1] if results else 0
-    scale = (top / base) if base else 0
-    ideal = (sweep[-1] / sweep[0]) if sweep else 1
-    print(f"\n[scaling] throughput {base:.0f}/s @ {sweep[0]} workers -> {top:.0f}/s @ "
-          f"{sweep[-1]} workers ({scale:.1f}x; ideal ~{ideal:.0f}x)")
-    if not is_pg:
-        print("[verdict] SQLite serializes writers — run against Postgres for a real read.")
-    elif scale >= 0.6 * ideal:
-        print("[verdict] Throughput scales with concurrency -> singleton rows are NOT the "
-              "bottleneck. Sharding not justified yet; keep the money core simple.")
-    else:
-        print("[verdict] Throughput FLAT/sub-linear as workers rise -> hot-partition contention "
-              "on the singleton ledger rows. The sharding change is justified.")
+    if do_ledger and results:
+        base, top = results[0][1], results[-1][1]
+        scale = (top / base) if base else 0
+        ideal = (sweep[-1] / sweep[0]) if sweep else 1
+        print(f"\n[scaling] throughput {base:.0f}/s @ {sweep[0]} -> {top:.0f}/s @ {sweep[-1]} "
+              f"workers ({scale:.1f}x; ideal ~{ideal:.0f}x)")
+        if not is_pg:
+            print("[verdict] SQLite serializes writers — run against Postgres for a real read.")
+        elif scale >= 0.6 * ideal:
+            print("[verdict] Scales with concurrency -> singleton rows NOT the bottleneck; don't shard.")
+        else:
+            print("[verdict] FLAT/sub-linear -> hot-partition contention; sharding justified.")
+
+    # --- Exactly-once under true concurrency: the guards that prevent double money ---
+    if do_races:
+        print("\n=== CONCURRENCY RACES — exactly-once under parallel workers ===")
+        W = max(max(sweep), 8)
+        with app.app_context():
+            key = db.session.get(Merchant, mid).test_secret_key
+        race_pass = True
+
+        # 1. Idempotency: W identical POST /v1/charges (SAME Idempotency-Key) -> 1 charge
+        idem, ref1 = "raceidem-" + run_id, "raceidemref-" + run_id
+        hdr = {"Authorization": f"Bearer {key}", "X-Timestamp": str(int(time.time())),
+               "Idempotency-Key": idem}
+        body = {"amount": 5000, "currency": "UGX", "channel": "mtn_momo",
+                "customer": {"phone": "256700000000"}, "reference": ref1}
+        with ThreadPoolExecutor(max_workers=W) as ex:
+            list(ex.map(lambda i: _safe(lambda _: app.test_client().post(
+                "/v1/charges", json=body, headers=hdr).status_code, i), range(W)))
+        with app.app_context():
+            n1 = Transaction.query.filter_by(merchant_reference=ref1).count()
+        ok = n1 <= 1; race_pass &= ok
+        print(f"  [{'PASS' if ok else 'FAIL'}] idempotency: {W} identical charges, same key -> "
+              f"{n1} charge(s) (want <=1)")
+
+        # 2. Double-submit: W POST /pay/<id>/submit on ONE single-use link -> 1 charge
+        with app.app_context():
+            db.session.add(PaymentLink(public_id=f"lnk_race_{run_id}", merchant_id=mid,
+                                       amount=5000, currency="UGX", is_test=True,
+                                       allow_multiple_uses=False))
+            db.session.commit()
+        with ThreadPoolExecutor(max_workers=W) as ex:
+            list(ex.map(lambda i: _safe(lambda _: app.test_client().post(
+                f"/pay/lnk_race_{run_id}/submit",
+                data={"channel": "mtn_momo", "phone": "256700000000"}).status_code, i), range(W)))
+        with app.app_context():
+            n2 = Transaction.query.filter_by(merchant_reference=f"lnk_race_{run_id}").count()
+        ok2 = n2 <= 1; race_pass &= ok2
+        print(f"  [{'PASS' if ok2 else 'FAIL'}] double-submit: {W} submits on 1 single-use link -> "
+              f"{n2} charge(s) (want <=1)")
+
+        # 3. Vending _claim: W concurrent atomic pending->dispensing on one order -> 1 winner
+        with app.app_context():
+            vl = PaymentLink(public_id=f"lnk_vend_{run_id}", merchant_id=mid, amount=5000,
+                             currency="UGX", is_test=True, vending_status="pending")
+            db.session.add(vl); db.session.commit(); vlid = vl.id
+
+        def _claim(_):
+            with app.app_context():
+                won = db.session.query(PaymentLink).filter(
+                    PaymentLink.id == vlid, PaymentLink.vending_status == "pending"
+                ).update({"vending_status": "dispensing"}, synchronize_session=False)
+                db.session.commit(); db.session.remove()
+                return won
+        with ThreadPoolExecutor(max_workers=W) as ex:
+            wins = sum(x for x in ex.map(lambda i: _safe(_claim, i), range(W)) if x)
+        ok3 = wins == 1; race_pass &= ok3
+        print(f"  [{'PASS' if ok3 else 'FAIL'}] vending _claim: {W} concurrent claims -> "
+              f"{wins} winner(s) (want exactly 1)")
+
+        print("\n[races] " + ("ALL PASS — exactly-once holds under this concurrency"
+              if race_pass else "A RACE FAILED — double charge/dispense possible; INVESTIGATE")
+              + ("" if is_pg else "  (SQLite serialized — re-run on Postgres for a true parallel read)"))
+
     print("\nDone. (Test rows tagged merchant_reference=load-%s / email load_%s@x.com — "
           "drop the DB or delete by that tag.)" % (run_id, run_id))
 
