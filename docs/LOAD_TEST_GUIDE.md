@@ -11,10 +11,20 @@ complexity without evidence. This harness is the gate that turns it into a
 decision.
 
 ## What it does
-`scripts/loadtest_ledger.py` drives many **concurrent charge completions** through
-the real path (`orchestrator.complete_transaction` → `ledger.post`) and reports
-throughput + p50/p95/p99 latency as worker concurrency rises, then asserts the
-ledger stayed **zero-sum and `cached_balance == journal-recompute`** under load.
+`scripts/loadtest_ledger.py` has two modes (`--test ledger|races|all`, default `all`):
+
+- **`ledger`** — drives many **concurrent charge completions** through the real path
+  (`orchestrator.complete_transaction` → `ledger.post`) and reports throughput +
+  p50/p95/p99 latency as worker concurrency rises (the sharding gate), then asserts
+  the ledger stayed **zero-sum and `cached_balance == journal-recompute`**.
+- **`races`** — fires many parallel workers at the same target and asserts
+  **exactly-once** holds: (1) identical `POST /v1/charges` with one Idempotency-Key →
+  1 charge; (2) many `POST /pay/<id>/submit` on one single-use link → 1 charge (the
+  `checkout_claimed_at` claim); (3) concurrent vending `pending→dispensing` claims →
+  1 winner. A `FAIL` here means a double-charge/dispense is possible under real load.
+
+On Postgres these are true parallel races; on SQLite they serialize (the guards still
+hold, but it's a self-test, not a concurrency verdict).
 
 ## When / how to run it
 Run it once you're on **paid Postgres** (the read is only meaningful there — SQLite
