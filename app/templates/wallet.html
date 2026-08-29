@@ -262,6 +262,37 @@
 
 <!-- ══ TAB: Withdraw ══ -->
 <div class="tab-panel" id="tab-withdraw">
+
+  <!-- Send from wallet (on-us transfer) -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div class="card-header">
+      <h3 class="card-title"><i data-feather="send"></i> Send from wallet</h3>
+    </div>
+    <p class="text-muted" style="font-size:.85rem;margin:0 0 1rem;">
+      Instantly pay another Samsoftpay account from your available balance — on us, no fee.
+      Enter their <strong>@handle</strong> or email.
+    </p>
+    <form method="POST" action="{{ url_for('wallet.wallet_send') }}"
+          onsubmit="var b=this.querySelector('button[type=submit]'); if(b) b.disabled=true;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Recipient (@handle or email)</label>
+          <input class="form-input" type="text" name="payee" required placeholder="@shopname or name@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (UGX)</label>
+          <input class="form-input" type="number" name="amount" min="1" required placeholder="10000">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reference (optional)</label>
+        <input class="form-input" type="text" name="reference" placeholder="What's this for?">
+      </div>
+      <button type="submit" class="btn btn-primary"><i data-feather="send"></i> Send instantly</button>
+    </form>
+  </div>
+
   <div class="grid-2">
 
     <!-- Settlement Accounts -->

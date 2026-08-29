@@ -340,6 +340,46 @@ def set_primary(acct_id: int):
     return redirect(url_for("wallet.wallet_home"))
 
 
+# ── Wallet transfer (on-us: pay another Samsoftpay account) ─────────────────────
+
+@bp.post("/dashboard/wallet/send")
+@login_required
+@verified_required
+def wallet_send():
+    """Send from your available balance to another Samsoftpay account, instantly
+    and on-us (no rail, no fee). Live balances only."""
+    from ..services.wallet_transfer import transfer, resolve_payee
+    from ..models import Merchant
+    payee_ref = request.form.get("payee", "").strip()
+    try:
+        amount = int(request.form.get("amount", 0))
+    except ValueError:
+        flash("Invalid amount.", "error")
+        return redirect(url_for("wallet.wallet_home"))
+    payee = resolve_payee(payee_ref)
+    if payee is None:
+        flash("No active Samsoftpay account found for that handle or email.", "error")
+        return redirect(url_for("wallet.wallet_home"))
+    payer = db.session.get(Merchant, current_user.id)
+    result = transfer(payer=payer, payee=payee, amount=amount, currency="UGX",
+                      is_test=False,
+                      reference=request.form.get("reference", "").strip() or None)
+    if result.get("ok"):
+        flash(f"Sent UGX {amount:,} to {payee.name}.", "success")
+    else:
+        errmap = {
+            "insufficient_balance": "Insufficient available balance for that transfer.",
+            "cannot_send_to_yourself": "You can't send to your own account.",
+            "payer_not_verified": "Complete business verification to send from your wallet.",
+            "amount_must_be_positive": "Enter a valid amount.",
+            "payee_not_available": "That account can't receive wallet payments.",
+            "only_UGX_supported": "Only UGX transfers are supported.",
+        }
+        flash(errmap.get(result.get("error"),
+                         f"Transfer failed: {result.get('error')}"), "error")
+    return redirect(url_for("wallet.wallet_home"))
+
+
 # ── Withdrawal requests ────────────────────────────────────────────────────────
 
 @bp.post("/dashboard/wallet/withdraw")

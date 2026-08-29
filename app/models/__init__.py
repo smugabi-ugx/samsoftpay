@@ -55,6 +55,7 @@ class Channel(str, Enum):
     CARD = "card"
     VISA = "visa"
     CRYPTO = "crypto"
+    WALLET = "samsoftpay_wallet"   # on-us Samsoftpay balance -> balance (no external rail)
 
 
 class AccountType(str, Enum):
