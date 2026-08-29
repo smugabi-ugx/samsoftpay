@@ -262,6 +262,19 @@ def register(app: Flask) -> None:
             for f in findings:
                 print(f"[{f['kind']}] {f}")
 
+    @app.cli.command("scan-anomalies")
+    def scan_anomalies():
+        """Run the CHARGE-side anomaly scan on demand (failed-charge storms,
+        velocity, large charges). The 10-min beat, by hand."""
+        from .services.anomaly import scan_charge_anomalies
+        with app.app_context():
+            findings = scan_charge_anomalies()
+            if not findings:
+                print("clear — no charge anomalies")
+                return
+            for f in findings:
+                print(f"[{f['kind']}] {f}")
+
     @app.cli.command("regulator-pack")
     @click.argument("month")   # YYYY-MM
     def regulator_pack(month):

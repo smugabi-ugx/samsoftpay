@@ -148,8 +148,16 @@ def scan_payout_anomalies() -> list[dict]:
                     severity="critical", key="payout-panic-freeze",
                 )
 
-    # Page each non-panic finding (panic already paged above), deduped hourly.
+    # Persist + page each finding. Panic was already paged above (auto-freeze);
+    # still record it to the admin feed.
     for f in findings:
+        subj = "platform" if f["kind"] == "platform_panic" else (
+            f.get("phone") or "merchant")
+        record_anomaly(
+            kind=f["kind"],
+            category="platform" if f["kind"] == "platform_panic" else "payout",
+            severity="critical", merchant_id=f.get("merchant_id"), subject=subj,
+            metric=f.get("total") or f.get("day_total"), detail=str(f))
         if f["kind"] == "platform_panic":
             continue
         send_alert(
@@ -209,6 +217,9 @@ def scan_refund_outliers() -> list[dict]:
                  "refunds_24h": int(n_ref), "refund_sum_24h": ref_sum,
                  "charge_sum_24h": charge_sum, "ratio_threshold": ratio}
             findings.append(f)
+            record_anomaly(kind="refund_outlier", category="refund",
+                           severity="critical", merchant_id=mid,
+                           subject="merchant", metric=ref_sum, detail=str(f))
             send_alert(
                 "Refund outlier: merchant refunds outsized vs charges",
                 str(f),
@@ -216,4 +227,158 @@ def scan_refund_outliers() -> list[dict]:
                 key=f"refund-outlier-{mid}",
                 dedupe_seconds=86400,
             )
+    return findings
+
+
+# ── Persisted anomaly feed (the admin-reviewable record + bank audit trail) ──
+
+def record_anomaly(*, kind: str, category: str, severity: str,
+                   merchant_id=None, subject: str | None = None,
+                   metric: int | None = None, detail: str | None = None) -> bool:
+    """Upsert an AnomalyEvent. One OPEN row per (kind, merchant_id, subject):
+    a persisting condition refreshes last_seen_at instead of spamming rows.
+    Returns True if a NEW row was created. Best-effort — NEVER raises, so a
+    scan (which runs inside a task) is never disrupted by a logging failure."""
+    try:
+        from ..models import AnomalyEvent
+        dedupe_key = f"{kind}:{merchant_id or '-'}:{subject or '-'}"
+        existing = (db.session.query(AnomalyEvent)
+                    .filter(AnomalyEvent.dedupe_key == dedupe_key,
+                            AnomalyEvent.status == "open")
+                    .first())
+        if existing is not None:
+            existing.last_seen_at = utcnow()
+            if metric is not None:
+                existing.metric = int(metric)
+            if detail is not None:
+                existing.detail = detail[:500]
+            db.session.commit()
+            return False
+        db.session.add(AnomalyEvent(
+            kind=kind, category=category, severity=severity,
+            merchant_id=merchant_id, subject=subject,
+            metric=int(metric) if metric is not None else None,
+            detail=(detail or "")[:500], dedupe_key=dedupe_key, status="open"))
+        db.session.commit()
+        return True
+    except Exception:
+        from flask import current_app
+        try:
+            db.session.rollback()
+            current_app.logger.exception("record_anomaly failed for %s", kind)
+        except Exception:
+            pass
+        return False
+
+
+def scan_charge_anomalies() -> list[dict]:
+    """Charge-side fraud/abuse detection — the gap the payout/refund scans don't
+    cover. Watches a short rolling window of LIVE charges for:
+
+      1. failed_charge_storm        one merchant with a burst of FAILED charges
+                                    (a compromised/leaked key being probed, or
+                                    card-testing) in the window
+      2. failed_charge_storm_phone  one customer phone failing repeatedly across
+                                    merchants (card/number testing)
+      3. charge_velocity            one merchant's charge COUNT far above normal
+                                    volume in the window (scripted abuse)
+      4. large_charge               a single live charge over a high-value floor
+                                    (worth a human's glance)
+
+    Each finding is persisted (record_anomaly) AND paged (send_alert, deduped).
+    Read-only over the ledger; it never blocks a charge.
+
+    Config (app.config):
+      CHARGE_ANOMALY_WINDOW_MIN     default 15
+      CHARGE_FAILED_STORM_COUNT     default 10   (per merchant, in window)
+      CHARGE_FAILED_PHONE_COUNT     default 6    (per phone, in window)
+      CHARGE_VELOCITY_COUNT         default 200  (per merchant, in window)
+      LARGE_CHARGE_AMOUNT           default 5_000_000  (UGX minor units)
+    """
+    from flask import current_app
+    from .alerts import send_alert
+    from ..models import Transaction, TxnStatus
+
+    cfg = current_app.config
+    now = utcnow()
+    window = now - timedelta(minutes=int(cfg.get("CHARGE_ANOMALY_WINDOW_MIN", 15)))
+    storm_n = int(cfg.get("CHARGE_FAILED_STORM_COUNT", 10))
+    phone_n = int(cfg.get("CHARGE_FAILED_PHONE_COUNT", 6))
+    vel_n = int(cfg.get("CHARGE_VELOCITY_COUNT", 200))
+    large = int(cfg.get("LARGE_CHARGE_AMOUNT", 5_000_000))
+    findings: list[dict] = []
+
+    live = Transaction.is_test.is_(False)
+
+    # 1. failed-charge storm per merchant
+    rows = (db.session.query(Transaction.merchant_id, safunc.count(Transaction.id))
+            .filter(live, Transaction.status == TxnStatus.FAILED,
+                    Transaction.created_at >= window)
+            .group_by(Transaction.merchant_id)
+            .having(safunc.count(Transaction.id) >= storm_n).all())
+    for mid, n in rows:
+        findings.append({"kind": "failed_charge_storm", "merchant_id": mid,
+                         "failed": int(n), "threshold": storm_n})
+        record_anomaly(kind="failed_charge_storm", category="charge",
+                       severity="critical", merchant_id=mid, subject="merchant",
+                       metric=int(n),
+                       detail=f"{n} failed charges in window (>= {storm_n})")
+        send_alert("Charge anomaly: failed-charge storm",
+                   f"Merchant {mid}: {n} failed live charges in the window "
+                   f"(threshold {storm_n}) — possible leaked key / card testing.",
+                   severity="critical", key=f"charge-storm-{mid}")
+
+    # 2. failed-charge storm per destination phone (across merchants)
+    rows = (db.session.query(Transaction.customer_phone, safunc.count(Transaction.id))
+            .filter(live, Transaction.status == TxnStatus.FAILED,
+                    Transaction.customer_phone.isnot(None),
+                    Transaction.created_at >= window)
+            .group_by(Transaction.customer_phone)
+            .having(safunc.count(Transaction.id) >= phone_n).all())
+    for phone, n in rows:
+        findings.append({"kind": "failed_charge_storm_phone", "phone": phone,
+                         "failed": int(n), "threshold": phone_n})
+        record_anomaly(kind="failed_charge_storm_phone", category="charge",
+                       severity="critical", merchant_id=None, subject=phone,
+                       metric=int(n),
+                       detail=f"{n} failed charges from one phone (>= {phone_n})")
+        send_alert("Charge anomaly: repeated failures from one number",
+                   f"Phone {phone}: {n} failed live charges in the window "
+                   f"(threshold {phone_n}) — possible card/number testing.",
+                   severity="critical", key=f"charge-phone-{phone}")
+
+    # 3. charge-count velocity per merchant
+    rows = (db.session.query(Transaction.merchant_id, safunc.count(Transaction.id))
+            .filter(live, Transaction.created_at >= window)
+            .group_by(Transaction.merchant_id)
+            .having(safunc.count(Transaction.id) >= vel_n).all())
+    for mid, n in rows:
+        findings.append({"kind": "charge_velocity", "merchant_id": mid,
+                         "count": int(n), "threshold": vel_n})
+        record_anomaly(kind="charge_velocity", category="charge",
+                       severity="warning", merchant_id=mid, subject="merchant",
+                       metric=int(n),
+                       detail=f"{n} charges in window (>= {vel_n})")
+        send_alert("Charge anomaly: velocity spike",
+                   f"Merchant {mid}: {n} live charges in the window "
+                   f"(threshold {vel_n}).", severity="warning",
+                   key=f"charge-velocity-{mid}")
+
+    # 4. large single charge
+    rows = (db.session.query(Transaction)
+            .filter(live, Transaction.amount >= large,
+                    Transaction.created_at >= window).all())
+    for txn in rows:
+        findings.append({"kind": "large_charge", "merchant_id": txn.merchant_id,
+                         "amount": int(txn.amount), "txn": txn.public_id,
+                         "floor": large})
+        record_anomaly(kind="large_charge", category="charge", severity="warning",
+                       merchant_id=txn.merchant_id, subject=txn.public_id,
+                       metric=int(txn.amount),
+                       detail=f"single charge {txn.amount} (>= {large})")
+        send_alert("Charge anomaly: large single charge",
+                   f"Merchant {txn.merchant_id}: charge {txn.public_id} of "
+                   f"{txn.amount} (floor {large}).", severity="warning",
+                   key=f"large-charge-{txn.public_id}")
+
     return findings

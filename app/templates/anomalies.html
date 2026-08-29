@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Anomaly Monitor{% endblock %}
+{% block content %}
+{% from '_pagination.html' import pager %}
+
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:1rem;">
+  <div>
+    <h1 class="page-title">Anomaly Monitor</h1>
+    <p class="page-subtitle">Detected fraud/abuse signals — charge storms, velocity, large charges, payout drain, refund outliers. Each was also alerted; resolve after investigating.</p>
+  </div>
+  <form method="post" action="{{ url_for('dashboard.run_anomaly_scan') }}">
+    <button type="submit" class="btn btn-primary"><i data-feather="search"></i> Run charge scan now</button>
+  </form>
+</div>
+
+<!-- Status filter tabs -->
+<div style="display:flex;gap:.5rem;margin-bottom:1.25rem;">
+  {% for s, label in [('open','Open'),('resolved','Resolved'),('dismissed','Dismissed')] %}
+  <a href="{{ url_for('dashboard.anomalies', status=s) }}"
+     class="btn {% if status == s %}btn-primary{% else %}btn-outline{% endif %}"
+     style="padding:.375rem .9rem;font-size:.85rem;">
+    {{ label }}{% if s == 'open' %} ({{ open_count }}){% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h3 class="card-title"><i data-feather="alert-triangle"></i> {{ status|capitalize }} anomalies</h3>
+  </div>
+
+  {% if anomalies %}
+  <div style="padding:0 .25rem;">
+    {% for a in anomalies %}
+    <div class="activity-row">
+      <div class="activity-icon" style="background:{% if a.severity == 'critical' %}rgba(239,68,68,.1){% else %}rgba(245,158,11,.1){% endif %};">
+        {% if a.severity == 'critical' %}⛔{% else %}⚠️{% endif %}
+      </div>
+      <div class="activity-info">
+        <div class="activity-title">
+          {{ a.kind.replace('_',' ') }}
+          <span class="badge {% if a.category == 'payout' %}failed{% elif a.category == 'refund' %}pending{% else %}info{% endif %}"
+                style="margin-left:.4rem;font-size:.7rem;">{{ a.category }}</span>
+        </div>
+        <div class="activity-sub">
+          {% if a.merchant_id %}merchant #{{ a.merchant_id }} · {% endif %}
+          {% if a.subject and a.subject not in ('merchant','platform') %}{{ a.subject }} · {% endif %}
+          {% if a.metric is not none %}metric <strong>{{ "{:,}".format(a.metric) }}</strong> · {% endif %}
+          {{ a.detail or '' }}
+          <span style="color:var(--gray-500);">· {{ a.created_at.strftime('%d %b %H:%M') }}{% if a.last_seen_at and a.last_seen_at != a.created_at %} · last seen {{ a.last_seen_at.strftime('%d %b %H:%M') }}{% endif %}</span>
+        </div>
+      </div>
+      {% if a.status == 'open' %}
+      <div style="display:flex;gap:.4rem;">
+        <form method="post" action="{{ url_for('dashboard.update_anomaly', anom_id=a.id, action='resolve') }}"
+              onsubmit="return confirm('Mark resolved? Do this only after investigating.')">
+          <button type="submit" class="btn btn-outline" style="padding:.3rem .7rem;font-size:.8125rem;">Resolve</button>
+        </form>
+        <form method="post" action="{{ url_for('dashboard.update_anomaly', anom_id=a.id, action='dismiss') }}"
+              onsubmit="return confirm('Dismiss as not a concern?')">
+          <button type="submit" class="btn btn-outline" style="padding:.3rem .7rem;font-size:.8125rem;color:var(--gray-500);">Dismiss</button>
+        </form>
+      </div>
+      {% else %}
+      <span class="badge {% if a.status == 'resolved' %}succeeded{% else %}pending{% endif %}">{{ a.status }}{% if a.resolved_by %} · {{ a.resolved_by }}{% endif %}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {{ pager(pag, param='page') }}
+  {% else %}
+  <div style="display:flex;align-items:center;gap:.5rem;color:var(--success);font-size:.9rem;padding:.5rem 0;">
+    <i data-feather="check-circle" style="width:18px;height:18px;"></i>
+    No {{ status }} anomalies.
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+{% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}
