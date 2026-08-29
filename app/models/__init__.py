@@ -129,6 +129,16 @@ class Merchant(UserMixin, db.Model):
     webhook_url_test = Column(String(500), nullable=True)
     webhook_secret_test = Column(String(80), nullable=True)
     kyc_status = Column(String(20), default="pending")  # pending|verified|rejected
+    # Stripe-standard re-verification: a merchant can be VERIFIED yet not
+    # currently allowed to move live money — because a submitted ID has lapsed
+    # (kyc_expires_at in the past) or because review flagged the account
+    # (reverify_required, e.g. abuse/limit breach). Both drop the merchant back
+    # to "needs verification" WITHOUT discarding the KYC record. kyc_is_current()
+    # is the single gate; kyc_status alone is NOT sufficient — never check it
+    # directly on a money path.
+    kyc_expires_at = Column(DateTime, nullable=True)          # NULL = never expires
+    reverify_required = Column(Boolean, default=False, nullable=False)
+    reverify_reason = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     # Admin suspend audit (is_active stays the source of truth; api._auth and
     # orchestrator already refuse is_active=False, so suspend halts everything).
@@ -176,6 +186,24 @@ class Merchant(UserMixin, db.Model):
 
     accounts = relationship("Account", back_populates="merchant")
     transactions = relationship("Transaction", back_populates="merchant")
+
+    def kyc_is_current(self) -> bool:
+        """The SINGLE gate for 'may move live money'. Stripe-standard:
+        verified → operate, but an EXPIRED ID (kyc_expires_at in the past) or a
+        review FLAG (reverify_required) drops the merchant back to needing
+        re-verification without losing the KYC record. Money paths must call
+        this, never `kyc_status == 'verified'` directly."""
+        if self.kyc_status != "verified":
+            return False
+        if self.reverify_required:
+            return False
+        if self.kyc_expires_at is not None:
+            exp = self.kyc_expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if exp <= datetime.now(timezone.utc):
+                return False
+        return True
 
 
 def hash_api_key(raw_key: str | None) -> str | None:
@@ -882,6 +910,7 @@ class KYCDirector(db.Model):
     nationality = Column(String(100), nullable=True)
     id_type = Column(String(30), nullable=True)    # national_id | passport | refugee_id
     id_number = Column(String(100), nullable=True)
+    id_expiry = Column(String(20), nullable=True)  # YYYY-MM-DD; drives merchant.kyc_expires_at
     contact_phone = Column(String(30), nullable=True)
     email = Column(String(200), nullable=True)
     is_primary = Column(Boolean, default=False, nullable=False)

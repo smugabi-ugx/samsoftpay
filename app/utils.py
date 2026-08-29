@@ -32,7 +32,7 @@ def verified_required(f):
         from flask import redirect, url_for
         if not current_user.is_authenticated:
             abort(401)
-        if current_user.role == "admin" or current_user.kyc_status == "verified":
+        if current_user.role == "admin" or current_user.kyc_is_current():
             return f(*args, **kwargs)
         # Redirect to the KYC page WITHOUT flashing: the destination page's own
         # header ("Complete verification to unlock live money") + status banner

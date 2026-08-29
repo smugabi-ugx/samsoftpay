@@ -107,7 +107,7 @@ def create_payout(
     # sk_live_ key created real payouts — the dashboard wall never applied to
     # the API, the actual integration path). Test mode stays open: building
     # never requires approval. Zero writes on refusal.
-    if g.get("api_mode") != "test" and merchant.kyc_status != "verified":
+    if g.get("api_mode") != "test" and not merchant.kyc_is_current():
         raise PayoutError(
             "live payouts require a verified business — complete verification "
             "on your dashboard (test keys work immediately)")

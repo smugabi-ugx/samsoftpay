@@ -93,6 +93,26 @@
 </div>
 {% endif %}
 
+{% if app.status == 'approved' %}
+{# Step-up: flag a verified merchant for re-verification (abuse, a limit
+   breach, a periodic re-KYC). Reopens their application to draft and gates
+   live money until they resubmit and are re-approved. #}
+<div class="card" style="border-color:rgba(245,158,11,.4);">
+  <div class="card-header"><h3 class="card-title"><i data-feather="alert-triangle"></i> Require re-verification</h3></div>
+  <form method="POST" action="{{ url_for('kyc.admin_review', app_id=app.id) }}">
+    <div class="form-group">
+      <label class="form-label">Reason (shown to the merchant)</label>
+      <input class="form-input" type="text" name="notes" placeholder="e.g. expired ID, unusual activity, periodic review">
+    </div>
+    <button type="submit" name="action" value="require_reverify" class="btn btn-outline"
+            style="color:#92400e;border-color:#f59e0b;"
+            onclick="return confirm('Flag this verified merchant for re-verification? Live money will be gated until they resubmit and are re-approved.')">
+      <i data-feather="alert-triangle"></i> Require re-verification
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <a href="{{ url_for('kyc.admin_list') }}" class="btn btn-outline" style="margin-bottom:2rem;">← All Applications</a>
 {% endblock %}
 {% block extra_scripts %}<script>window.feather && feather.replace();</script>{% endblock %}
