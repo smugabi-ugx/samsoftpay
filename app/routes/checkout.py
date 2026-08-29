@@ -424,6 +424,7 @@ def status_json(public_id: str):
 
 
 @bp.post("/pay/<public_id>/retry")
+@limiter.limit("20 per minute")   # public + state-mutating; throttle like the other checkout POSTs
 def retry_payment(public_id: str):
     """Re-open a single-use link whose only attempt FAILED, so the customer can
     try again instead of hitting a dead-end status page.
