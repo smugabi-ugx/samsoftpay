@@ -34,6 +34,12 @@ def run_reconciliation() -> dict:
 
     # 2. External: count rail successes vs. txn successes per channel
     for ch in Channel:
+        # WALLET is an ON-US transfer (Samsoftpay balance -> balance) — it has no
+        # external rail and therefore no RailEvent, so a rail-vs-txn count would
+        # always read 0-vs-N and fire a false mismatch. The ledger is its only
+        # source of truth (covered by the internal zero-sum check above).
+        if ch == Channel.WALLET:
+            continue
         rail_success_count = (
             db.session.query(func.count(RailEvent.id))
             .filter(RailEvent.rail == ch, RailEvent.event_type == "succeeded")
