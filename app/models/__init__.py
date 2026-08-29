@@ -545,6 +545,13 @@ class PaymentLink(db.Model):
     vending_status = Column(String(20), nullable=True)
     vending_error = Column(String(255), nullable=True)
     vending_dispensed_at = Column(DateTime, nullable=True)
+    # Concurrency claim for the PUBLIC checkout: set atomically just before a
+    # charge is initiated so a double-tap / concurrent double-scan of a SINGLE-USE
+    # link cannot fire two rail prompts and book two charges (transaction_id is
+    # only attached AFTER create_charge returns). A stale claim (older than the
+    # checkout claim TTL) is reclaimable so a crashed/abandoned submit never wedges
+    # the link. Multi-use links are exempt.
+    checkout_claimed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=utcnow, nullable=False, index=True)
 
     __table_args__ = (
