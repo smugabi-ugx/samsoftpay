@@ -187,6 +187,24 @@ def checkout_submit(public_id: str):
             error="Please choose a payment method.",
         )
 
+    # SERVER-SIDE channel allowlist. _channel_options() is only the UI half; a
+    # forged POST could otherwise submit channel=crypto/visa, which route to the
+    # PASSTHROUGH adapter (NOT _MockRail, so orchestrator._simulated_rail_forbidden
+    # — which only recognises _MockRail — does NOT block them). The passthrough
+    # then auto-succeeds the charge with NO money collected and (for a vending
+    # order) dispenses a product for free. CRYPTO/VISA are externally settled and
+    # must ONLY be charged via their own confirmed flow (the page redirects a
+    # crypto pick to /pay/<id>/crypto), never from this generic submit. Reject
+    # anything not currently offered, and crypto/visa unconditionally.
+    _allowed = {v for v, _, _ in _channel_options(include_crypto=True)}
+    if channel in (Channel.CRYPTO, Channel.VISA) or channel.value not in _allowed:
+        return render_template(
+            "checkout.html", link=link, merchant=merchant,
+            channels=_channel_options(include_crypto=True),
+            error="That payment method isn't available here.",
+            selected_channel=channel.value,
+        )
+
     customer_phone = (request.form.get("phone") or "").strip()
     customer_email = (request.form.get("email") or "").strip() or None
 
@@ -289,6 +307,29 @@ def checkout_submit(public_id: str):
         link.public_id if is_vending_order(link) else (link.reference or link.public_id)
     )
 
+    # CLAIM the link before firing the rail prompt. link.transaction_id is only
+    # attached AFTER create_charge returns, so the single-use guard above cannot
+    # fire during the charge window; a double-tap / concurrent double-scan would
+    # otherwise book TWO real charges for one single-use link. Atomic
+    # compare-and-set on checkout_claimed_at; a claim older than 5 min is
+    # reclaimable so a crashed/abandoned submit never wedges the link. Multi-use
+    # links are exempt (meant to be paid repeatedly).
+    if not link.allow_multiple_uses:
+        from datetime import timedelta
+        from sqlalchemy import or_
+        _stale = utcnow() - timedelta(minutes=5)
+        _claimed = db.session.query(PaymentLink).filter(
+            PaymentLink.id == link.id,
+            PaymentLink.transaction_id.is_(None),
+            or_(PaymentLink.checkout_claimed_at.is_(None),
+                PaymentLink.checkout_claimed_at < _stale),
+        ).update({"checkout_claimed_at": utcnow()}, synchronize_session=False)
+        db.session.commit()
+        if not _claimed:
+            # Another submit is already mid-charge on this single-use link (or it
+            # is already paid) — do NOT fire a second prompt; show the status page.
+            return redirect(url_for("checkout.status_page", public_id=public_id))
+
     try:
         txn = create_charge(
             merchant=merchant,
@@ -301,7 +342,15 @@ def checkout_submit(public_id: str):
         )
     except OrchestratorError as exc:
         # The gift card, if any, was only validated (dry_run) above — never
-        # redeemed — so there is nothing to roll back here.
+        # redeemed — so there is nothing to roll back here. Release the checkout
+        # claim so a legitimate retry (e.g. corrected phone) isn't blocked; no
+        # charge is in flight because create_charge raised at/ before initiation.
+        if not link.allow_multiple_uses:
+            db.session.query(PaymentLink).filter(
+                PaymentLink.id == link.id,
+                PaymentLink.transaction_id.is_(None),
+            ).update({"checkout_claimed_at": None}, synchronize_session=False)
+            db.session.commit()
         return render_template(
             "checkout.html", link=link, merchant=merchant,
             channels=_channel_options(include_crypto=True),
@@ -399,7 +448,8 @@ def retry_payment(public_id: str):
         db.session.query(PaymentLink).filter(
             PaymentLink.id == link.id,
             PaymentLink.transaction_id == txn.id,
-        ).update({"transaction_id": None}, synchronize_session=False)
+        ).update({"transaction_id": None, "checkout_claimed_at": None},
+                 synchronize_session=False)
         db.session.commit()
     return redirect(url_for("checkout.checkout_page", public_id=public_id))
 

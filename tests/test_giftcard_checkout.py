@@ -54,6 +54,12 @@ from app.extensions import db
 from app.models import Merchant, PaymentLink, Transaction, WebhookDelivery
 from app.services.giftcards import create_gift_card
 
+# enqueue() fires deliver_webhook.delay() on every charge.succeeded; with no
+# local Redis broker that .delay blocks and hangs the test. Stub it (same pattern
+# as tests/test_webhook_envelope.py) so the suite runs with mock rails, no Redis.
+import app.tasks.webhooks_task as _wt
+_wt.deliver_webhook.delay = lambda *a, **k: None
+
 CHECKS = []
 
 
