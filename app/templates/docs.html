@@ -226,6 +226,22 @@ X-Samsoftpay-Signature: …              ← verify with your whsec_ (proves US 
     <!-- Quickstart -->
     <div class="docs-section" id="quickstart">
       <h2><i data-feather="zap" style="width:22px;height:22px;color:var(--primary);"></i> Quickstart</h2>
+
+      <div class="callout" id="simulate-or-real">
+        <strong>Simulate or real? Your API key prefix decides — there is no separate flag.</strong>
+        <ul style="margin:.5rem 0 .25rem 1.1rem;">
+          <li><code>sk_test_…</code> = <strong>sandbox</strong>: a charge completes on a short timer with
+            <strong>no real PIN prompt and no real money</strong>, so you can test the whole scan → pay →
+            dispense loop safely. It's deterministic — an ordinary test number always succeeds; specific
+            magic numbers force <code>insufficient_funds</code> / <code>user_cancelled</code> / <code>timeout</code>.</li>
+          <li><code>sk_live_…</code> = <strong>live</strong>: the customer gets a real Mobile Money
+            <strong>PIN prompt on their phone and real money moves</strong> before we confirm success.</li>
+        </ul>
+        Every charge and webhook carries a <code>mode</code> field (<code>test</code> / <code>live</code>) so you
+        always know which you're handling. <strong>In production, only release the goods / dispense on
+        <code>mode: "live"</code></strong> — a sandbox "instant success" is a simulation, not a payment.
+      </div>
+
       <p style="font-size:1.0625rem;">
         To integrate with Samsoftpay you need exactly <strong>two things</strong>:
       </p>
