@@ -805,15 +805,21 @@ print(data["qr_png_url"])   # a ready PNG of that same URL (no auth)</code></pre
   "status": "refunded",
   "refund": { "id": "pout_...", "amount": 5000, "status": "authorized" }
 }</code></pre>
+      <p><strong>The 202 means the refund was <em>initiated</em>, not yet paid.</strong> Like any payout,
+      the customer's money-out lands on the rail moments later — treat <code>refund.status</code> as a
+      payout status and confirm it reaches <code>succeeded</code> (poll <code>GET /v1/payouts/&lt;id&gt;</code>
+      or watch the <code>payout.succeeded</code> / <code>payout.failed</code> webhook), not as final on the 202.</p>
       <p>Refunding twice returns <code>400 {"error": "already_refunded"}</code>. A charge that was
       created with a <code>split</code> cannot be refunded through this endpoint yet.
       You will receive <code>400 {"error": "split_charge_refunds_not_yet_supported"}</code>;
       contact support to reverse a split charge.</p>
-      <div class="callout"><strong>A refund draws from your <em>available</em> balance, not pending.</strong>
-      A charge that just succeeded sits in the settlement hold (pending) — refunding it immediately can
-      return <code>400 insufficient available balance</code> even though the customer clearly just paid.
-      This is correct: available (settled) funds back the disbursement. Refund once the charge has settled,
-      or keep enough available balance to cover same-day refunds.</div>
+      <div class="callout"><strong>A refund draws from your <em>available</em> balance, and needs
+      <code>amount + the payout fee</code>.</strong> A charge that just succeeded sits in the settlement
+      hold (pending), and its own net proceeds (<code>amount − charge fee</code>) are less than a refund
+      costs — so <strong>a charge cannot fund its own refund</strong> from its proceeds alone. Refunding
+      immediately can also return <code>400 insufficient available balance</code> even though the customer
+      clearly just paid; this is correct — settled funds back the disbursement. Keep working float to cover
+      same-day refunds.</div>
     </div>
 
     <!-- Listing -->
