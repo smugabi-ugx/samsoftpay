@@ -103,7 +103,7 @@
      Hidden automatically once MTN production go-live flips MOMO_TARGET_ENV. -->
 {% if sandbox_active %}
 <div class="alert" style="margin-bottom:1.5rem;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-  <i data-feather="beaker" style="color:#6366f1;flex-shrink:0;"></i>
+  <i data-feather="beaker" style="color:#4d51b8;flex-shrink:0;"></i>
   <div style="flex:1;min-width:180px;">
     <strong>Sandbox test funds.</strong>
     <span style="color:#64748b;font-size:.875rem;">Instantly add TEST money to your sandbox balance so you can try payouts and refunds. This is <em>not</em> real money and can never be withdrawn.</span>
@@ -280,7 +280,7 @@
       {% if accounts %}
       <div style="display:flex;flex-direction:column;gap:.625rem;margin-bottom:1.25rem;">
         {% for a in accounts %}
-        <div style="display:flex;align-items:center;gap:.875rem;padding:.875rem;border:1px solid var(--gray-200);border-radius:12px;{% if a.is_primary %}border-color:rgba(79,70,229,.3);background:rgba(79,70,229,.03);{% endif %}">
+        <div style="display:flex;align-items:center;gap:.875rem;padding:.875rem;border:1px solid var(--gray-200);border-radius:12px;{% if a.is_primary %}border-color:rgba(46, 49, 146,.3);background:rgba(46, 49, 146,.03);{% endif %}">
           <div style="width:40px;height:40px;border-radius:10px;background:{% if 'mtn' in a.account_type %}#fff7ed{% elif 'airtel' in a.account_type %}#fff1f2{% else %}#f0fdf4{% endif %};display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
             {% if 'mtn' in a.account_type %}📱{% elif 'airtel' in a.account_type %}📲{% else %}🏦{% endif %}
           </div>

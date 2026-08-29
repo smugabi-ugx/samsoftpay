@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f172a">
   <title>Pay {{ merchant.name }}</title>
-  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.png') }}">
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="preload" href="{{ url_for('static', filename='fonts/InterVariable.woff2') }}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
@@ -17,7 +17,7 @@
       --muted: #64748b;
       --line: #e2e8f0;
       --bg: #f8fafc;
-      --primary: #4f46e5;
+      --primary: #2e3192;
       --mtn: #ffcb05;
       --mtn-text: #003566;
       --airtel: #e60000;
@@ -222,14 +222,14 @@
       display: flex; align-items: center; justify-content: center; gap: 0.5rem;
       width: 100%; height: 56px;
       /* Same brand family as the summary band — one purple, not two. */
-      background: #4f46e5;
+      background: #2e3192;
       color: white; border: none; border-radius: 12px;
       font-size: 1.0625rem; font-weight: 700; font-family: inherit;
       cursor: pointer; transition: all .2s;
       -webkit-tap-highlight-color: transparent;
       max-width: 480px; margin: 0 auto; display: flex;
     }
-    .pay-btn:hover { background: #4338ca; }
+    .pay-btn:hover { background: #262a7a; }
     .pay-btn:active { transform: scale(0.99); }
     .pay-btn:disabled { opacity: .45; cursor: not-allowed; }
     .pay-reassure {
