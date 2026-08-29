@@ -39,9 +39,17 @@ def run_reconciliation() -> dict:
             .filter(RailEvent.rail == ch, RailEvent.event_type == "succeeded")
             .scalar()
         )
+        # Count SUCCEEDED *and* REFUNDED transactions: a refund does NOT undo the
+        # original collection — the money was really taken (its 'succeeded'
+        # RailEvent stands) and returned separately via a disbursement. Counting
+        # only SUCCEEDED made the per-channel totals drift by one on every refund,
+        # firing a FALSE 'critical' ledger-recon alert every night from the first
+        # refund onward (alert fatigue that hides a real drift). REFUNDED charges
+        # keep their rail 'succeeded' event, so they belong on this side of the tally.
         txn_success_count = (
             db.session.query(func.count(Transaction.id))
-            .filter(Transaction.channel == ch, Transaction.status == TxnStatus.SUCCEEDED)
+            .filter(Transaction.channel == ch,
+                    Transaction.status.in_([TxnStatus.SUCCEEDED, TxnStatus.REFUNDED]))
             .scalar()
         )
         report["external"][ch.value] = {
