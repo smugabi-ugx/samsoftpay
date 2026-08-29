@@ -110,6 +110,7 @@
       <div class="docs-nav-title">Getting Started</div>
       <a href="#integration-modes" class="docs-nav-link active">Choose Your Integration</a>
       <a href="#connection" class="docs-nav-link">How You Connect</a>
+      <a href="#pesapal" class="docs-nav-link">Migrating from Pesapal</a>
       <a href="#quickstart" class="docs-nav-link">Quickstart</a>
       <a href="#authentication" class="docs-nav-link">Authentication</a>
       <a href="#headers" class="docs-nav-link">Required Headers</a>
@@ -124,7 +125,8 @@
       <a href="#testing" class="docs-nav-link">Testing</a>
       <a href="#balance" class="docs-nav-link">Balance</a>
       <a href="#payouts" class="docs-nav-link">Payouts</a>
-      <a href="#payment-links" class="docs-nav-link">Payment Links</a>
+      <a href="#payment-links" class="docs-nav-link">Accept a Payment</a>
+      <a href="#gift-cards" class="docs-nav-link">Gift Cards &amp; Vouchers</a>
       <a href="#refunds" class="docs-nav-link">Refunds</a>
       <a href="#listing" class="docs-nav-link">Listing &amp; Search</a>
       <a href="#subaccounts" class="docs-nav-link">Subaccounts &amp; Splits</a>
@@ -672,17 +674,35 @@ print(resp.json())
 
     <!-- Payment Links -->
     <div class="docs-section" id="payment-links">
-      <h2><i data-feather="link" style="width:22px;height:22px;color:var(--primary);"></i> Payment Links</h2>
-      <p>Generate a shareable URL your customers open to pay. No integration required on their end. Perfect for WhatsApp, SMS, and email.</p>
+      <h2><i data-feather="link" style="width:22px;height:22px;color:var(--primary);"></i> Accept a Payment (Hosted Checkout)</h2>
+      <p><strong>The simplest way to take money — and the one most stores want.</strong> You create a
+      payment link, send the customer to the returned <code>url</code> (or show its QR on a screen). They
+      pick their method and pay on <em>our</em> secure page — you never handle a card number or a MoMo PIN,
+      so you carry no PCI scope. This is the exact flow the <a href="#integration-modes">WooCommerce plugin,
+      the Shopify app, and TK's vending machines</a> all use.</p>
+
+      <div class="callout"><strong>Coming from Pesapal?</strong> This is your
+      <code>SubmitOrderRequest → redirect_url</code>, minus the token dance and the separate IPN
+      registration. See <a href="#pesapal">Migrating from Pesapal</a>.</div>
+
+      <h3>The flow (three steps)</h3>
+<pre><code>1. POST /v1/payment-links              → { id, url, qr_png_url }
+2. Send the customer to `url`           (redirect their browser, or show the QR)
+     → they pick MTN / Airtel / card / crypto and pay on our page
+3. Confirm the payment:  charge.succeeded webhook   OR   GET /v1/charges/&lt;id&gt;
+     → then fulfil the order / dispense the product</code></pre>
 
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/payment-links</div>
       <table class="param-table">
         <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in UGX.</td></tr>
+          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in the smallest unit (UGX has none, so whole shillings).</td></tr>
+          <tr><td><code>currency</code> <span class="optional">optional</span></td><td>string</td><td>Default <code>UGX</code>.</td></tr>
           <tr><td><code>description</code> <span class="optional">optional</span></td><td>string</td><td>Shown to the customer on the payment page.</td></tr>
-          <tr><td><code>success_url</code> <span class="optional">optional</span></td><td>string</td><td>Redirect URL after successful payment.</td></tr>
-          <tr><td><code>allow_multiple_uses</code> <span class="optional">optional</span></td><td>boolean</td><td>If <code>true</code>, the link can be paid more than once. Default: <code>false</code>.</td></tr>
+          <tr><td><code>reference</code> <span class="optional">optional</span></td><td>string</td><td>Your order id. Echoed on the charge and every webhook — match on it to reconcile.</td></tr>
+          <tr><td><code>success_url</code> <span class="optional">optional</span></td><td>string</td><td>Where the customer returns after paying (Pesapal's <code>callback_url</code>).</td></tr>
+          <tr><td><code>cancel_url</code> <span class="optional">optional</span></td><td>string</td><td>Where they return if they cancel (Pesapal's <code>cancellation_url</code>).</td></tr>
+          <tr><td><code>allow_multiple_uses</code> <span class="optional">optional</span></td><td>boolean</td><td>If <code>true</code>, the link can be paid more than once (a reusable "donate" page). Default <code>false</code> — a one-shot order link.</td></tr>
         </tbody>
       </table>
 
@@ -696,12 +716,102 @@ print(resp.json())
     },
     json={
         "amount": 25000,
+        "reference": "order-1042",
         "description": "School Fees Payment",
         "success_url": "https://yourapp.com/thank-you",
-    }
+        "cancel_url":  "https://yourapp.com/cart",
+    },
 )
 data = resp.json()
-print(data["url"])  # Share this link with your customer</code></pre>
+# → send the browser here, or render the QR on a machine screen:
+print(data["url"])          # {{ request.host_url }}pay/lnk_…
+print(data["qr_png_url"])   # a ready PNG of that same URL (no auth)</code></pre>
+
+      <h3>Where the customer returns</h3>
+      <p><code>success_url</code> and <code>cancel_url</code> are <strong>your</strong> return pages. After
+      paying, the customer is offered a "Return to &lt;you&gt;" button to <code>success_url</code>; if you
+      set neither, they stay on our hosted status page. <strong>Never trust the return redirect as proof of
+      payment</strong> — always confirm server-side with the <code>charge.succeeded</code> webhook or
+      <code>GET /v1/charges/&lt;id&gt;</code> (a customer can close the tab before returning).</p>
+
+      <h3>The customer picks the channel — you don't</h3>
+      <p>You never send a channel when creating a link. Our page shows the methods that are live (MTN Mobile
+      Money today; Airtel Money and cards as they launch) and the customer chooses. Which method actually ran
+      comes back on the charge's <code>channel</code> field. This is the same "customer chooses on the hosted
+      page" model as Pesapal.</p>
+
+      <h3>Gift cards &amp; vouchers work on this page</h3>
+      <p>Because the customer pays on our hosted checkout, they can apply a gift-card / voucher code right
+      there (a "Have a voucher?" field). This works for payment links, WooCommerce and Shopify — anything that
+      lands on the hosted checkout. It does <strong>not</strong> apply to the raw <code>POST /v1/charges</code>
+      API. See <a href="#gift-cards">Gift Cards &amp; Vouchers</a>.</p>
+
+      <h3>Checking the status</h3>
+      <p>Poll <code>GET /v1/charges/&lt;id&gt;</code>, or wait for the webhook. The status field moves through:</p>
+      <table class="param-table">
+        <thead><tr><th>Status</th><th>Meaning</th><th>Fulfil?</th><th>Pesapal <code>status_code</code></th></tr></thead>
+        <tbody>
+          <tr><td><code>pending</code></td><td>Link created, not yet paid</td><td>No</td><td>0 (invalid/not started)</td></tr>
+          <tr><td><code>authorized</code></td><td>Prompt sent, awaiting the customer's PIN</td><td>No</td><td>—</td></tr>
+          <tr><td><code>succeeded</code></td><td>Money received</td><td><strong>Yes</strong></td><td>1 (completed)</td></tr>
+          <tr><td><code>failed</code></td><td>Declined / cancelled / timed out</td><td>No</td><td>2 (failed)</td></tr>
+          <tr><td><code>refunded</code></td><td>Reversed after success</td><td>—</td><td>3 (reversed)</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Only release goods on <code>succeeded</code>.</strong> In the sandbox (<code>sk_test_</code>)
+      a charge auto-completes with no real PIN or money — see <a href="#simulate-or-real">Simulate or real?</a></p>
+
+      <div class="callout"><strong>A payment link is not your storefront.</strong> A <em>payment link</em>
+      (<code>{{ request.host_url }}pay/lnk_…</code>) is <strong>one</strong> checkout for one amount. Your
+      public <em>storefront / profile page</em> (<code>{{ request.host_url }}pay/@yourhandle</code>) is a
+      catalog that lists your items and links — a different thing. Send a link for one order; send the
+      storefront to browse.</div>
+    </div>
+
+    <!-- Gift Cards -->
+    <div class="docs-section" id="gift-cards">
+      <h2><i data-feather="gift" style="width:22px;height:22px;color:var(--primary);"></i> Gift Cards &amp; Vouchers</h2>
+      <p>Gift cards are a <strong>merchant-issued</strong> store-credit. They are created and managed in your
+      dashboard, and redeemed by the customer on the hosted checkout — there is deliberately no API endpoint
+      to redeem one (a gift card is your own liability, not something an integrator's server should be able to
+      spend).</p>
+      <h3>How it works</h3>
+      <ul style="color:var(--gray-600);line-height:1.8;">
+        <li><strong>Issue:</strong> Dashboard → <strong>Gift Cards</strong> → create a card with a balance and
+          currency. You get a code to hand to the customer.</li>
+        <li><strong>Redeem:</strong> on the hosted checkout (<code>/pay/&lt;id&gt;</code>), the customer enters
+          the code in the "Have a voucher?" field. It's validated, then applied to the amount; the customer
+          pays only the remainder (if any) by Mobile Money. A fully-covered order needs no rail payment at all.</li>
+        <li><strong>Where it works:</strong> anywhere the customer lands on our hosted checkout — payment
+          links, WooCommerce, Shopify, vending. It does <strong>not</strong> apply to the direct
+          <code>POST /v1/charges</code> API.</li>
+      </ul>
+      <p>Gift cards are real, live store credit (there is no sandbox gift-card system) — a sandbox
+      (<code>sk_test_</code>) checkout is refused a gift card by design.</p>
+    </div>
+
+    <!-- Migrating from Pesapal -->
+    <div class="docs-section" id="pesapal">
+      <h2><i data-feather="repeat" style="width:22px;height:22px;color:var(--primary);"></i> Migrating from Pesapal</h2>
+      <p>If you've integrated Pesapal, you already know this model — Samsoftpay uses the same
+      hosted-redirect, <em>customer-picks-the-channel</em> flow, with less ceremony (no 5-minute token
+      exchange, no separate IPN registration). Here's the direct mapping:</p>
+      <table class="param-table">
+        <thead><tr><th>Pesapal 3.0</th><th>Samsoftpay</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /Auth/RequestToken</code> (token expires in 5 min)</td><td>Just a Bearer key — <code>Authorization: Bearer sk_live_…</code>. No token exchange.</td></tr>
+          <tr><td><code>POST /URLSetup/RegisterIPNURL</code> (per-integration)</td><td>Set your webhook URL <strong>once</strong> on <a href="{{ url_for('auth.account') }}#webhooks">Account → Webhooks</a>. No per-transaction <code>notification_id</code>.</td></tr>
+          <tr><td><code>POST /Transactions/SubmitOrderRequest</code> → <code>order_tracking_id</code> + <code>redirect_url</code></td><td><a href="#payment-links"><code>POST /v1/payment-links</code></a> → <code>id</code> + <code>url</code> (+ a QR).</td></tr>
+          <tr><td>Redirect the customer to <code>redirect_url</code>; they pick a method on Pesapal's page</td><td>Send them to <code>url</code> (or show the QR); they pick a method on our page — same model.</td></tr>
+          <tr><td><code>callback_url</code> / <code>cancellation_url</code></td><td><code>success_url</code> / <code>cancel_url</code> on the payment link.</td></tr>
+          <tr><td><strong>IPN</strong> ping (thin — carries no payment detail; you must re-fetch)</td><td>The <a href="#webhooks"><code>charge.succeeded</code> webhook</a> — <strong>signed and self-contained</strong>, so you don't <em>need</em> a second call (though <code>GET /v1/charges/&lt;id&gt;</code> stays the tiebreaker).</td></tr>
+          <tr><td><code>GET /Transactions/GetTransactionStatus?orderTrackingId=</code> (<code>status_code</code> 0/1/2/3)</td><td><a href="#payment-links"><code>GET /v1/charges/&lt;id&gt;</code></a> (<code>pending</code>/<code>authorized</code>/<code>succeeded</code>/<code>failed</code>/<code>refunded</code> — mapped in the status table above).</td></tr>
+          <tr><td>Sandbox on a different host (<code>cybqa.pesapal.com</code>)</td><td>Same base URL; the <code>sk_test_</code> prefix picks the sandbox. <a href="#simulate-or-real">Simulate or real?</a></td></tr>
+        </tbody>
+      </table>
+      <p><strong>Net:</strong> where Pesapal is four calls + an IPN registration, Samsoftpay is one call
+      (<code>POST /v1/payment-links</code>) + a webhook you registered once. The customer still chooses their
+      channel on the hosted page, exactly as they do on Pesapal.</p>
     </div>
 
     <!-- Vending machines -->
