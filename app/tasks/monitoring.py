@@ -166,6 +166,21 @@ def payout_anomaly_scan() -> dict:
     return {"ok": not findings, "findings": findings}
 
 
+@celery.task(name="app.tasks.monitoring.charge_anomaly_scan")
+def charge_anomaly_scan() -> dict:
+    """Every 10 min: charge-side fraud/abuse detection — failed-charge storms
+    (leaked-key probing / card testing), velocity spikes, large single charges.
+    The payout/refund scans watch money OUT; this watches money IN. Persists to
+    the admin anomaly feed and pages, deduped."""
+    from ..services.anomaly import scan_charge_anomalies
+    findings = scan_charge_anomalies()
+    if findings:
+        print(f"charge-anomaly: {len(findings)} finding(s) recorded/alerted")
+    else:
+        print("charge-anomaly: clear")
+    return {"ok": not findings, "findings": findings}
+
+
 @celery.task(name="app.tasks.monitoring.refund_outlier_scan")
 def refund_outlier_scan() -> dict:
     """Daily: refunds-vs-charges outlier report (Interswitch lesson — the

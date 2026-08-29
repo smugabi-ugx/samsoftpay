@@ -87,6 +87,10 @@ def init_celery(app: object) -> Celery:
                 "task": "app.tasks.monitoring.payout_anomaly_scan",
                 "schedule": 600.0,    # every 10 min — rolling-sum drain detection (aggregates, not per-payout)
             },
+            "charge-anomaly-scan": {
+                "task": "app.tasks.monitoring.charge_anomaly_scan",
+                "schedule": 600.0,    # every 10 min — failed-charge storms / velocity / large charges (money IN)
+            },
             "refund-outlier-scan": {
                 "task": "app.tasks.monitoring.refund_outlier_scan",
                 "schedule": 86400.0,  # daily — refunds-vs-charges outlier report per merchant
