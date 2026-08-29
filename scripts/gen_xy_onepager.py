@@ -53,13 +53,13 @@ def build() -> str:
     state = {"y": 31}
 
     def h(title):
-        state["y"] += 3.0   # breathing room above each section heading
+        state["y"] += 1.8   # breathing room above each section heading
         pdf.set_xy(14, state["y"])
         pdf.set_font("Helvetica", "B", 11.5)
         pdf.set_text_color(*GREEN)
         pdf.cell(W, 6, a(title))
         pdf.set_text_color(*DARK)
-        state["y"] += 8
+        state["y"] += 7
 
     def p(text, size=10, gap=5.6):
         pdf.set_xy(14, state["y"])
@@ -130,6 +130,13 @@ def build() -> str:
       "URL to show on the machine.   2) Know it is paid: set your Webhook URL + copy the signing secret "
       "(whsec_...) in the dashboard; we POST a signed charge.succeeded event to you (or poll GET /v1/charges"
       "?reference=...).   3) Dispense-result (XY -> us): POST /inbound/xy/dispense-result.", size=9.3, gap=4.5)
+
+    # ---- Sandbox vs live ----
+    h("Sandbox vs live - simulate or real (read before testing)")
+    p("The API KEY PREFIX decides the mode. sk_test_ = SANDBOX: charges auto-complete instantly with NO "
+      "real PIN prompt and NO real money (safe testing of the scan-to-dispense loop). sk_live_ = LIVE: the "
+      "customer gets a real PIN prompt and real money moves before we confirm. Every charge/webhook carries "
+      "a mode field ('test'/'live') - in production, only dispense when mode is 'live'.", size=9.3, gap=4.5)
 
     # ---- What each side provides ----
     h("What is needed to finish (the Samsoftpay side is already built)")
