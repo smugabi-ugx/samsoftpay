@@ -221,6 +221,10 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
     if payout.status in (PayoutStatus.PENDING, PayoutStatus.AUTHORIZED):
         txn.refund_payout_id = payout.id
         db.session.commit()
+        # Tell the customer their refund is on the way. Best-effort, never raises.
+        if not txn.is_test:
+            from .emails import email_refund_issued
+            email_refund_issued(txn, refund_amount)
     else:
         # Rail rejected synchronously — reverse the fee return, release claim.
         _fee_return(-1)
