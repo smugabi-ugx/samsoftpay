@@ -196,7 +196,18 @@ def run_due(app=None) -> dict:
                 db.session.rollback()
                 run_fail += 1
                 last_err = str(exc)
-                print(f"scheduled payout {sp.public_id} recipient crashed: {exc}")
+                # A crashed recipient used to be a bare print() to worker stdout —
+                # money silently under-delivered with no on-call signal. Log at
+                # ERROR and page (deduped; send_alert never raises).
+                from flask import current_app
+                from .alerts import send_alert
+                current_app.logger.exception(
+                    "scheduled payout %s recipient crashed", sp.public_id)
+                send_alert(
+                    "Scheduled payout recipient crashed",
+                    f"Scheduled payout {sp.public_id} had a recipient crash: {exc}. "
+                    f"The batch continued; this recipient was NOT paid.",
+                    severity="warning", key=f"sched-payout-crash-{sp.public_id}")
 
         sp = db.session.get(ScheduledPayout, sp.id)
         if sp is not None:

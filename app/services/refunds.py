@@ -225,6 +225,33 @@ def refund_charge(txn: Transaction, merchant: Merchant) -> dict:
         if not txn.is_test:
             from .emails import email_refund_issued
             email_refund_issued(txn, refund_amount)
+        # Emit charge.refunded so a merchant's cart/order system can mark the sale
+        # refunded. The payout.* webhook fires too, but it is keyed to the refund
+        # DISBURSEMENT (its own public_id), not the original charge_id, so a cart
+        # cannot correlate it to the refunded sale — hence a charge-scoped event.
+        # Best-effort; per-mode routing (test/live) is handled inside enqueue().
+        try:
+            from ..models import Merchant
+            from . import webhooks
+            _m = db.session.get(Merchant, txn.merchant_id)
+            if _m is not None:
+                webhooks.enqueue(_m, "charge.refunded", {
+                    "id": txn.public_id,
+                    "status": "refunded",
+                    "amount": txn.amount,
+                    "refund_amount": int(refund_amount),
+                    "currency": txn.currency,
+                    "reference": txn.merchant_reference,
+                    "channel": txn.channel.value if txn.channel else None,
+                    "refunded_at": txn.refunded_at.isoformat() if txn.refunded_at else None,
+                }, transaction_id=txn.id)
+        except Exception:
+            from flask import current_app
+            try:
+                current_app.logger.warning("charge.refunded webhook enqueue failed for %s",
+                                           txn.public_id, exc_info=True)
+            except Exception:
+                pass
     else:
         # Rail rejected synchronously — reverse the fee return, release claim.
         _fee_return(-1)
