@@ -262,6 +262,15 @@
         statusSub.textContent = sub;
         if (data.status === 'finished') {
           setTimeout(() => { window.location.href = '{{ url_for("checkout.status_page", public_id=link.public_id) }}'; }, 1500);
+        } else if (data.status === 'failed' || data.status === 'refunded') {
+          // Terminal states: stop polling (was looping forever) and give the
+          // customer a next step, mirroring the rate-lock-expiry handler above.
+          clearInterval(pollHandle);
+          statusSub.innerHTML = (data.status === 'refunded'
+              ? 'This payment was refunded. '
+              : 'This payment did not go through. ')
+            + '<a href="{{ url_for("checkout.crypto_checkout", public_id=link.public_id, restart=1) }}">Start over</a>'
+            + ' or <a href="{{ url_for("checkout.checkout_page", public_id=link.public_id) }}">choose another method</a>.';
         }
       }).catch(() => {});
   }
