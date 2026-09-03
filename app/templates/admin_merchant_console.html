@@ -45,6 +45,24 @@
 <!-- ACTIONS -->
 <div class="tab-panel" id="tab-actions">
   <div class="card">
+    <div class="card-header"><h3 class="card-title"><i data-feather="file-text"></i> Compliance &amp; KYC</h3></div>
+    <div class="grid-2">
+      <div>
+        <label class="form-label">KYC status</label>
+        <div style="margin-bottom:.6rem;">
+          <span class="badge {% if m.kyc_status=='verified' %}succeeded{% elif m.kyc_status=='rejected' %}failed{% else %}pending{% endif %}">{{ m.kyc_status }}</span>
+        </div>
+        <a href="{{ url_for('kyc.admin_list') }}" class="btn btn-outline"><i data-feather="user-check"></i> Review KYC / view IDs</a>
+        <div class="form-hint">Preview uploaded IDs (inline) and director details in the KYC review.</div>
+      </div>
+      <div>
+        <label class="form-label">Audit pack</label>
+        <a href="{{ url_for('dashboard.merchant_audit_pack', merchant_id=m.id) }}" class="btn btn-primary"><i data-feather="download"></i> Download Audit Pack (PDF)</a>
+        <div class="form-hint">Formal PDF — identity, directors/NINs, balances, flow of funds and the append-only ledger journal — for a bank, BoU or police request.</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
     <div class="card-header"><h3 class="card-title"><i data-feather="shield"></i> Account</h3></div>
     <div class="grid-2">
       <div>

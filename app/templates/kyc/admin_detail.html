@@ -46,10 +46,16 @@
   {% for doc in app.documents %}
   <div style="padding:.5rem .75rem;border-bottom:1px solid var(--gray-100);font-size:.875rem;display:flex;justify-content:space-between;align-items:center;">
     <span><strong>{{ doc_types.get(doc.doc_type, doc.doc_type) }}</strong> — {{ doc.original_filename }}</span>
-    <a href="{{ url_for('kyc.admin_download', app_id=app.id, doc_id=doc.id) }}"
-       class="btn btn-outline" style="padding:.3rem .625rem;font-size:.75rem;" download>
-      <i data-feather="download" style="width:12px;height:12px;"></i> Download
-    </a>
+    <span style="display:flex;gap:.4rem;">
+      <a href="{{ url_for('kyc.admin_view', app_id=app.id, doc_id=doc.id) }}" target="_blank" rel="noopener"
+         class="btn btn-outline" style="padding:.3rem .625rem;font-size:.75rem;">
+        <i data-feather="eye" style="width:12px;height:12px;"></i> View
+      </a>
+      <a href="{{ url_for('kyc.admin_download', app_id=app.id, doc_id=doc.id) }}"
+         class="btn btn-outline" style="padding:.3rem .625rem;font-size:.75rem;" download>
+        <i data-feather="download" style="width:12px;height:12px;"></i> Download
+      </a>
+    </span>
   </div>
   {% endfor %}
 </div>

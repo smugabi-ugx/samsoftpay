@@ -471,6 +471,23 @@ def _is_protected_merchant(m) -> bool:
             or (m.email or "").strip().lower() in protected_emails)
 
 
+@bp.get("/admin/merchants/<int:merchant_id>/audit-pack.pdf")
+@login_required
+@admin_required
+def merchant_audit_pack(merchant_id: int):
+    """Formal per-merchant Compliance Audit Pack (KYC + directors/NINs + balances +
+    flow of funds + the append-only ledger journal) as a PDF, for a bank / BoU /
+    police request. Admin-only."""
+    from flask import Response
+    from ..models import Merchant
+    from ..services.compliance import build_audit_pack
+    m = db.session.get(Merchant, merchant_id) or abort(404)
+    pdf = build_audit_pack(m, is_test=False)
+    fname = f"audit-pack-{m.handle or m.id}.pdf"
+    return Response(pdf, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
 @bp.get("/admin/merchants/<int:merchant_id>/delete-confirm")
 @login_required
 @admin_required
