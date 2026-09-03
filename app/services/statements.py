@@ -89,8 +89,18 @@ def build_statement(merchant, year: int, month: int, *, is_test: bool = False,
 
     total_collected = sum(r["net"] for r in money_in)
     total_gross_in = sum(r["gross"] for r in money_in)
-    total_fees = sum(r["fee"] for r in money_in) + sum(r["fee"] for r in money_out)
+    total_charge_fees = sum(r["fee"] for r in money_in)
+    total_payout_fees = sum(r["fee"] for r in money_out)
+    total_fees = total_charge_fees + total_payout_fees
     total_paid_out = sum(r["amount"] for r in money_out)
+    # What actually left the withdrawable balance: the ledger debits amount+fee
+    # per payout (payouts.py), so this — not amount alone — is the money-out
+    # figure the journal-derived closing balance foots against. Using amount-only
+    # in the summary/footer made neither presentation tie in any month with a
+    # payout (charge fees are already inside collected_net; payout fees were
+    # dropped from the footer). Identity: closing == opening + collected_net -
+    # total_out.
+    total_out = total_paid_out + total_payout_fees
 
     cfg = None
     try:
@@ -115,8 +125,11 @@ def build_statement(merchant, year: int, month: int, *, is_test: bool = False,
         "totals": {
             "gross_in": total_gross_in,
             "collected_net": total_collected,
-            "paid_out": total_paid_out,
+            "paid_out": total_paid_out,          # payout amounts only (excl. fee)
+            "paid_out_total": total_out,         # amount + fee — foots to closing
             "fees": total_fees,
+            "charge_fees": total_charge_fees,
+            "payout_fees": total_payout_fees,
             "count_in": len(money_in),
             "count_out": len(money_out),
         },
@@ -157,15 +170,24 @@ def render_pdf(st: dict) -> bytes:
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 6, "Summary", ln=1)
     pdf.set_font("Helvetica", "", 10)
+    # These four lines are the running balance and MUST foot exactly:
+    # opening + collected_net - paid_out_total = closing. Collection fees are
+    # already inside collected_net; payout fees are inside paid_out_total. Fees
+    # are disclosed as a memo below, NOT as a separately-summed line (which used
+    # to double-subtract the collection fees and break the arithmetic).
     for label, val in [
         ("Opening balance", st["opening_balance"]),
         (f"Collected (net of fees) - {t['count_in']} charge(s)", t["collected_net"]),
-        (f"Paid out - {t['count_out']} payout(s)", -t["paid_out"]),
-        ("Fees", -t["fees"]),
+        (f"Paid out (incl. fees) - {t['count_out']} payout(s)", -t["paid_out_total"]),
         ("Closing balance", st["closing_balance"]),
     ]:
         pdf.cell(90, 5, _a(label), border=0)
         pdf.cell(0, 5, _fmt(val, cur), ln=1)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.multi_cell(0, 5, _a(
+        f"Memo - fees deducted this period (already reflected above): "
+        f"collections {_fmt(t['charge_fees'], cur)} + payouts {_fmt(t['payout_fees'], cur)} "
+        f"= {_fmt(t['fees'], cur)}."))
     pdf.ln(3)
 
     def _table(title, headers, widths, rows):
@@ -202,7 +224,7 @@ def render_pdf(st: dict) -> bytes:
     pdf.set_font("Helvetica", "I", 8)
     pdf.multi_cell(0, 4, _a(
         f"Reconciliation: opening {_fmt(st['opening_balance'], cur)} + collected "
-        f"{_fmt(t['collected_net'], cur)} - paid out {_fmt(t['paid_out'], cur)} = closing "
+        f"{_fmt(t['collected_net'], cur)} - paid out incl. fees {_fmt(t['paid_out_total'], cur)} = closing "
         f"{_fmt(st['closing_balance'], cur)}. This closing balance equals what Samsoftpay holds "
         f"for you (GET /v1/balance) at period end. Every line shows your reference, our id, and "
         f"MTN's rail reference so it ties to both your books and MTN's records."))
@@ -242,10 +264,10 @@ def render_html(st: dict) -> str:
     {('· VAT No: ' + st['vat_number']) if st.get('vat_number') else ''}</p>
   <table style="border-collapse:collapse;margin-bottom:1rem">
     <tr><td style="padding:3px 12px">Opening balance</td><td style="text-align:right">{_fmt(st['opening_balance'], cur)}</td></tr>
-    <tr><td style="padding:3px 12px">Collected (net) — {t['count_in']}</td><td style="text-align:right">{_fmt(t['collected_net'], cur)}</td></tr>
-    <tr><td style="padding:3px 12px">Paid out — {t['count_out']}</td><td style="text-align:right">-{_fmt(t['paid_out'], cur)}</td></tr>
-    <tr><td style="padding:3px 12px">Fees</td><td style="text-align:right">-{_fmt(t['fees'], cur)}</td></tr>
+    <tr><td style="padding:3px 12px">Collected (net of fees) — {t['count_in']}</td><td style="text-align:right">{_fmt(t['collected_net'], cur)}</td></tr>
+    <tr><td style="padding:3px 12px">Paid out (incl. fees) — {t['count_out']}</td><td style="text-align:right">-{_fmt(t['paid_out_total'], cur)}</td></tr>
     <tr style="font-weight:700"><td style="padding:3px 12px">Closing balance</td><td style="text-align:right">{_fmt(st['closing_balance'], cur)}</td></tr>
+    <tr><td style="padding:3px 12px;color:#888;font-size:12px" colspan=2>Memo — fees deducted this period (already reflected above): collections {_fmt(t['charge_fees'], cur)} + payouts {_fmt(t['payout_fees'], cur)} = {_fmt(t['fees'], cur)}</td></tr>
   </table>
   <h3>Money in (collections)</h3>
   <table border=1 cellpadding=4 style="border-collapse:collapse;font-size:12px;width:100%">{thead_in}{rows_in()}</table>
