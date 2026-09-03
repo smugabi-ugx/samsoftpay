@@ -82,22 +82,36 @@ def main():
         assert st["money_out"][0]["rail_reference"] == "disb_xyz", "[1] payout rail ref"
         print("[1] PASS — money-in/out carry your reference + our id + MTN rail ref")
 
-        # [2] reconciliation math
+        # [2] reconciliation math — the presentation must now FOOT by construction,
+        # not via an amount-only fudge. The payout debits amount+fee (20,300) from
+        # available, so paid_out_total is the money-out figure the journal closing
+        # foots against; charge fees are already inside collected_net.
         t = st["totals"]
         assert t["collected_net"] == 98_500 and t["paid_out"] == 20_000, f"[2] totals {t}"
-        expect_closing = st["opening_balance"] + t["collected_net"] - t["paid_out"] - 300
-        # closing from journal should match opening + net in - (payout amount + fee)
-        # (the payout debits amount+fee from available). Our recon line uses amount only,
-        # so verify the journal closing equals opening + collected - (paid_out + payout_fee).
-        assert st["closing_balance"] == expect_closing, \
-            f"[2] closing {st['closing_balance']} != {expect_closing}"
-        print(f"[2] PASS — reconciles: opening {st['opening_balance']:,} + collected {t['collected_net']:,} "
-              f"- paid {t['paid_out']:,} - fee 300 = closing {st['closing_balance']:,}")
+        assert t["paid_out_total"] == 20_300, f"[2] paid_out_total should be amount+fee {t}"
+        assert (t["payout_fees"] == 300 and t["charge_fees"] == 1_500
+                and t["fees"] == 1_800), f"[2] fee split {t}"
+        # The identity the statement prints: opening + collected_net - paid_out_total
+        # == closing, EXACTLY (no manual '- payout_fee' correction).
+        assert st["closing_balance"] == (
+            st["opening_balance"] + t["collected_net"] - t["paid_out_total"]), \
+            f"[2] closing {st['closing_balance']} must foot to opening+net-paid_out_total"
+        print(f"[2] PASS — statement foots: opening {st['opening_balance']:,} + collected "
+              f"{t['collected_net']:,} - paid out incl. fees {t['paid_out_total']:,} = closing "
+              f"{st['closing_balance']:,}")
 
         # [3] PDF renders
         pdf = render_pdf(st)
         assert isinstance(pdf, (bytes, bytearray)) and pdf[:4] == b"%PDF", "[3] not a PDF"
         print(f"[3] PASS — render_pdf produced a {len(pdf):,}-byte PDF")
+
+        # [3b] HTML summary uses the footing figure + discloses fees as a memo
+        from app.services.statements import render_html
+        html = render_html(st)
+        assert "Paid out (incl. fees)" in html, "[3b] html money-out label"
+        assert "20,300" in html, "[3b] html shows amount+fee, not amount-only"
+        assert "Memo" in html and "1,800" in html, "[3b] html fee memo"
+        print("[3b] PASS — HTML summary foots and discloses fees as a memo")
 
     # [4] API
     c = app.test_client()
