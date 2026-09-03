@@ -121,7 +121,8 @@ def _paths() -> dict:
                 "security": _BEARER,
                 "parameters": [_q("status", "Filter by status"),
                                _q("created_after", "ISO-8601"), _q("created_before", "ISO-8601"),
-                               _q("limit", "1–100", typ="integer")],
+                               _q("limit", "1–100", typ="integer"),
+                               _q("starting_after", "Cursor: pass a previous next_cursor to page")],
                 "responses": {"200": _list("Payout"), "401": _err("Auth")},
             },
         },
@@ -329,8 +330,9 @@ def _components() -> dict:
         },
         "schemas": {
             "Error": {"type": "object", "properties": {
-                "error": {"type": "string", "description": "Human-readable message; also a stable code where relevant."},
-                "request_id": {"type": "string"}}},
+                "error": {"type": "string", "description": "Human-readable message."},
+                "code": {"type": "string", "description": "Stable machine-readable slug to branch on: bad_request, unauthorized, forbidden, not_found, conflict, rate_limited (domain slugs like already_refunded also appear here)."},
+                "request_id": {"type": "string", "description": "Echoes the X-Request-ID response header — quote it in support requests."}}},
             "Account": {"type": "object", "properties": {
                 "object": {"type": "string", "const": "account"},
                 "id": {"type": "string", "description": "Stable public identifier for this account (handle, or public key)."},
