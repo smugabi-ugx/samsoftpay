@@ -332,6 +332,21 @@ def admin_download(app_id: int, doc_id: int):
                                download_name=doc.original_filename, as_attachment=True)
 
 
+@bp.get("/admin/<int:app_id>/document/<int:doc_id>/view")
+@login_required
+def admin_view(app_id: int, doc_id: int):
+    """Serve a KYC document INLINE — so an admin can preview an ID/passport in the
+    browser instead of downloading every file to check identity."""
+    if current_user.role != "admin":
+        abort(403)
+    from flask import send_from_directory
+    doc = KYCDocument.query.filter_by(id=doc_id, application_id=app_id).first_or_404()
+    kyc_app = db.session.get(KYCApplication, app_id) or abort(404)
+    folder = os.path.join(_upload_root(), str(kyc_app.merchant_id))
+    return send_from_directory(folder, doc.stored_filename,
+                               download_name=doc.original_filename, as_attachment=False)
+
+
 @bp.get("/admin/list")
 @login_required
 def admin_list():
