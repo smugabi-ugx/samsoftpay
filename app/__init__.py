@@ -515,7 +515,19 @@ def create_app(config: dict | None = None) -> Flask:
         the mail/Slack vars must ALSO be set there — check the worker's own
         /ops/readiness is not exposed; confirm via a test alert. Never prints values.
         """
-        from flask import jsonify
+        from flask import jsonify, request
+        from flask_login import current_user
+        # Gate this verbose config-posture map — it is reconnaissance (which rails
+        # are live, whether alerts/Sentry would catch an attack, service identity).
+        # Public liveness stays on /ops/status (bare ok/stale). This needs an admin
+        # session or ?token=<OPS_TOKEN>. Set OPS_TOKEN to keep a curl/monitor here.
+        _ops_tok = app.config.get("OPS_TOKEN") or os.environ.get("OPS_TOKEN")
+        _authorized = (
+            (getattr(current_user, "is_authenticated", False)
+             and getattr(current_user, "role", "") == "admin")
+            or (_ops_tok and request.args.get("token") == _ops_tok))
+        if not _authorized:
+            return jsonify(error="forbidden", code="forbidden"), 403
         from .services.sms_service import sms_configured
         is_prod = bool(os.environ.get("RENDER"))
         wh = app.config.get("WEBHOOK_SIGNING_SECRET", "")

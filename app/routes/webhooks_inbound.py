@@ -16,7 +16,7 @@ import hashlib
 
 from flask import Blueprint, abort, current_app, jsonify, request
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import Channel, Transaction
 from ..services.orchestrator import complete_transaction
 
@@ -51,6 +51,7 @@ def _verify_signature(payload: bytes) -> bool:
 
 
 @bp.post("/<channel>")
+@limiter.limit("600 per minute")  # generous per-IP cap: a real rail burst is fine, DB-exhaustion floods are not
 def receive(channel: str):
     try:
         ch = Channel(channel)
@@ -77,6 +78,7 @@ def receive(channel: str):
 
 
 @bp.route("/mtn/callback", methods=["POST", "PUT"])
+@limiter.limit("600 per minute")
 def mtn_native_callback():
     """MTN's OWN requesttopay callback (providerCallbackHost) — hint-verify design.
 
