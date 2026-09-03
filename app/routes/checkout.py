@@ -753,6 +753,19 @@ def crypto_status_json(public_id: str):
             merchant = db.session.get(Merchant, link.merchant_id)
             from flask import g
             g.api_mode = "test" if link.is_test else "live"
+            # ⚠️ OVER-CREDIT RISK — reconcile the amount RECEIVED before enabling
+            # live crypto. This credits the FULL link.amount UGX the moment
+            # ChangeNow reports "finished", but get_status returns only the status
+            # string — it never reads ChangeNow's amountTo (what actually landed
+            # in our receiving wallet). The deposit quote is built off a FIXED
+            # 3700 UGX/USD rate under a FLOATING (standard) exchange, so a
+            # "finished" exchange that forwarded LESS than quoted still mints full
+            # gross withdrawable UGX. Crypto is gated off in production today; do
+            # NOT turn it on until this fetches the ChangeNow transaction detail
+            # (amountTo), converts at a live rate, and credits only the value
+            # received (parking/flagging a materially-short settlement). Found by
+            # the multi-agent bug hunt (PLAUSIBLE high). Needs testing against the
+            # real ChangeNow API, which is why it is flagged here, not guessed at.
             try:
                 txn = create_charge(
                     merchant=merchant,
