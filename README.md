@@ -172,7 +172,6 @@ verification, and the sandbox test-phone-number table:
 Honest, not aspirational — checked against the live system, not the code's
 intentions:
 
-- **Dashboard auth** — no login gate on merchant dashboard URLs yet.
 - **PCI-DSS card handling** — the card channel is mocked; never touch a real
   PAN without certification.
 - **Real Airtel Money / card rails** — both mocked, refused for live traffic
