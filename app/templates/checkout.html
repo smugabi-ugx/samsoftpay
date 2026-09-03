@@ -534,6 +534,24 @@
         window.location.href = {{ url_for('checkout.crypto_checkout', public_id=link.public_id)|tojson }};
         return;
       }
+      // Mobile Money needs a phone number — validate inline BEFORE the loading
+      // state, instead of a full server round-trip + re-render on a blank field.
+      if (checked && (checked.value === 'mtn_momo' || checked.value === 'airtel_money')) {
+        const phone = document.getElementById('phone');
+        if (phone && !phone.value.trim()) {
+          e.preventDefault();
+          phone.focus();
+          let err = document.getElementById('phone-err');
+          if (!err) {
+            err = document.createElement('div');
+            err.id = 'phone-err';
+            err.style.cssText = 'color:var(--danger,#ef4444);font-size:.8rem;margin-top:.35rem;';
+            (phone.closest('.input-wrap') || phone).after(err);
+          }
+          err.textContent = 'Enter your Mobile Money phone number.';
+          return;
+        }
+      }
       payBtn.classList.add('loading');
       payBtn.disabled = true;
     });

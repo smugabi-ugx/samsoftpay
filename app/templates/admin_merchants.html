@@ -49,6 +49,8 @@
           <td class="text-muted" style="font-size:.8125rem;">{{ m.created_at.strftime('%d %b %Y') if m.created_at else '—' }}</td>
           <td><a href="{{ url_for('dashboard.admin_merchant_console', merchant_id=m.id) }}" class="btn btn-outline" style="padding:.3rem .7rem;font-size:.8125rem;">Manage</a></td>
         </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted" style="text-align:center;padding:2.5rem 1rem;">No merchants match these filters.</td></tr>
         {% endfor %}
       </tbody>
     </table>
