@@ -185,7 +185,7 @@ def pay_bill_page(handle: str, bill_public_id: str):
 @limiter.limit("10 per minute;60 per hour")
 def pay_bill_submit(handle: str, bill_public_id: str):
     from flask import g
-    from ..models import Channel, Merchant
+    from ..models import Channel, Merchant, Transaction, TxnStatus
     from ..services.orchestrator import OrchestratorError, create_charge
     merchant = Merchant.query.filter_by(handle=handle).one_or_none()
     if not merchant:
@@ -197,6 +197,22 @@ def pay_bill_submit(handle: str, bill_public_id: str):
         abort(404)
 
     tax_cfg = get_merchant_tax(merchant.id)
+
+    # Don't fire a SECOND MoMo prompt for a bill that already has a charge in
+    # flight (or already collected). bill.transaction_id is set the moment the
+    # first prompt is sent, but the bill stays 'active' until the rail CONFIRMS
+    # (it flips to 'paid' only then — see _maybe_mark_bill_paid), so the status
+    # guard above does NOT catch a reload / double-tap during that window. Without
+    # this, a payer who tapped Pay twice (or whose slow page resubmitted) got two
+    # prompts and, on approving both, was charged twice for one bill. A prior
+    # FAILED charge legitimately re-opens the bill, so fall through in that case.
+    if bill.transaction_id:
+        prior = db.session.get(Transaction, bill.transaction_id)
+        if prior is not None and prior.status != TxnStatus.FAILED:
+            return render_template("pay_bill.html", channels=_bill_channels(),
+                                   merchant=merchant, bill=bill, tax_cfg=tax_cfg,
+                                   breakdown=None, success=True, txn=prior)
+
     phone = request.form.get("phone", "").strip()
     channel_str = request.form.get("channel", "mtn_momo")
     try:
