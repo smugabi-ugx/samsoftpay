@@ -311,6 +311,7 @@ def _webhooks() -> dict:
     return {
         "charge.succeeded": hook("charge.succeeded", "Charge"),
         "charge.failed": hook("charge.failed", "Charge"),
+        "charge.refunded": hook("charge.refunded", "Charge"),
         "payout.succeeded": hook("payout.succeeded", "Payout"),
         "payout.failed": hook("payout.failed", "Payout"),
         "vending.dispensed": hook("vending.dispensed", "VendingOrder"),

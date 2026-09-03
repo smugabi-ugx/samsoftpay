@@ -1059,3 +1059,55 @@ def register(app: Flask) -> None:
 
             print("-" * 64)
             print(f"Repaired {repaired} account(s). The journal was not modified.")
+
+    @app.cli.command("backup-db")
+    @click.option("--out-dir", default="backups", help="Directory to write the dump to.")
+    def backup_db(out_dir):
+        """Dump the whole database to a timestamped file — a FREE ledger backup.
+
+        Free-tier Postgres has NO automated backups and expires ~90 days after
+        creation, so run this yourself (weekly) as a safety net until the DB is on
+        a paid plan with point-in-time recovery. Postgres -> pg_dump .sql;
+        SQLite -> a plain file copy. For Postgres, pg_dump must be on PATH (it
+        ships with the PostgreSQL client tools) — you can also run it from your own
+        machine pointed at DATABASE_URL.
+
+            flask backup-db
+        """
+        import datetime
+        import os
+        import shutil
+        import subprocess
+
+        url = app.config.get("SQLALCHEMY_DATABASE_URI") or os.environ.get("DATABASE_URL", "")
+        if not url:
+            print("No database configured (set DATABASE_URL).")
+            return
+        os.makedirs(out_dir, exist_ok=True)
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        if url.startswith("sqlite"):
+            src = url.split("///", 1)[-1]
+            dst = os.path.join(out_dir, f"samsoftpay_{stamp}.db")
+            shutil.copyfile(src, dst)
+            print(f"SQLite backup -> {dst} ({os.path.getsize(dst):,} bytes)")
+            return
+
+        pg_url = (url.replace("postgresql+psycopg2://", "postgresql://")
+                     .replace("postgres://", "postgresql://"))
+        dst = os.path.join(out_dir, f"samsoftpay_{stamp}.sql")
+        try:
+            with open(dst, "wb") as fh:
+                subprocess.run(["pg_dump", "--no-owner", "--no-privileges", pg_url],
+                               stdout=fh, check=True)
+        except FileNotFoundError:
+            os.path.exists(dst) and os.remove(dst)
+            print("pg_dump not found on PATH. Install the PostgreSQL client tools, or "
+                  "run pg_dump from your own machine against DATABASE_URL.")
+            return
+        except subprocess.CalledProcessError as exc:
+            print(f"pg_dump failed: {exc}")
+            return
+        print(f"Postgres backup -> {dst} ({os.path.getsize(dst):,} bytes)")
+        print("Keep this file OFF the server. Run weekly until the DB is on a paid, "
+              "backed-up plan.")

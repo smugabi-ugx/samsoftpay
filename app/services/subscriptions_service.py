@@ -239,7 +239,16 @@ def bill_due(app=None) -> dict:
             # above, so continuing is safe (no double-bill); this one just
             # misses this attempt and stays where it is for the next tick.
             db.session.rollback()
-            print(f"subscription {sub.public_id} billing crashed: {exc}")
+            # Was a bare print() — a crashed cycle billed nobody and paged no one.
+            # Log at ERROR and alert (deduped; send_alert never raises).
+            from flask import current_app
+            from .alerts import send_alert
+            current_app.logger.exception("subscription %s billing crashed", sub.public_id)
+            send_alert(
+                "Subscription billing crashed",
+                f"Subscription {sub.public_id} billing crashed: {exc}. "
+                f"The batch continued; this cycle was NOT billed.",
+                severity="warning", key=f"sub-billing-crash-{sub.public_id}")
             failed += 1
 
     return {"attempted": attempted, "succeeded": succeeded, "failed": failed}
