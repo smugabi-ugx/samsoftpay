@@ -498,8 +498,9 @@ on BOTH the web and worker services (web serves /ops/status; worker sends the al
 ---
 
 ## OPEN / NEXT (not yet done)
-- **Security headers** (live probe found NONE): add HSTS, X-Frame-Options, X-Content-Type-Options,
-  Referrer-Policy, CSP. Cloudflare fronts the app but the app should set these.
+- **Security headers** — DONE. `app/__init__.py` after_request sets X-Content-Type-Options
+  (nosniff), X-Frame-Options (SAMEORIGIN), Strict-Transport-Security (HSTS), Referrer-Policy and
+  Content-Security-Policy. Cloudflare also fronts the app.
 - **Apex domain**: samsoftpay.com + www have NO DNS records ("no server found" is expected).
   To serve a landing page there: add both as custom domains in Render, add an A record (apex) +
   CNAME (www) in Namecheap. api.samsoftpay.com is the only one configured and is all the API needs.
