@@ -110,6 +110,12 @@ def main():
         partial_card_b_code = partial_card_b.code
         partial_card_b_id = partial_card_b.id
 
+        # Card for the concurrency test (fully-covered $0 path): high balance so a
+        # SECOND redeem would silently succeed if the claim didn't gate it.
+        race_card = create_gift_card(merchant_id=merchant_id, face_value=5000)
+        race_card_code = race_card.code
+        race_card_id = race_card.id
+
     client = app.test_client()
 
     # ---- 1/2. fully-covered order, LIVE and TEST mode ----
@@ -177,6 +183,35 @@ def main():
         card_b = db.session.get(GiftCard, partial_card_b_id)
         check("...and the gift card WAS debited exactly once (250 -> 0)",
               card_b.balance == 0)
+
+    # ---- 6. CONCURRENCY: the $0 (fully-covered) path must honor the single-use
+    # claim, exactly like the rail path. The $0 branch used to redeem + book a
+    # SUCCEEDED charge OUTSIDE the checkout_claimed_at claim, so a concurrent
+    # double-submit double-debited the card and made two charges on one single-use
+    # link. Reproduce the race deterministically: simulate another submit already
+    # in-flight by pre-setting a FRESH checkout_claimed_at (claim held,
+    # transaction_id still None), then submit. The claim compare-and-set must fail
+    # and the $0 branch must NOT run — card untouched, no txn attached.
+    from datetime import datetime, timezone
+    race_link = make_link(app, merchant_id, 2500, is_test=False)   # fully covered
+    client.post(f"/pay/{race_link}/apply-voucher", data={"code": race_card_code})
+    with app.app_context():
+        rl = PaymentLink.query.filter_by(public_id=race_link).one()
+        rl.checkout_claimed_at = datetime.now(timezone.utc)   # another submit holds it
+        db.session.commit()
+    r6 = client.post(f"/pay/{race_link}/submit",
+                     data={"channel": "mtn_momo", "phone": "256783647260"})
+    check("concurrent $0 submit is turned away (redirect, no redeem)",
+          r6.status_code in (302, 303))
+    with app.app_context():
+        db.session.expire_all()
+        from app.models import GiftCard
+        rc = db.session.get(GiftCard, race_card_id)
+        check("...and the gift card was NOT double-debited (still 5000)",
+              rc.balance == 5000)
+        rl2 = PaymentLink.query.filter_by(public_id=race_link).one()
+        check("...and no second transaction was attached to the claimed link",
+              rl2.transaction_id is None)
 
     print()
     failed = [label for label, ok in CHECKS if not ok]
