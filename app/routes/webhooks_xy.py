@@ -61,7 +61,7 @@ import time
 
 from flask import Blueprint, current_app, jsonify, request
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import Merchant, PaymentLink
 from ..services import signing, vending, xy_vending
 
@@ -143,6 +143,7 @@ def _reject(message: str, http_status: int = 401):
 # ---------- the endpoint ----------
 
 @bp.post("/dispense-result")
+@limiter.limit("600 per minute")
 def dispense_result():
     """XY §2.2.3 — the machine finished (or failed to) dispense an order.
 
