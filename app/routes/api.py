@@ -165,8 +165,17 @@ def _optional_idempotency(merchant, body):
 @bp.errorhandler(429)
 def _err(e):
     # Every /v1 error is machine-readable JSON — a kiosk or server integration
-    # must never have to parse an HTML error page.
-    return jsonify(error=e.description or e.name), e.code
+    # must never have to parse an HTML error page. Alongside the human `error`
+    # message we return a STABLE `code` discriminator (so integrators branch on a
+    # slug, not on prose that can be reworded) and echo `request_id` into the body
+    # (it was only ever in the X-Request-ID header despite the docs advertising it).
+    _CODES = {400: "bad_request", 401: "unauthorized", 403: "forbidden",
+              404: "not_found", 409: "conflict", 429: "rate_limited"}
+    body = {"error": e.description or e.name, "code": _CODES.get(e.code, "error")}
+    rid = g.get("request_id")
+    if rid:
+        body["request_id"] = rid
+    return jsonify(body), e.code
 
 
 # ---------- charges ----------
