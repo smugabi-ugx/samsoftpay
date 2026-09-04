@@ -1357,6 +1357,121 @@ def new_payout_submit(merchant_id: int):
     return redirect(url_for("dashboard.merchant_detail", merchant_id=merchant.id))
 
 
+# ── Recurring payouts (payroll autopilot) ──────────────────────────────────────
+# Dashboard UI over the scheduled-payout engine + API (see
+# app/services/scheduled_payouts_service.py). LIVE (is_test=False) only, like
+# every other dashboard money surface. The pause/resume/cancel actions call the
+# same service functions the API endpoints do.
+
+def _payroll_context(merchant, **extra):
+    import json as _json
+    from ..models import ScheduledPayout
+    schedules = (ScheduledPayout.query
+                 .filter_by(merchant_id=merchant.id, is_test=False)
+                 .order_by(ScheduledPayout.created_at.desc())
+                 .limit(100).all())
+    rows = []
+    for sp in schedules:
+        try:
+            recips = _json.loads(sp.recipients) or []
+        except Exception:
+            recips = []
+        rows.append({"sp": sp, "recipients": recips, "count": len(recips)})
+    avail = Account.query.filter_by(
+        merchant_id=merchant.id, type=AccountType.MERCHANT_AVAILABLE,
+        is_test=False).first()
+    ctx = {"merchant": merchant, "rows": rows,
+           "available": (-avail.cached_balance if avail else 0)}
+    ctx.update(extra)
+    return ctx
+
+
+@bp.get("/dashboard/<int:merchant_id>/payroll")
+@login_required
+@verified_required
+def payroll_list(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    return render_template("scheduled_payouts.html", **_payroll_context(merchant))
+
+
+@bp.post("/dashboard/<int:merchant_id>/payroll/new")
+@login_required
+@verified_required
+def payroll_new(merchant_id: int):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    merchant = db.session.get(Merchant, merchant_id) or abort(404)
+    from ..models import Channel as _Channel
+    from ..services.scheduled_payouts_service import (
+        ScheduledPayoutError, create_scheduled_payout)
+
+    name = (request.form.get("name") or "").strip() or None
+    interval = request.form.get("interval", "monthly")
+    try:
+        amount = int((request.form.get("amount") or "0").replace(",", ""))
+    except ValueError:
+        amount = 0
+    max_raw = (request.form.get("max_per_recipient") or "").strip().replace(",", "")
+    try:
+        max_per = int(max_raw) if max_raw else None
+    except ValueError:
+        max_per = None
+    # recipients textarea: one per line, "phone" or "phone,name". One line = a
+    # single "home money" schedule; many lines = payroll — same form for both.
+    recips = []
+    for line in (request.form.get("recipients") or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = [p.strip() for p in line.split(",", 1)]
+        if parts[0]:
+            recips.append({"phone": parts[0],
+                           "name": parts[1] if len(parts) > 1 and parts[1] else None})
+    start_at = None
+    sd = (request.form.get("start_date") or "").strip()
+    if sd:
+        from datetime import datetime as _dt, timezone as _tz
+        try:
+            start_at = _dt.fromisoformat(sd)
+            if start_at.tzinfo is None:
+                start_at = start_at.replace(tzinfo=_tz.utc)
+        except ValueError:
+            start_at = None
+
+    try:
+        create_scheduled_payout(
+            merchant=merchant, amount=amount, currency="UGX",
+            channel=_Channel.MTN_MOMO, interval=interval, recipients=recips,
+            name=name, max_per_recipient=max_per, is_test=False, start_at=start_at)
+    except ScheduledPayoutError as exc:
+        return render_template("scheduled_payouts.html",
+                               **_payroll_context(merchant, error=str(exc)))
+    return redirect(url_for("dashboard.payroll_list", merchant_id=merchant_id))
+
+
+@bp.post("/dashboard/<int:merchant_id>/payroll/<public_id>/<action>")
+@login_required
+@verified_required
+def payroll_action(merchant_id: int, public_id: str, action: str):
+    if not merchant_or_admin(merchant_id):
+        abort(403)
+    from ..models import ScheduledPayout
+    from ..services import scheduled_payouts_service as sps
+    sp = ScheduledPayout.query.filter_by(
+        public_id=public_id, merchant_id=merchant_id, is_test=False).one_or_none()
+    if sp is None:
+        abort(404)
+    if action == "pause":
+        sps.pause_scheduled_payout(sp.id)
+    elif action == "resume" and sp.status != "cancelled":
+        sps.resume_scheduled_payout(sp.id)
+    elif action == "cancel":
+        sps.cancel_scheduled_payout(sp.id)
+    return redirect(url_for("dashboard.payroll_list", merchant_id=merchant_id))
+
+
 @bp.get("/dashboard/<int:merchant_id>/bulk-payout")
 @login_required
 @verified_required
