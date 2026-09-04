@@ -28,12 +28,23 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
+from requests.adapters import HTTPAdapter
 from flask import current_app
 
 from ..extensions import db
 from ..models import Channel, RailEvent, Transaction
+from .circuit_breaker import RailUnavailableError, mtn_collection_breaker
 from .rails import InitiateResult, RailAdapter
 from .rails_mtn_disbursement import AmbiguousRailError
+
+
+# One shared connection pool for ALL MTN calls (token + requesttopay + status).
+# Bare requests.post opens a fresh TCP+TLS handshake every call — latency on
+# every already-synchronous request and ephemeral-port churn at volume. Keep-
+# alive reuses connections. max_retries=0: we own retry/backoff, not urllib3.
+_session = requests.Session()
+_session.mount("https://", HTTPAdapter(pool_connections=10, pool_maxsize=20, max_retries=0))
+_session.mount("http://", HTTPAdapter(pool_connections=4, pool_maxsize=8, max_retries=0))
 
 
 # ---------- Token cache (process-local) ----------
@@ -57,7 +68,7 @@ def _get_token(*, subscription_key: str, api_user: str, api_key: str, base_url: 
             return _cached_token.value
 
         basic = base64.b64encode(f"{api_user}:{api_key}".encode()).decode()
-        resp = requests.post(
+        resp = _session.post(
             f"{base_url}/collection/token/",
             headers={
                 "Authorization": f"Basic {basic}",
@@ -124,13 +135,26 @@ class RealMTNMoMoAdapter(RailAdapter):
         return str(minor)
 
     def initiate(self, txn: Transaction) -> InitiateResult:
+        # Fail FAST if the rail has clearly stopped answering, so a slow MTN can't
+        # hold every gunicorn thread for the full 20s timeout and starve the pool.
+        # Nothing is sent here, so create_charge treats RailUnavailableError as a
+        # clean, retryable rejection (marks the txn FAILED) — never a phantom
+        # AUTHORIZED for a call MTN never received.
+        if not mtn_collection_breaker.allow():
+            raise RailUnavailableError(
+                "MTN collections rail temporarily unavailable (circuit open) — retry shortly")
         reference_id = str(uuid.uuid4())
-        token = _get_token(
-            subscription_key=self.subscription_key,
-            api_user=self.api_user,
-            api_key=self.api_key,
-            base_url=self.base_url,
-        )
+        try:
+            token = _get_token(
+                subscription_key=self.subscription_key,
+                api_user=self.api_user,
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            # Token endpoint unreachable — nothing charged; fast-fail cleanly.
+            mtn_collection_breaker.record_failure()
+            raise RailUnavailableError(f"MTN token endpoint unreachable: {exc}") from exc
 
         # MSISDN must carry the country code in production (a raw "0772..."
         # fails with PAYER_NOT_FOUND) and the notes reject special characters
@@ -161,14 +185,22 @@ class RealMTNMoMoAdapter(RailAdapter):
         db.session.commit()
 
         try:
-            resp = requests.post(
+            resp = _session.post(
                 f"{self.base_url}/collection/v1_0/requesttopay",
                 headers=self._headers(token, reference_id),
                 json=body,
                 timeout=20,
             )
         except requests.RequestException as exc:
+            # The request MAY have reached MTN (ambiguous) — park AUTHORIZED and
+            # let reconciliation resolve it. Only a timeout/connection error is a
+            # breaker signal (the rail is unresponsive); a mid-flight error still
+            # counts as "may have landed".
+            if isinstance(exc, (requests.Timeout, requests.ConnectionError)):
+                mtn_collection_breaker.record_failure()
             raise AmbiguousRailError(reference_id, str(exc)) from exc
+        # The rail ANSWERED (even a rejection) — it is up. Reset the breaker.
+        mtn_collection_breaker.record_success()
 
         db.session.add(
             RailEvent(

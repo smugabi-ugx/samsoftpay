@@ -17,6 +17,23 @@
 </div>
 
 {% else %}
+{# Re-verification banner: the merchant WAS approved but can't currently move
+   live money — an ID on file has expired, or review flagged the account. Shown
+   above the normal status banner because it's the action that matters now. #}
+{% if current_user.kyc_status == 'verified' and not current_user.kyc_is_current() %}
+<div class="alert alert-warning" style="margin-bottom:2rem;">
+  <i data-feather="alert-triangle" class="alert-icon"></i>
+  <div>
+    <strong>Re-verification required.</strong>
+    {% if current_user.reverify_required %}
+      {{ current_user.reverify_reason or 'Our compliance team needs to re-check your details.' }}
+    {% else %}
+      A government ID on your account has expired. Update it to keep moving live money.
+    {% endif %}
+    Update the steps below and submit again — your existing details are kept.
+  </div>
+</div>
+{% endif %}
 <!-- Status banner -->
 {% if current_user.kyc_status == 'rejected' %}
 {# A rejected application is sent back to 'draft' so the merchant can FIX and

@@ -103,7 +103,7 @@
      Hidden automatically once MTN production go-live flips MOMO_TARGET_ENV. -->
 {% if sandbox_active %}
 <div class="alert" style="margin-bottom:1.5rem;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
-  <i data-feather="beaker" style="color:#6366f1;flex-shrink:0;"></i>
+  <i data-feather="beaker" style="color:#4d51b8;flex-shrink:0;"></i>
   <div style="flex:1;min-width:180px;">
     <strong>Sandbox test funds.</strong>
     <span style="color:#64748b;font-size:.875rem;">Instantly add TEST money to your sandbox balance so you can try payouts and refunds. This is <em>not</em> real money and can never be withdrawn.</span>
@@ -262,6 +262,37 @@
 
 <!-- ══ TAB: Withdraw ══ -->
 <div class="tab-panel" id="tab-withdraw">
+
+  <!-- Send from wallet (on-us transfer) -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div class="card-header">
+      <h3 class="card-title"><i data-feather="send"></i> Send from wallet</h3>
+    </div>
+    <p class="text-muted" style="font-size:.85rem;margin:0 0 1rem;">
+      Instantly pay another Samsoftpay account from your available balance — on us, no fee.
+      Enter their <strong>@handle</strong> or email.
+    </p>
+    <form method="POST" action="{{ url_for('wallet.wallet_send') }}"
+          onsubmit="var b=this.querySelector('button[type=submit]'); if(b) b.disabled=true;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Recipient (@handle or email)</label>
+          <input class="form-input" type="text" name="payee" required placeholder="@shopname or name@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (UGX)</label>
+          <input class="form-input" type="number" name="amount" min="1" required placeholder="10000">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reference (optional)</label>
+        <input class="form-input" type="text" name="reference" placeholder="What's this for?">
+      </div>
+      <button type="submit" class="btn btn-primary"><i data-feather="send"></i> Send instantly</button>
+    </form>
+  </div>
+
   <div class="grid-2">
 
     <!-- Settlement Accounts -->
@@ -280,7 +311,7 @@
       {% if accounts %}
       <div style="display:flex;flex-direction:column;gap:.625rem;margin-bottom:1.25rem;">
         {% for a in accounts %}
-        <div style="display:flex;align-items:center;gap:.875rem;padding:.875rem;border:1px solid var(--gray-200);border-radius:12px;{% if a.is_primary %}border-color:rgba(79,70,229,.3);background:rgba(79,70,229,.03);{% endif %}">
+        <div style="display:flex;align-items:center;gap:.875rem;padding:.875rem;border:1px solid var(--gray-200);border-radius:12px;{% if a.is_primary %}border-color:rgba(46, 49, 146,.3);background:rgba(46, 49, 146,.03);{% endif %}">
           <div style="width:40px;height:40px;border-radius:10px;background:{% if 'mtn' in a.account_type %}#fff7ed{% elif 'airtel' in a.account_type %}#fff1f2{% else %}#f0fdf4{% endif %};display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
             {% if 'mtn' in a.account_type %}📱{% elif 'airtel' in a.account_type %}📲{% else %}🏦{% endif %}
           </div>

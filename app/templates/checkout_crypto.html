@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--primary:#4f46e5;--success:#059669;--warning:#f59e0b;}
+    :root{--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--primary:#2e3192;--success:#059669;--warning:#f59e0b;}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 
     .topbar{background:white;border-bottom:1px solid var(--line);padding:.875rem 1rem;display:flex;align-items:center;gap:.75rem;position:sticky;top:0;z-index:10}
@@ -133,7 +133,7 @@
     <div class="pay-footer">
       {# Brand gradient (matches checkout.html's pay button), and a loading
          state — this submit makes a synchronous call to ChangeNow. #}
-      <button type="submit" id="gen-btn" style="width:100%;height:52px;background:#4f46e5;color:white;border:none;border-radius:12px;font-size:1rem;font-weight:700;font-family:inherit;cursor:pointer;">
+      <button type="submit" id="gen-btn" style="width:100%;height:52px;background:#2e3192;color:white;border:none;border-radius:12px;font-size:1rem;font-weight:700;font-family:inherit;cursor:pointer;">
         Generate Deposit Address
       </button>
     </div>

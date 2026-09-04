@@ -47,6 +47,18 @@ def check_money_stuck() -> dict:
 
     problems = []
 
+    # 0. Un-wedge idempotency reservations stranded IN_FLIGHT by a crashed request
+    #    (the holder died between reserve() and store()). Without this they 409
+    #    'still in flight' until the 30-day prune; reap_stale_inflight resolves them
+    #    to a terminal 'verify/retry-with-new-key' response (never re-executes, so
+    #    zero double-spend risk). Best-effort — never break the money-stuck scan.
+    try:
+        from ..services import idempotency
+        idempotency.reap_stale_inflight()
+    except Exception:
+        from ..extensions import db as _db
+        _db.session.rollback()
+
     # 1. Stranded payouts: PENDING with no rail_reference — money earmarked into
     #    SUSPENSE for a payout that never reached a rail. `flask reverse-payout`.
     stranded = (Payout.query
@@ -106,6 +118,24 @@ def check_money_stuck() -> dict:
                      .all())
     held = sum(-a.cached_balance for a in live_suspense if a.cached_balance)
 
+    # 4. Webhook deliveries that EXHAUSTED all 8 attempts are a permanent
+    #    dead-letter: a platform that finalizes state on the webhook (e.g. KarlPOS)
+    #    silently diverges from us, and the retry sweep (attempts < 8) never
+    #    re-drives them. Nothing else surfaces this — alert so a human resends or
+    #    fixes the endpoint before the ledgers drift unnoticed.
+    from ..models import WebhookDelivery
+    dead = (WebhookDelivery.query
+            .filter(WebhookDelivery.status == "failed",
+                    WebhookDelivery.attempts >= 8,
+                    WebhookDelivery.created_at >= utcnow() - timedelta(days=2))
+            .all())
+    if dead:
+        m_ids = {d.merchant_id for d in dead}
+        problems.append(
+            f"{len(dead)} webhook deliver(y/ies) permanently FAILED (8/8 attempts) in "
+            f"the last 48h across {len(m_ids)} merchant(s) — their charge/payout/vending "
+            f"outcomes never arrived. Check the endpoint(s) and resend.")
+
     if problems:
         send_alert(
             "Money stuck",
@@ -133,6 +163,21 @@ def payout_anomaly_scan() -> dict:
         print(f"payout-anomaly: {len(findings)} finding(s) alerted")
     else:
         print("payout-anomaly: clear")
+    return {"ok": not findings, "findings": findings}
+
+
+@celery.task(name="app.tasks.monitoring.charge_anomaly_scan")
+def charge_anomaly_scan() -> dict:
+    """Every 10 min: charge-side fraud/abuse detection — failed-charge storms
+    (leaked-key probing / card testing), velocity spikes, large single charges.
+    The payout/refund scans watch money OUT; this watches money IN. Persists to
+    the admin anomaly feed and pages, deduped."""
+    from ..services.anomaly import scan_charge_anomalies
+    findings = scan_charge_anomalies()
+    if findings:
+        print(f"charge-anomaly: {len(findings)} finding(s) recorded/alerted")
+    else:
+        print("charge-anomaly: clear")
     return {"ok": not findings, "findings": findings}
 
 

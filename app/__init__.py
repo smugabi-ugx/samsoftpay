@@ -110,9 +110,16 @@ def create_app(config: dict | None = None) -> Flask:
     # Pool tuning only applies to server databases. SQLite uses a different pool
     # implementation that does not accept pool_size/max_overflow.
     if _db_uri.startswith("postgresql"):
+        # Pool sizing is PER PROCESS. The real ceiling is:
+        #   (web workers + worker concurrency) x (pool_size + max_overflow)
+        #   MUST stay under Postgres max_connections (free tier ~90-100).
+        # The old 20+20 default meant ~4 processes x 40 = up to 160 connections —
+        # over the free-tier cap, so a burst hit 'too many connections' / 500s.
+        # Conservative defaults fit the free tier; raise DB_POOL_SIZE via env once
+        # on a paid plan / behind PgBouncer.
         _engine_options = {
-            "pool_size": int(os.environ.get("DB_POOL_SIZE", "20")),
-            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+            "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
+            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
             "pool_recycle": 1800,    # recycle connections every 30 min (avoid stale)
             "pool_pre_ping": True,   # check a connection is alive before using it
             "pool_timeout": 30,

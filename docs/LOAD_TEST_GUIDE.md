@@ -1,0 +1,60 @@
+# Load-test gate — the singleton-ledger sharding decision
+
+**Status: run this WHEN LIVE (on paid Postgres), before deciding on sharding.**
+
+The money audit flagged the platform-wide singleton ledger rows (`rail_clearing`,
+`psp_revenue`, keyed `merchant_id=NULL`) as a *possible* write hot-partition:
+every successful charge posts to them, and concurrent completions serialize on
+those two row locks. The audit rated it **plausible, not yet biting** at the
+current worker concurrency of 2 — so sharding the money core now would be
+complexity without evidence. This harness is the gate that turns it into a
+decision.
+
+## What it does
+`scripts/loadtest_ledger.py` has two modes (`--test ledger|races|all`, default `all`):
+
+- **`ledger`** — drives many **concurrent charge completions** through the real path
+  (`orchestrator.complete_transaction` → `ledger.post`) and reports throughput +
+  p50/p95/p99 latency as worker concurrency rises (the sharding gate), then asserts
+  the ledger stayed **zero-sum and `cached_balance == journal-recompute`**.
+- **`races`** — fires many parallel workers at the same target and asserts
+  **exactly-once** holds: (1) identical `POST /v1/charges` with one Idempotency-Key →
+  1 charge; (2) many `POST /pay/<id>/submit` on one single-use link → 1 charge (the
+  `checkout_claimed_at` claim); (3) concurrent vending `pending→dispensing` claims →
+  1 winner. A `FAIL` here means a double-charge/dispense is possible under real load.
+
+On Postgres these are true parallel races; on SQLite they serialize (the guards still
+hold, but it's a self-test, not a concurrency verdict).
+
+## When / how to run it
+Run it once you're on **paid Postgres** (the read is only meaningful there — SQLite
+serializes every writer and can't show row-lock contention). Point it at a
+**throwaway** database (it inserts test rows tagged `merchant_reference=load-<id>`):
+
+```bash
+DATABASE_URL="postgresql://user:pass@host/loadtest_db" \
+  python scripts/loadtest_ledger.py --charges 1500 --sweep 1,2,4,8,16 --pool 24
+```
+
+Target ~1,000 completions/min sustained (raise `--charges`/`--pool` and worker
+concurrency to match production plans).
+
+## How to read the result
+The harness prints a scaling line and a verdict:
+
+- **Throughput scales ~linearly with workers** → the singleton rows are **not** the
+  bottleneck. **Do not shard** — keep the money core simple.
+- **Throughput goes flat / sub-linear and latency (p95/p99) climbs** with more
+  workers → **hot-partition contention** on the singleton rows. **Sharding is
+  justified** — shard `rail_clearing`/`psp_revenue` into per-bucket sub-accounts
+  that reconcile, or move `cached_balance` maintenance off the hot path (the
+  journal is already the source of truth).
+
+If the invariant check ever reports a non-zero mismatch or journal sum, **stop** —
+that's a concurrency correctness bug in the ledger, which outranks any scaling
+question.
+
+## Safety
+Sandbox only: mock rail, `is_test=True`, no real MTN, no real money. It refuses a
+Postgres URL that doesn't look like a throwaway/test DB. Drop the DB (or delete by
+the `load-<id>` tag) afterward.

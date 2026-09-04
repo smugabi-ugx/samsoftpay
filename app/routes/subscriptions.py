@@ -239,12 +239,21 @@ def subscribe_submit(handle: str, plan_public_id: str):
         return render_template("subscribe.html", merchant=merchant, plan=plan,
                                error="Phone number is required.")
 
-    # Dedupe: a double-submit (or resubmitted form) created a SECOND active
+    # Dedupe: a double-submit (or resubmitted form) created a SECOND live
     # subscription for the same phone+plan, each billing independently every
     # cycle — the customer was charged twice forever.
+    #
+    # Match ANY still-billing status, not just 'active'. A first charge that the
+    # customer declines flips the subscription to 'past_due' (dunning), which
+    # keeps retrying via the billing beat — exactly as list_plans counts live
+    # subscribers (active + past_due). A dedupe of 'active' only missed the
+    # past_due case: a customer who re-submitted after a declined first charge
+    # got a SECOND live subscription and was then billed twice every cycle.
     from ..models import Subscription
-    existing = Subscription.query.filter_by(
-        plan_id=plan.id, customer_phone=phone, status="active"
+    existing = Subscription.query.filter(
+        Subscription.plan_id == plan.id,
+        Subscription.customer_phone == phone,
+        Subscription.status.in_(("active", "past_due")),
     ).first()
     if existing:
         return render_template("subscribe.html", merchant=merchant, plan=plan,

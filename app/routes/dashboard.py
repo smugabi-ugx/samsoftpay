@@ -1551,6 +1551,60 @@ def resolve_recon_exception(exc_id: int):
     return redirect(url_for("dashboard.reconciliation"))
 
 
+# ── Fraud / abuse anomaly feed ──────────────────────────────────────────────
+
+@bp.get("/admin/anomalies")
+@login_required
+@admin_required
+def anomalies():
+    """Reviewable feed of detected fraud/abuse anomalies (charge storms,
+    velocity, large charges, payout drain, refund outliers). The scans also
+    page via alerts; this is the in-app record + the bank's monitoring trail."""
+    from ..models import AnomalyEvent
+    status = request.args.get("status", "open")
+    q = AnomalyEvent.query
+    if status in ("open", "resolved", "dismissed"):
+        q = q.filter_by(status=status)
+    pag = (q.order_by(AnomalyEvent.severity, AnomalyEvent.created_at.desc())
+           .paginate(page=page_arg("page"), per_page=50, error_out=False))
+    open_count = AnomalyEvent.query.filter_by(status="open").count()
+    return render_template("anomalies.html", anomalies=pag.items, pag=pag,
+                           status=status, open_count=open_count)
+
+
+@bp.post("/admin/anomalies/scan")
+@login_required
+@admin_required
+def run_anomaly_scan():
+    """Run the charge-side anomaly scan on demand (payout/refund scans run on
+    their beats)."""
+    from flask import flash
+    from ..services.anomaly import scan_charge_anomalies
+    findings = scan_charge_anomalies()
+    flash(f"Charge anomaly scan: {len(findings)} finding(s).",
+          "error" if findings else "success")
+    return redirect(url_for("dashboard.anomalies"))
+
+
+@bp.post("/admin/anomalies/<int:anom_id>/<string:action>")
+@login_required
+@admin_required
+def update_anomaly(anom_id: int, action: str):
+    from datetime import datetime, timezone
+    from flask import flash
+    from flask_login import current_user
+    from ..models import AnomalyEvent
+    if action not in ("resolve", "dismiss"):
+        abort(404)
+    a = db.session.get(AnomalyEvent, anom_id) or abort(404)
+    a.status = "resolved" if action == "resolve" else "dismissed"
+    a.resolved_at = datetime.now(timezone.utc)
+    a.resolved_by = current_user.email
+    db.session.commit()
+    flash(f"Anomaly {a.kind} marked {a.status}.", "success")
+    return redirect(url_for("dashboard.anomalies"))
+
+
 @bp.post("/admin/sweep-pending")
 @login_required
 @admin_required

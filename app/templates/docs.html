@@ -44,7 +44,7 @@
   .callout.warning { border-color: var(--warning); background: rgba(245,158,11,0.05); }
   .callout.success { border-color: var(--success); background: rgba(16,185,129,0.05); }
 
-  .live-key-note { background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.9375rem; display: flex; align-items: center; gap: 0.75rem; }
+  .live-key-note { background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(106, 99, 217,0.08) 100%); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 2rem; font-size: 0.9375rem; display: flex; align-items: center; gap: 0.75rem; }
 
   /* min-width:0 lets the content column shrink instead of a wide code block/
      table forcing the whole grid wider than the phone (the "docs cut off in
@@ -124,7 +124,8 @@
       <a href="#testing" class="docs-nav-link">Testing</a>
       <a href="#balance" class="docs-nav-link">Balance</a>
       <a href="#payouts" class="docs-nav-link">Payouts</a>
-      <a href="#payment-links" class="docs-nav-link">Payment Links</a>
+      <a href="#payment-links" class="docs-nav-link">Accept a Payment</a>
+      <a href="#gift-cards" class="docs-nav-link">Gift Cards &amp; Vouchers</a>
       <a href="#refunds" class="docs-nav-link">Refunds</a>
       <a href="#listing" class="docs-nav-link">Listing &amp; Search</a>
       <a href="#subaccounts" class="docs-nav-link">Subaccounts &amp; Splits</a>
@@ -672,17 +673,34 @@ print(resp.json())
 
     <!-- Payment Links -->
     <div class="docs-section" id="payment-links">
-      <h2><i data-feather="link" style="width:22px;height:22px;color:var(--primary);"></i> Payment Links</h2>
-      <p>Generate a shareable URL your customers open to pay. No integration required on their end. Perfect for WhatsApp, SMS, and email.</p>
+      <h2><i data-feather="link" style="width:22px;height:22px;color:var(--primary);"></i> Accept a Payment (Hosted Checkout)</h2>
+      <p><strong>The simplest way to take money — and the one most stores want.</strong> You create a
+      payment link, send the customer to the returned <code>url</code> (or show its QR on a screen). They
+      pick their method and pay on <em>our</em> secure page — you never handle a card number or a MoMo PIN,
+      so you carry no PCI scope. This is the exact flow the <a href="#integration-modes">WooCommerce plugin,
+      the Shopify app, and TK's vending machines</a> all use.</p>
+
+      <div class="callout">One call creates the checkout; the customer pays on our hosted page; a
+      signed webhook (or a status fetch) confirms it. No token exchange, no per-transaction setup.</div>
+
+      <h3>The flow (three steps)</h3>
+<pre><code>1. POST /v1/payment-links              → { id, url, qr_png_url }
+2. Send the customer to `url`           (redirect their browser, or show the QR)
+     → they pick MTN / Airtel / card / crypto and pay on our page
+3. Confirm the payment:  charge.succeeded webhook   OR   GET /v1/charges/&lt;id&gt;
+     → then fulfil the order / dispense the product</code></pre>
 
       <div class="endpoint-badge"><span class="method post">POST</span> /v1/payment-links</div>
       <table class="param-table">
         <thead><tr><th>Parameter</th><th>Type</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in UGX.</td></tr>
+          <tr><td><code>amount</code> <span class="required">required</span></td><td>integer</td><td>Amount in the smallest unit (UGX has none, so whole shillings).</td></tr>
+          <tr><td><code>currency</code> <span class="optional">optional</span></td><td>string</td><td>Default <code>UGX</code>.</td></tr>
           <tr><td><code>description</code> <span class="optional">optional</span></td><td>string</td><td>Shown to the customer on the payment page.</td></tr>
-          <tr><td><code>success_url</code> <span class="optional">optional</span></td><td>string</td><td>Redirect URL after successful payment.</td></tr>
-          <tr><td><code>allow_multiple_uses</code> <span class="optional">optional</span></td><td>boolean</td><td>If <code>true</code>, the link can be paid more than once. Default: <code>false</code>.</td></tr>
+          <tr><td><code>reference</code> <span class="optional">optional</span></td><td>string</td><td>Your order id. Echoed on the charge and every webhook — match on it to reconcile.</td></tr>
+          <tr><td><code>success_url</code> <span class="optional">optional</span></td><td>string</td><td>Where the customer returns after paying.</td></tr>
+          <tr><td><code>cancel_url</code> <span class="optional">optional</span></td><td>string</td><td>Where they return if they cancel.</td></tr>
+          <tr><td><code>allow_multiple_uses</code> <span class="optional">optional</span></td><td>boolean</td><td>If <code>true</code>, the link can be paid more than once (a reusable "donate" page). Default <code>false</code> — a one-shot order link.</td></tr>
         </tbody>
       </table>
 
@@ -696,12 +714,77 @@ print(resp.json())
     },
     json={
         "amount": 25000,
+        "reference": "order-1042",
         "description": "School Fees Payment",
         "success_url": "https://yourapp.com/thank-you",
-    }
+        "cancel_url":  "https://yourapp.com/cart",
+    },
 )
 data = resp.json()
-print(data["url"])  # Share this link with your customer</code></pre>
+# → send the browser here, or render the QR on a machine screen:
+print(data["url"])          # {{ request.host_url }}pay/lnk_…
+print(data["qr_png_url"])   # a ready PNG of that same URL (no auth)</code></pre>
+
+      <h3>Where the customer returns</h3>
+      <p><code>success_url</code> and <code>cancel_url</code> are <strong>your</strong> return pages. After
+      paying, the customer is offered a "Return to &lt;you&gt;" button to <code>success_url</code>; if you
+      set neither, they stay on our hosted status page. <strong>Never trust the return redirect as proof of
+      payment</strong> — always confirm server-side with the <code>charge.succeeded</code> webhook or
+      <code>GET /v1/charges/&lt;id&gt;</code> (a customer can close the tab before returning).</p>
+
+      <h3>The customer picks the channel — you don't</h3>
+      <p>You never send a channel when creating a link. Our page shows the methods that are live (MTN Mobile
+      Money today; Airtel Money and cards as they launch) and the customer chooses. Which method actually ran
+      comes back on the charge's <code>channel</code> field.</p>
+
+      <h3>Gift cards &amp; vouchers work on this page</h3>
+      <p>Because the customer pays on our hosted checkout, they can apply a gift-card / voucher code right
+      there (a "Have a voucher?" field). This works for payment links, WooCommerce and Shopify — anything that
+      lands on the hosted checkout. It does <strong>not</strong> apply to the raw <code>POST /v1/charges</code>
+      API. See <a href="#gift-cards">Gift Cards &amp; Vouchers</a>.</p>
+
+      <h3>Checking the status</h3>
+      <p>Poll <code>GET /v1/charges/&lt;id&gt;</code>, or wait for the webhook. The status field moves through:</p>
+      <table class="param-table">
+        <thead><tr><th>Status</th><th>Meaning</th><th>Fulfil?</th></tr></thead>
+        <tbody>
+          <tr><td><code>pending</code></td><td>Link created, not yet paid</td><td>No</td></tr>
+          <tr><td><code>authorized</code></td><td>Prompt sent, awaiting the customer's PIN</td><td>No</td></tr>
+          <tr><td><code>succeeded</code></td><td>Money received</td><td><strong>Yes</strong></td></tr>
+          <tr><td><code>failed</code></td><td>Declined / cancelled / timed out</td><td>No</td></tr>
+          <tr><td><code>refunded</code></td><td>Reversed after success</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Only release goods on <code>succeeded</code>.</strong> In the sandbox (<code>sk_test_</code>)
+      a charge auto-completes with no real PIN or money — see <a href="#simulate-or-real">Simulate or real?</a></p>
+
+      <div class="callout"><strong>A payment link is not your storefront.</strong> A <em>payment link</em>
+      (<code>{{ request.host_url }}pay/lnk_…</code>) is <strong>one</strong> checkout for one amount. Your
+      public <em>storefront / profile page</em> (<code>{{ request.host_url }}pay/@yourhandle</code>) is a
+      catalog that lists your items and links — a different thing. Send a link for one order; send the
+      storefront to browse.</div>
+    </div>
+
+    <!-- Gift Cards -->
+    <div class="docs-section" id="gift-cards">
+      <h2><i data-feather="gift" style="width:22px;height:22px;color:var(--primary);"></i> Gift Cards &amp; Vouchers</h2>
+      <p>Gift cards are a <strong>merchant-issued</strong> store-credit. They are created and managed in your
+      dashboard, and redeemed by the customer on the hosted checkout — there is deliberately no API endpoint
+      to redeem one (a gift card is your own liability, not something an integrator's server should be able to
+      spend).</p>
+      <h3>How it works</h3>
+      <ul style="color:var(--gray-600);line-height:1.8;">
+        <li><strong>Issue:</strong> Dashboard → <strong>Gift Cards</strong> → create a card with a balance and
+          currency. You get a code to hand to the customer.</li>
+        <li><strong>Redeem:</strong> on the hosted checkout (<code>/pay/&lt;id&gt;</code>), the customer enters
+          the code in the "Have a voucher?" field. It's validated, then applied to the amount; the customer
+          pays only the remainder (if any) by Mobile Money. A fully-covered order needs no rail payment at all.</li>
+        <li><strong>Where it works:</strong> anywhere the customer lands on our hosted checkout — payment
+          links, WooCommerce, Shopify, vending. It does <strong>not</strong> apply to the direct
+          <code>POST /v1/charges</code> API.</li>
+      </ul>
+      <p>Gift cards are real, live store credit (there is no sandbox gift-card system) — a sandbox
+      (<code>sk_test_</code>) checkout is refused a gift card by design.</p>
     </div>
 
     <!-- Vending machines -->
@@ -722,15 +805,21 @@ print(data["url"])  # Share this link with your customer</code></pre>
   "status": "refunded",
   "refund": { "id": "pout_...", "amount": 5000, "status": "authorized" }
 }</code></pre>
+      <p><strong>The 202 means the refund was <em>initiated</em>, not yet paid.</strong> Like any payout,
+      the customer's money-out lands on the rail moments later — treat <code>refund.status</code> as a
+      payout status and confirm it reaches <code>succeeded</code> (poll <code>GET /v1/payouts/&lt;id&gt;</code>
+      or watch the <code>payout.succeeded</code> / <code>payout.failed</code> webhook), not as final on the 202.</p>
       <p>Refunding twice returns <code>400 {"error": "already_refunded"}</code>. A charge that was
       created with a <code>split</code> cannot be refunded through this endpoint yet.
       You will receive <code>400 {"error": "split_charge_refunds_not_yet_supported"}</code>;
       contact support to reverse a split charge.</p>
-      <div class="callout"><strong>A refund draws from your <em>available</em> balance, not pending.</strong>
-      A charge that just succeeded sits in the settlement hold (pending) — refunding it immediately can
-      return <code>400 insufficient available balance</code> even though the customer clearly just paid.
-      This is correct: available (settled) funds back the disbursement. Refund once the charge has settled,
-      or keep enough available balance to cover same-day refunds.</div>
+      <div class="callout"><strong>A refund draws from your <em>available</em> balance, and needs
+      <code>amount + the payout fee</code>.</strong> A charge that just succeeded sits in the settlement
+      hold (pending), and its own net proceeds (<code>amount − charge fee</code>) are less than a refund
+      costs — so <strong>a charge cannot fund its own refund</strong> from its proceeds alone. Refunding
+      immediately can also return <code>400 insufficient available balance</code> even though the customer
+      clearly just paid; this is correct — settled funds back the disbursement. Keep working float to cover
+      same-day refunds.</div>
     </div>
 
     <!-- Listing -->

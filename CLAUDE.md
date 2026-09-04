@@ -474,6 +474,27 @@ real sandbox payments. **Deferred engineering items live in the memory file
 4. If worker/beat are manually configured (not blueprint-synced), set their start commands to
    `app.celery_worker` in the Render dashboard.
 
+## OBSERVABILITY setup (one-time; makes alerting actually deliver — guardrail 25)
+Until these are set, the money tasks still LOG loudly but nothing buzzes a human — no
+behaviour regression, just no delivery. Alerts fire from the WORKER, so set the channel vars
+on BOTH the web and worker services (web serves /ops/status; worker sends the alerts).
+1. **Pick at least one channel** (set on web + worker in Render → Environment):
+   - Slack: `SLACK_WEBHOOK_URL` = a Slack Incoming Webhook URL. Fastest; recommended.
+   - Email: `ALERT_EMAIL` (or it falls back to `ADMIN_EMAIL`) AND the `MAIL_*` vars
+     (`MAIL_HOST/PORT/USERNAME/PASSWORD/MAIL_FROM`). No `MAIL_HOST` = email channel is skipped.
+   - Sentry: set `SENTRY_DSN` (already wired via CeleryIntegration) to also get `capture_message`.
+   Optional: `HEARTBEAT_STALE_SECONDS` (default 300), `ALERTS_ENABLED=0` to mute everything.
+2. **Wire an external uptime monitor** (UptimeRobot/Render/Pingdom) to
+   `https://api.samsoftpay.com/ops/status` — it returns **503 when the Celery worker/beat
+   pipeline is dead** (heartbeat older than the threshold) even though the web app is fine.
+   This is the ONLY way a dead worker gets noticed — it can't alert on its own death.
+   (Do NOT monitor /healthz for this — that's the web dyno's own liveness and stays 200.)
+3. **Verify it's live:** `curl https://api.samsoftpay.com/ops/status` → within ~2 min of the
+   worker running it should read `{"status":"ok","worker":"up",...}`. `"unknown"` = no
+   heartbeat yet (cold start or no Redis); persistent `"stale"`/503 = worker or beat is down.
+4. **Smoke-test a channel** (optional): `flask reconcile-mtn` with a known open exception, or
+   temporarily lower `HEARTBEAT_STALE_SECONDS`, and confirm Slack/email actually receives it.
+
 ---
 
 ## OPEN / NEXT (not yet done)

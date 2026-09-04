@@ -135,6 +135,7 @@ def step2_add_director():
         nationality=request.form.get("nationality", "").strip(),
         id_type=request.form.get("id_type", "national_id"),
         id_number=request.form.get("id_number", "").strip(),
+        id_expiry=request.form.get("id_expiry", "").strip() or None,
         contact_phone=request.form.get("contact_phone", "").strip(),
         email=request.form.get("email", "").strip(),
         is_primary=bool(request.form.get("is_primary")),
@@ -360,15 +361,39 @@ def admin_review(app_id: int):
         abort(403)
     app = db.session.get(KYCApplication, app_id) or abort(404)
     action = request.form.get("action")
+    from ..models import Merchant
+    # ── Require re-verification (Stripe-standard step-up): flag a currently
+    # verified merchant — abuse, a limit breach, or a periodic re-KYC — so
+    # kyc_is_current() returns False and live money is gated until they
+    # resubmit and are re-approved. The KYC record is NOT discarded. ──
+    if action == "require_reverify":
+        m = db.session.get(Merchant, app.merchant_id)
+        if m:
+            m.reverify_required = True
+            m.reverify_reason = request.form.get("notes", "").strip() or "manual review"
+            # Reopen the application to draft so the merchant can fix (e.g.
+            # upload a renewed ID) and resubmit — mirrors the reject flow. The
+            # step guards only allow edits while status == 'draft'.
+            app.status = "draft"
+            app.reviewer_notes = m.reverify_reason
+            db.session.commit()
+            from ..services.emails import email_kyc_decision
+            email_kyc_decision(m, "reverify", m.reverify_reason)
+        return redirect(url_for("kyc.admin_detail", app_id=app_id))
     if action in ("approve", "reject"):
         app.reviewer_notes = request.form.get("notes", "").strip()
         app.reviewed_at = datetime.now(timezone.utc)
-        from ..models import Merchant
         m = db.session.get(Merchant, app.merchant_id)
         if action == "approve":
             app.status = "approved"
             if m:
                 m.kyc_status = "verified"
+                # Approval clears any prior re-verify flag and sets the expiry
+                # from the primary director's ID (earliest expiry wins). No
+                # parseable expiry → no expiry (kyc_expires_at stays NULL).
+                m.reverify_required = False
+                m.reverify_reason = None
+                m.kyc_expires_at = _earliest_id_expiry(app)
         else:
             # REJECT: send the application back to 'draft' so the merchant can
             # FIX and resubmit (the step guards allow 'draft'); the reviewer_notes
@@ -379,7 +404,32 @@ def admin_review(app_id: int):
             if m:
                 m.kyc_status = "rejected"
         db.session.commit()
+        if m:
+            from ..services.emails import email_kyc_decision
+            email_kyc_decision(m, "approved" if action == "approve" else "rejected",
+                               app.reviewer_notes or "")
     return redirect(url_for("kyc.admin_detail", app_id=app_id))
+
+
+def _earliest_id_expiry(app: KYCApplication):
+    """Earliest parseable director ID expiry on this application, as an aware
+    UTC datetime at end-of-day (an ID is valid THROUGH its printed date), or
+    None if no director has a parseable YYYY-MM-DD expiry. Drives
+    Merchant.kyc_expires_at at approval so an expired ID forces re-verification."""
+    from datetime import datetime, timezone
+    best = None
+    for d in app.directors:
+        raw = (d.id_expiry or "").strip()
+        if not raw:
+            continue
+        try:
+            dt = datetime.strptime(raw[:10], "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if best is None or dt < best:
+            best = dt
+    return best
 
 
 def _touch(app: KYCApplication) -> None:
