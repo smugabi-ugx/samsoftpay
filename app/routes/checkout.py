@@ -246,13 +246,53 @@ def checkout_submit(public_id: str):
         else:
             charge_amount = max(0, link.amount - discount)
 
+    # CLAIM the single-use link BEFORE any money moves — this MUST cover both the
+    # $0 (fully gift-card-covered) path below AND the rail path. It used to sit
+    # only in front of create_charge, so the $0 branch redeemed the gift card and
+    # booked a SUCCEEDED charge entirely OUTSIDE the claim: a concurrent double-
+    # submit on a fully-covered single-use link double-debited the card and
+    # produced two SUCCEEDED charges (redeem_gift_card's row lock serialises the
+    # two redemptions but does NOT stop the second one succeeding when the card
+    # still has balance). Atomic compare-and-set on checkout_claimed_at; a claim
+    # older than 5 min is reclaimable so a crashed submit never wedges the link.
+    # Multi-use links are exempt (meant to be paid repeatedly).
+    if not link.allow_multiple_uses:
+        from datetime import timedelta
+        from sqlalchemy import or_
+        _stale = utcnow() - timedelta(minutes=5)
+        _claimed = db.session.query(PaymentLink).filter(
+            PaymentLink.id == link.id,
+            PaymentLink.transaction_id.is_(None),
+            or_(PaymentLink.checkout_claimed_at.is_(None),
+                PaymentLink.checkout_claimed_at < _stale),
+        ).update({"checkout_claimed_at": utcnow()}, synchronize_session=False)
+        db.session.commit()
+        if not _claimed:
+            # Another submit is already mid-charge on this single-use link (or it
+            # is already paid) — do NOT redeem a gift card or fire a second
+            # prompt; show the status page.
+            return redirect(url_for("checkout.status_page", public_id=public_id))
+
+    def _release_claim():
+        # Give the claim back so a legitimate retry isn't blocked for 5 min. Only
+        # release while transaction_id is still NULL (no charge attached yet).
+        if not link.allow_multiple_uses:
+            db.session.query(PaymentLink).filter(
+                PaymentLink.id == link.id,
+                PaymentLink.transaction_id.is_(None),
+            ).update({"checkout_claimed_at": None}, synchronize_session=False)
+            db.session.commit()
+
     if charge_amount == 0:
         # Fully covered by gift card — no rail is ever involved, so there is
         # no "the charge might still fail" risk; safe to redeem for real now.
+        # The single-use claim above guarantees only ONE submit reaches here.
         from ..services.giftcards import redeem_gift_card
         ok, msg, _ = redeem_gift_card(voucher_code, discount, merchant_id=merchant.id)
         if not ok:
             session.pop(f"voucher_{public_id}", None)
+            _release_claim()   # redeem failed AFTER the dry_run passed (rare) —
+                               # nothing was debited; free the link for a retry.
             return render_template(
                 "checkout.html", link=link, merchant=merchant,
                 channels=_channel_options(include_crypto=True), voucher_error=msg,
@@ -307,29 +347,8 @@ def checkout_submit(public_id: str):
         link.public_id if is_vending_order(link) else (link.reference or link.public_id)
     )
 
-    # CLAIM the link before firing the rail prompt. link.transaction_id is only
-    # attached AFTER create_charge returns, so the single-use guard above cannot
-    # fire during the charge window; a double-tap / concurrent double-scan would
-    # otherwise book TWO real charges for one single-use link. Atomic
-    # compare-and-set on checkout_claimed_at; a claim older than 5 min is
-    # reclaimable so a crashed/abandoned submit never wedges the link. Multi-use
-    # links are exempt (meant to be paid repeatedly).
-    if not link.allow_multiple_uses:
-        from datetime import timedelta
-        from sqlalchemy import or_
-        _stale = utcnow() - timedelta(minutes=5)
-        _claimed = db.session.query(PaymentLink).filter(
-            PaymentLink.id == link.id,
-            PaymentLink.transaction_id.is_(None),
-            or_(PaymentLink.checkout_claimed_at.is_(None),
-                PaymentLink.checkout_claimed_at < _stale),
-        ).update({"checkout_claimed_at": utcnow()}, synchronize_session=False)
-        db.session.commit()
-        if not _claimed:
-            # Another submit is already mid-charge on this single-use link (or it
-            # is already paid) — do NOT fire a second prompt; show the status page.
-            return redirect(url_for("checkout.status_page", public_id=public_id))
-
+    # The single-use claim was already taken above (before the $0 branch) so it
+    # now protects this rail path too — no second claim here.
     try:
         txn = create_charge(
             merchant=merchant,
@@ -345,12 +364,7 @@ def checkout_submit(public_id: str):
         # redeemed — so there is nothing to roll back here. Release the checkout
         # claim so a legitimate retry (e.g. corrected phone) isn't blocked; no
         # charge is in flight because create_charge raised at/ before initiation.
-        if not link.allow_multiple_uses:
-            db.session.query(PaymentLink).filter(
-                PaymentLink.id == link.id,
-                PaymentLink.transaction_id.is_(None),
-            ).update({"checkout_claimed_at": None}, synchronize_session=False)
-            db.session.commit()
+        _release_claim()
         return render_template(
             "checkout.html", link=link, merchant=merchant,
             channels=_channel_options(include_crypto=True),
