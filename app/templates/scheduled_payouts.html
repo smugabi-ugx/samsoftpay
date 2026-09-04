@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Recurring payouts</h1>
+<p style="color:#555;max-width:640px;">
+  Set it once and forget it — Samsoftpay sends money to the numbers you list, on a
+  schedule. Salaries, allowances, daily home money. One number or a whole payroll;
+  same form. A cycle the balance can’t fully cover pauses itself — it never sends a
+  half-done payroll.
+</p>
+
+<div style="background:#fafaf7;padding:1rem 1.25rem;border-radius:4px;margin:1rem 0 1.5rem;display:inline-block;">
+  <div style="font-size:.78rem;color:#666;text-transform:uppercase;letter-spacing:.06em;">Available balance</div>
+  <div style="font-size:1.5rem;font-weight:600;">UGX {{ "{:,}".format(available) }}</div>
+</div>
+
+{% if error %}
+  <div style="color:#c1303a;margin-bottom:1rem;white-space:pre-line;padding:.75rem 1rem;background:#fdecea;border-left:3px solid #c1303a;border-radius:3px;">{{ error }}</div>
+{% endif %}
+
+<!-- Create -->
+<div style="border:1px solid #e6e4de;border-radius:6px;padding:1.25rem 1.5rem;max-width:640px;margin-bottom:2rem;">
+  <h3 style="margin-top:0;">New recurring payout</h3>
+  <form method="post" action="{{ url_for('dashboard.payroll_new', merchant_id=merchant.id) }}">
+    <div style="margin-bottom:1rem;">
+      <label style="display:block;font-weight:600;margin-bottom:.35rem;">Name <span style="color:#999;font-weight:400;">(optional)</span></label>
+      <input type="text" name="name" placeholder="e.g. Staff salaries" style="width:100%;padding:.55rem;border:1px solid #ccc;border-radius:3px;font-size:1rem;">
+    </div>
+
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+      <div style="flex:1;min-width:180px;">
+        <label style="display:block;font-weight:600;margin-bottom:.35rem;">Amount per recipient (UGX)</label>
+        <input type="text" name="amount" inputmode="numeric" placeholder="300000" required style="width:100%;padding:.55rem;border:1px solid #ccc;border-radius:3px;font-size:1rem;">
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <label style="display:block;font-weight:600;margin-bottom:.35rem;">Every</label>
+        <select name="interval" style="width:100%;padding:.55rem;border:1px solid #ccc;border-radius:3px;font-size:1rem;">
+          <option value="daily">Day</option>
+          <option value="weekly">Week</option>
+          <option value="monthly" selected>Month</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+      <div style="flex:1;min-width:180px;">
+        <label style="display:block;font-weight:600;margin-bottom:.35rem;">First run <span style="color:#999;font-weight:400;">(optional)</span></label>
+        <input type="date" name="start_date" style="width:100%;padding:.5rem;border:1px solid #ccc;border-radius:3px;font-size:1rem;">
+        <div style="font-size:.78rem;color:#888;margin-top:.25rem;">Leave blank to start now.</div>
+      </div>
+      <div style="flex:1;min-width:180px;">
+        <label style="display:block;font-weight:600;margin-bottom:.35rem;">Max per recipient <span style="color:#999;font-weight:400;">(optional cap)</span></label>
+        <input type="text" name="max_per_recipient" inputmode="numeric" placeholder="no cap" style="width:100%;padding:.55rem;border:1px solid #ccc;border-radius:3px;font-size:1rem;">
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.25rem;">
+      <label style="display:block;font-weight:600;margin-bottom:.35rem;">Recipients</label>
+      <textarea name="recipients" rows="4" required placeholder="One per line: phone or phone,name&#10;256780000001,Jane Doe&#10;256770111222,John Smith&#10;256750555666" style="width:100%;padding:.55rem;border:1px solid #ccc;border-radius:3px;font-size:.95rem;font-family:monospace;"></textarea>
+      <div style="font-size:.78rem;color:#888;margin-top:.25rem;">Everyone on the list gets the same amount each cycle. One line = a single recurring send.</div>
+    </div>
+
+    <button type="submit" style="padding:.7rem 1.4rem;background:#2e3192;color:#fff;border:none;border-radius:3px;font-size:1rem;cursor:pointer;">
+      Create schedule
+    </button>
+    <a href="{{ url_for('dashboard.merchant_detail', merchant_id=merchant.id) }}" style="margin-left:1rem;color:#666;">Back</a>
+  </form>
+</div>
+
+<!-- Existing -->
+<h3>Your schedules</h3>
+{% if not rows %}
+  <p style="color:#888;">No recurring payouts yet.</p>
+{% else %}
+<div style="overflow-x:auto;">
+<table style="border-collapse:collapse;width:100%;font-size:.9rem;">
+  <thead>
+    <tr style="text-align:left;border-bottom:2px solid #e6e4de;">
+      <th style="padding:.5rem .6rem;">Name</th>
+      <th style="padding:.5rem .6rem;">Amount</th>
+      <th style="padding:.5rem .6rem;">Every</th>
+      <th style="padding:.5rem .6rem;">Recipients</th>
+      <th style="padding:.5rem .6rem;">Next run</th>
+      <th style="padding:.5rem .6rem;">Status</th>
+      <th style="padding:.5rem .6rem;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    {% set sp = row.sp %}
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:.5rem .6rem;">{{ sp.name or '—' }}<br><span style="color:#aaa;font-size:.78rem;">{{ sp.public_id }}</span></td>
+      <td style="padding:.5rem .6rem;">UGX {{ "{:,}".format(sp.amount) }}</td>
+      <td style="padding:.5rem .6rem;">{{ sp.interval }}</td>
+      <td style="padding:.5rem .6rem;">{{ row.count }}{% if row.recipients %} <span style="color:#aaa;font-size:.78rem;">({{ row.recipients[0].phone }}{% if row.count > 1 %} +{{ row.count - 1 }}{% endif %})</span>{% endif %}</td>
+      <td style="padding:.5rem .6rem;">{{ sp.next_run_at.strftime('%d %b %Y') if sp.next_run_at else '—' }}</td>
+      <td style="padding:.5rem .6rem;">
+        {% if sp.status == 'active' %}<span style="background:#e4f6e9;color:#1a7f3c;padding:.15rem .5rem;border-radius:10px;font-size:.78rem;">active</span>
+        {% elif sp.status == 'paused' %}<span style="background:#fdf3d8;color:#96700a;padding:.15rem .5rem;border-radius:10px;font-size:.78rem;">paused</span>
+        {% else %}<span style="background:#eee;color:#777;padding:.15rem .5rem;border-radius:10px;font-size:.78rem;">cancelled</span>{% endif %}
+        {% if sp.failure_reason and sp.status == 'paused' %}<br><span style="color:#c1303a;font-size:.72rem;">{{ sp.failure_reason }}</span>{% endif %}
+      </td>
+      <td style="padding:.5rem .6rem;white-space:nowrap;">
+        {% if sp.status == 'active' %}
+          <form method="post" action="{{ url_for('dashboard.payroll_action', merchant_id=merchant.id, public_id=sp.public_id, action='pause') }}" style="display:inline;">
+            <button type="submit" style="border:1px solid #ccc;background:#fff;border-radius:3px;padding:.3rem .6rem;cursor:pointer;font-size:.8rem;">Pause</button>
+          </form>
+        {% elif sp.status == 'paused' %}
+          <form method="post" action="{{ url_for('dashboard.payroll_action', merchant_id=merchant.id, public_id=sp.public_id, action='resume') }}" style="display:inline;">
+            <button type="submit" style="border:1px solid #1a7f3c;background:#fff;color:#1a7f3c;border-radius:3px;padding:.3rem .6rem;cursor:pointer;font-size:.8rem;">Resume</button>
+          </form>
+        {% endif %}
+        {% if sp.status != 'cancelled' %}
+          <form method="post" action="{{ url_for('dashboard.payroll_action', merchant_id=merchant.id, public_id=sp.public_id, action='cancel') }}" style="display:inline;" onsubmit="return confirm('Cancel this recurring payout? This cannot be undone.');">
+            <button type="submit" style="border:1px solid #c1303a;background:#fff;color:#c1303a;border-radius:3px;padding:.3rem .6rem;cursor:pointer;font-size:.8rem;">Cancel</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

@@ -204,6 +204,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
         Bulk CSV
       </a>
+      <a href="{{ url_for('dashboard.payroll_list', merchant_id=merchant.id) }}" class="qa-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Recurring
+      </a>
       <a href="{{ url_for('dashboard.vending_settings', merchant_id=merchant.id) }}" class="qa-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="4" y1="8" x2="14" y2="8"/><line x1="4" y1="14" x2="14" y2="14"/><line x1="17" y1="18" x2="17" y2="18"/></svg>
         Vending
