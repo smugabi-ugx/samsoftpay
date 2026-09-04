@@ -1183,6 +1183,13 @@ def create_scheduled_payout_route():
         if max_per_recipient is not None:
             max_per_recipient = int(max_per_recipient)
         name = body.get("name")
+        # Optional first-run date (ISO 8601). A future value defers the first
+        # run; omitted = immediately due. No new column — it becomes next_run_at.
+        start_at = None
+        start_at_raw = body.get("start_at")
+        if start_at_raw:
+            from datetime import datetime as _dt
+            start_at = _dt.fromisoformat(str(start_at_raw).replace("Z", "+00:00"))
     except (KeyError, ValueError, TypeError) as exc:
         idempotency.release(merchant.id, idem_key)
         abort(400, description=f"invalid request: {exc}")
@@ -1198,6 +1205,7 @@ def create_scheduled_payout_route():
             name=name,
             max_per_recipient=max_per_recipient,
             is_test=(g.api_mode == "test"),
+            start_at=start_at,
         )
     except ScheduledPayoutError as exc:
         body_out = {"error": str(exc)}
@@ -1243,6 +1251,54 @@ def list_scheduled_payouts():
         q = q.filter(ScheduledPayout.created_at <= before)
     rows = q.order_by(ScheduledPayout.id.desc()).limit(limit).all()
     return jsonify(data=[_scheduled_payout_public(sp) for sp in rows])
+
+
+def _scheduled_payout_transition(public_id: str, action: str):
+    """Pause / resume / cancel a schedule. This is a money-OUT control surface —
+    resume makes the schedule immediately due, so like create it is full-scope
+    only (a collections key must never steer autopilot payouts, guardrail 24).
+    The transitions are idempotent: pausing a paused schedule is a no-op."""
+    from ..models import ScheduledPayout
+    from ..services import scheduled_payouts_service as sps
+    _check_timestamp()
+    merchant = _auth()
+    _require_full_scope()
+    sp = ScheduledPayout.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id,
+        is_test=(g.api_mode == "test"),
+    ).one_or_none()
+    if sp is None:
+        abort(404)
+    if action == "pause":
+        sps.pause_scheduled_payout(sp.id)
+    elif action == "resume":
+        # Cancel is terminal — never silently revive a cancelled schedule.
+        if sp.status == "cancelled":
+            abort(409, description="a cancelled schedule cannot be resumed")
+        sps.resume_scheduled_payout(sp.id)
+    else:  # cancel
+        sps.cancel_scheduled_payout(sp.id)
+    log_event(f"scheduled_payout.{action}", merchant_id=merchant.id,
+              resource_id=public_id)
+    sp = ScheduledPayout.query.filter_by(
+        public_id=public_id, merchant_id=merchant.id,
+        is_test=(g.api_mode == "test")).one()
+    return jsonify(_scheduled_payout_public(sp))
+
+
+@bp.post("/scheduled-payouts/<public_id>/pause")
+def pause_scheduled_payout_route(public_id: str):
+    return _scheduled_payout_transition(public_id, "pause")
+
+
+@bp.post("/scheduled-payouts/<public_id>/resume")
+def resume_scheduled_payout_route(public_id: str):
+    return _scheduled_payout_transition(public_id, "resume")
+
+
+@bp.post("/scheduled-payouts/<public_id>/cancel")
+def cancel_scheduled_payout_route(public_id: str):
+    return _scheduled_payout_transition(public_id, "cancel")
 
 
 # ---------- reconciliation statements ----------

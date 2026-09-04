@@ -37,15 +37,32 @@ class ScheduledPayoutError(Exception):
     pass
 
 
+# Valid interval keys. daily/weekly advance by a fixed delta; monthly advances by
+# a real CALENDAR month (see _next_run) — not a fixed 30 days — so "pay on the
+# 1st" stays on the 1st every month instead of drifting earlier each cycle.
 _INTERVALS = {
-    "daily":   timedelta(days=1),
-    "weekly":  timedelta(weeks=1),
-    "monthly": timedelta(days=30),
+    "daily":  timedelta(days=1),
+    "weekly": timedelta(weeks=1),
+    "monthly": None,   # calendar-based, handled in _next_run
 }
 
 
+def _add_calendar_month(dt: datetime) -> datetime:
+    """One calendar month later, preserving the day-of-month and clamping to the
+    target month's length (e.g. Jan 31 -> Feb 28/29, Dec 15 -> Jan 15 next year)."""
+    import calendar
+    month = dt.month + 1
+    year = dt.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    day = min(dt.day, calendar.monthrange(year, month)[1])
+    return dt.replace(year=year, month=month, day=day)
+
+
 def _next_run(from_dt: datetime, interval: str) -> datetime:
-    return from_dt + _INTERVALS.get(interval, timedelta(days=30))
+    if interval == "monthly":
+        return _add_calendar_month(from_dt)
+    delta = _INTERVALS.get(interval)
+    return from_dt + (delta if delta is not None else timedelta(days=30))
 
 
 def create_scheduled_payout(
@@ -59,9 +76,15 @@ def create_scheduled_payout(
     name: str | None = None,
     max_per_recipient: int | None = None,
     is_test: bool = False,
+    start_at: datetime | None = None,
 ) -> ScheduledPayout:
     """Validate and persist a schedule. All validation runs BEFORE any write, so a
-    rejected config moves no money and writes no rows (guardrail 13)."""
+    rejected config moves no money and writes no rows (guardrail 13).
+
+    start_at (optional): when the FIRST run should happen. A future start_at makes
+    the schedule dormant until then (next_run_at = start_at); omitted or in the
+    past means immediately due, as before. There is no separate column — the first
+    run IS next_run_at, which the engine already keys on."""
     if interval not in _INTERVALS:
         raise ScheduledPayoutError(f"interval must be one of {list(_INTERVALS)}")
     if amount <= 0:
@@ -76,6 +99,12 @@ def create_scheduled_payout(
             f"amount {amount} exceeds the per-recipient cap of {max_per_recipient}")
 
     now = datetime.now(timezone.utc)
+    first_run = now   # immediately due; the next beat tick fires it
+    if start_at is not None:
+        if start_at.tzinfo is None:
+            start_at = start_at.replace(tzinfo=timezone.utc)
+        # A future start defers the first run; a past start is treated as "now".
+        first_run = start_at if start_at > now else now
     sp = ScheduledPayout(
         public_id=f"spo_{uuid.uuid4().hex[:16]}",
         merchant_id=merchant.id,
@@ -89,7 +118,7 @@ def create_scheduled_payout(
         max_per_recipient=max_per_recipient,
         status="active",
         is_test=is_test,
-        next_run_at=now,   # immediately due; the next beat tick fires it
+        next_run_at=first_run,
     )
     db.session.add(sp)
     db.session.commit()
