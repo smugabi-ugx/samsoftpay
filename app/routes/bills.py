@@ -283,6 +283,12 @@ def pay_bill_submit(handle: str, bill_public_id: str):
 # ── Bill lookup by account reference ─────────────────────────────────────────
 
 @bp.get("/pay/@<handle>/bills")
+# UNAUTHENTICATED lookup by a merchant-chosen account reference (student no.,
+# meter no., invoice id) that is often sequential/guessable. Without a throttle
+# this was an enumeration oracle: iterate references and harvest each matching
+# customer's name + amount owed. The rate limit makes bulk harvesting
+# impractical; the template also masks the name to first-name-only.
+@limiter.limit("15 per minute;150 per hour")
 def bill_lookup(handle: str):
     from ..models import Merchant
     merchant = Merchant.query.filter_by(handle=handle).one_or_none()

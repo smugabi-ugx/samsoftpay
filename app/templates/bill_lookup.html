@@ -79,7 +79,9 @@
       <div class="bill-card-info">
         <div class="bill-cat">{{ b.category.value.replace('_',' ').upper() }}</div>
         <div class="bill-name">{{ b.title }}</div>
-        {% if b.customer_name %}<div class="bill-ref">{{ b.customer_name }}</div>{% endif %}
+        {# Masked to first name + last initial (e.g. "Jane D.") — enough for a
+           payer to recognise their own bill, far less useful to a harvester. #}
+        {% if b.customer_name %}<div class="bill-ref">{{ b.customer_name.split()[0] }}{% if b.customer_name.split()|length > 1 %} {{ b.customer_name.split()[-1][0] }}.{% endif %}</div>{% endif %}
       </div>
       <div class="bill-amount">
         {% if b.is_variable %}
