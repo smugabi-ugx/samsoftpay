@@ -86,6 +86,10 @@ def profile_qr_png(handle: str):
 
 
 @bp.get("/pay/@<handle>/pay")
+# UNAUTHENTICATED and WRITES (commits a PaymentLink row) — without a throttle a
+# crawler/prefetch loop could insert unbounded junk links against any merchant.
+# Rate-limit it like the other public mutating checkout routes.
+@limiter.limit("20 per minute;200 per hour")
 def profile_pay(handle: str):
     """Create a one-shot payment link from the profile page custom-amount form."""
     import uuid as _uuid
