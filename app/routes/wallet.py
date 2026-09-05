@@ -838,6 +838,16 @@ def _settle_topup(merchant_id: int, txn, ref: str) -> None:
     """
     from ..services import ledger
 
+    # Lock the Transaction row FIRST so this shares serialization with the hourly
+    # settlement sweep, which locks the SAME row (FOR UPDATE SKIP LOCKED,
+    # settlement.py). Before this, the poll path locked only the TopUpRequest
+    # while the sweep locked the Transaction — DIFFERENT rows — so the settled_at
+    # check below was a TOCTOU: the sweep could settle between our read of
+    # settled_at and our post, double-crediting available with money no rail
+    # funded. Now the two paths serialize on the same row. (SQLite no-ops
+    # with_for_update, same as ledger.lock_account_for_update.)
+    db.session.refresh(txn, with_for_update=True)
+
     # SETTLE-ONCE GUARD (critical, armed by MTN go-live): this function is
     # called from the poll endpoint, but the hourly settlement sweep can settle
     # the SAME transaction first (a merchant who paid then closed the poll page
@@ -877,6 +887,32 @@ def _settle_topup(merchant_id: int, txn, ref: str) -> None:
     # pending->available amount AGAIN 24h later — every top-up double-credited.
     from ..models import utcnow as _utcnow
     txn.settled_at = _utcnow()
+
+    # RELEASE INVARIANT (matches settlement._settle_one_merchant / splits): after
+    # moving net pending->available, this merchant's pending must NOT have gone
+    # positive — that would mean a double release (money moved that pending never
+    # held). The row lock above already prevents the double post; this is the
+    # loud backstop every sibling release path carries. cached_balance updates
+    # via an atomic SQL increment, so flush+refresh to read the committed number.
+    db.session.flush()
+    db.session.refresh(pending)
+    if int(pending.cached_balance) > 0:
+        try:
+            from ..services.alerts import send_alert
+            send_alert(
+                "TOP-UP SETTLE INVARIANT VIOLATION — release aborted",
+                f"merchant={merchant_id} txn={txn.public_id} is_test={mode}: "
+                f"releasing {net_amount} drove merchant_pending positive "
+                f"({int(pending.cached_balance)}). Rolled back; investigate "
+                f"before this account settles again.",
+                severity="critical",
+                key=f"topup-settle-invariant-{merchant_id}-{currency}-{int(mode)}",
+            )
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"top-up settle invariant violated for merchant {merchant_id}: "
+            f"released {net_amount}, pending went positive")
 
 
 def _credit_wallet(merchant_id: int, amount: int, ref: str) -> None:
