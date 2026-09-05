@@ -417,28 +417,47 @@ def _queue_payout_webhook(payout) -> None:
 # ---------- Adapter selection ----------
 
 def _get_disbursement_adapter(channel: Channel):
-    if channel != Channel.MTN_MOMO:
-        raise PayoutError(f"no disbursement adapter for channel {channel}")
     sandbox = g.get("api_mode") == "test"
-    if not sandbox and current_app.config.get("MOMO_USE_REAL"):
-        from .rails_mtn_disbursement import RealMTNMoMoDisbursementAdapter
-        try:
-            return RealMTNMoMoDisbursementAdapter()
-        except Exception as exc:
-            # Missing/mis-set MOMO_DISBURSEMENT_* creds. Raise the TRANSIENT
-            # exception (not PayoutError) so the route's generic handler
-            # releases the idempotency key and returns a retryable 503 — a
-            # PayoutError here would be cached as a permanent 400 and block
-            # retries after the config is fixed. Zero writes (before earmark).
-            raise DisbursementUnavailable(
-                "disbursement temporarily unavailable — configuration error") from exc
-    return _MockDisbursementAdapter()
+    if channel == Channel.MTN_MOMO:
+        if not sandbox and current_app.config.get("MOMO_USE_REAL"):
+            from .rails_mtn_disbursement import RealMTNMoMoDisbursementAdapter
+            try:
+                return RealMTNMoMoDisbursementAdapter()
+            except Exception as exc:
+                # Missing/mis-set MOMO_DISBURSEMENT_* creds. Raise the TRANSIENT
+                # exception (not PayoutError) so the route's generic handler
+                # releases the idempotency key and returns a retryable 503 — a
+                # PayoutError here would be cached as a permanent 400 and block
+                # retries after the config is fixed. Zero writes (before earmark).
+                raise DisbursementUnavailable(
+                    "disbursement temporarily unavailable — configuration error") from exc
+        return _MockDisbursementAdapter(Channel.MTN_MOMO)
+    if channel == Channel.AIRTEL_MONEY:
+        # Mirror MTN's gating (scaffold): the REAL Airtel rail is used only when
+        # AIRTEL_USE_REAL is on with credentials. In a sandbox it uses the mock
+        # so integrators can rehearse Airtel payouts; in PRODUCTION with no real
+        # rail configured it is REJECTED with zero writes (guardrail 13) — exactly
+        # as before this scaffold. Do NOT enable AIRTEL_USE_REAL until the real
+        # adapter is certified against Airtel's sandbox.
+        if not sandbox and current_app.config.get("AIRTEL_USE_REAL") \
+                and current_app.config.get("AIRTEL_CLIENT_ID"):
+            from .rails_airtel_disbursement import RealAirtelDisbursementAdapter
+            try:
+                return RealAirtelDisbursementAdapter()
+            except Exception as exc:
+                raise DisbursementUnavailable(
+                    "airtel disbursement temporarily unavailable — configuration error") from exc
+        if sandbox:
+            return _MockDisbursementAdapter(Channel.AIRTEL_MONEY)
+        raise PayoutError(f"no disbursement adapter for channel {channel}")
+    raise PayoutError(f"no disbursement adapter for channel {channel}")
 
 
 class _MockDisbursementAdapter:
     """In-process mock for fast local testing."""
 
-    channel = Channel.MTN_MOMO
+    def __init__(self, channel: Channel = Channel.MTN_MOMO):
+        self.channel = channel
 
     def resolve_account_holder(self, phone: str) -> dict:
         """Deterministic sandbox Hakikisha: the not-found magic number resolves
@@ -456,7 +475,7 @@ class _MockDisbursementAdapter:
 
         db.session.add(
             RailEvent(
-                rail=Channel.MTN_MOMO,
+                rail=self.channel,
                 rail_reference=rail_ref,
                 event_type="payout_initiated",
                 amount=payout.amount,
