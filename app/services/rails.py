@@ -171,6 +171,16 @@ def get_adapter(channel: Channel) -> RailAdapter:
             return RealMTNMoMoAdapter()
         return MTNMoMoAdapter()
     if channel == Channel.AIRTEL_MONEY:
+        # Real Airtel rail is used ONLY when an operator has deliberately enabled
+        # it (AIRTEL_USE_REAL) AND provided credentials, and never for a sandbox
+        # key. Otherwise it stays the mock -> is_simulated() is True -> Airtel is
+        # refused in production exactly as before (guardrail 14). The scaffold
+        # therefore changes nothing in prod until real keys are added.
+        cfg = current_app.config
+        if (not sandbox and cfg.get("AIRTEL_USE_REAL")
+                and cfg.get("AIRTEL_CLIENT_ID") and cfg.get("AIRTEL_CLIENT_SECRET")):
+            from .rails_airtel_real import RealAirtelMoneyAdapter
+            return RealAirtelMoneyAdapter()
         return AirtelMoneyAdapter()
     if channel == Channel.CARD:
         return CardAdapter()

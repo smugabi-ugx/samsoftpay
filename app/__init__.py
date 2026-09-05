@@ -48,6 +48,25 @@ def _momo_use_real() -> bool:
     return False
 
 
+def _airtel_use_real() -> bool:
+    """Is the REAL Airtel rail switched on? Same tolerant parsing as MTN.
+
+    Defaults OFF. The Airtel adapter is a SCAFFOLD (rails_airtel_real /
+    rails_airtel_disbursement) — until this is 1/true AND Airtel credentials are
+    set, Airtel stays mocked (refused in production, guardrails 13/14). Do NOT
+    enable in production until the adapter is certified against Airtel's sandbox.
+    """
+    raw = os.environ.get("AIRTEL_USE_REAL", "0")
+    val = raw.strip().strip('"').strip("'").lower()
+    if val in _TRUTHY:
+        return True
+    if val not in _FALSY:
+        logging.getLogger(__name__).error(
+            "AIRTEL_USE_REAL=%r is not a recognised boolean — treating the Airtel "
+            "rail as MOCKED. Use 1/true/yes/on to enable the real rail.", raw)
+    return False
+
+
 def _init_sentry() -> None:
     """Initialise Sentry error tracking IF a SENTRY_DSN is configured.
 
@@ -225,6 +244,19 @@ def create_app(config: dict | None = None) -> Flask:
         ),
         MOMO_DISBURSEMENT_API_USER=os.environ.get("MOMO_DISBURSEMENT_API_USER", ""),
         MOMO_DISBURSEMENT_API_KEY=os.environ.get("MOMO_DISBURSEMENT_API_KEY", ""),
+        # ---- Airtel Money rail config (SCAFFOLD — only used when AIRTEL_USE_REAL
+        # is on WITH credentials; default OFF keeps Airtel mocked/refused in prod,
+        # guardrails 13/14). See app/services/rails_airtel_real.py. ----
+        AIRTEL_USE_REAL=_airtel_use_real(),
+        AIRTEL_BASE_URL=os.environ.get(
+            "AIRTEL_BASE_URL", "https://openapiuat.airtel.africa"),  # UAT sandbox
+        AIRTEL_COUNTRY=os.environ.get("AIRTEL_COUNTRY", "UG"),
+        AIRTEL_CURRENCY=os.environ.get("AIRTEL_CURRENCY", "UGX"),
+        AIRTEL_CLIENT_ID=os.environ.get("AIRTEL_CLIENT_ID", ""),
+        AIRTEL_CLIENT_SECRET=os.environ.get("AIRTEL_CLIENT_SECRET", ""),
+        AIRTEL_CALLBACK_URL=os.environ.get("AIRTEL_CALLBACK_URL", ""),
+        # RSA-encrypted disbursement PIN (operator supplies pre-encrypted).
+        AIRTEL_DISBURSEMENT_PIN=os.environ.get("AIRTEL_DISBURSEMENT_PIN", ""),
         # ---- Email / 2FA ----
         MAIL_HOST=os.environ.get("MAIL_HOST", ""),
         MAIL_PORT=int(os.environ.get("MAIL_PORT", "587")),
