@@ -1303,6 +1303,32 @@ def vending_retry(merchant_id: int, public_id: str):
 
 # ---------- Payout dashboard routes (single + bulk CSV) ----------
 
+@bp.context_processor
+def _inject_dash_form_token():
+    """A fresh single-submit token for every dashboard render. The payout forms
+    embed it as a hidden field; the POST handlers claim it atomically (below) so
+    a double-click / back-resubmit / concurrent duplicate can't fire the payout
+    twice. A fresh token per render means an ERROR re-render is a NEW submission
+    (correct — nothing moved yet), while a double-click reuses one rendered
+    form's token (deduped)."""
+    from uuid import uuid4
+    return {"dash_form_token": uuid4().hex}
+
+
+def _claim_payout_form(merchant_id: int, scope: str):
+    """Atomic single-submit guard for a dashboard money form. Returns (ok, key):
+    ok is False if this exact submission was already claimed. Reuses the
+    idempotency layer's DB-atomic reserve (unique constraint decides one winner),
+    the same protection the API payout endpoints carry. A submission with no
+    token (a stale cached page) is allowed but cannot be deduped."""
+    from ..services import idempotency
+    token = (request.form.get("form_token") or "").strip()
+    if not token:
+        return True, ""
+    key = f"dashpayout:{scope}:{merchant_id}:{token}"
+    return idempotency.reserve(merchant_id, key, token[:64]), key
+
+
 @bp.get("/dashboard/<int:merchant_id>/new-payout")
 @login_required
 @verified_required
@@ -1343,6 +1369,14 @@ def new_payout_submit(merchant_id: int):
             "new_payout.html", merchant=merchant, available=available,
             error="Amount and phone are required.",
         )
+    # Single-submit guard: claim the form token BEFORE creating the payout so a
+    # double-click / resubmit can't fire two disbursements for one intent.
+    ok, key = _claim_payout_form(merchant_id, "single")
+    if not ok:
+        return render_template(
+            "new_payout.html", merchant=merchant, available=available,
+            error="This payout was already submitted — check Transactions before retrying.",
+        )
     try:
         create_payout(
             merchant=merchant, amount=amount, currency="UGX",
@@ -1350,6 +1384,10 @@ def new_payout_submit(merchant_id: int):
             channel=_Channel.MTN_MOMO,
         )
     except PayoutError as exc:
+        # Nothing moved — release the claim so a corrected resubmit isn't blocked.
+        if key:
+            from ..services import idempotency
+            idempotency.release(merchant_id, key)
         return render_template(
             "new_payout.html", merchant=merchant, available=available,
             error=str(exc),
@@ -1509,6 +1547,17 @@ def bulk_payout_submit(merchant_id: int):
         merchant_id=merchant_id, type=AccountType.MERCHANT_AVAILABLE, is_test=False
     ).first()
     available = -avail.cached_balance if avail else 0
+
+    # Single-submit guard: claim the form token BEFORE processing the CSV so a
+    # double-click / resubmit / re-upload can't pay the whole batch twice. This
+    # is the hardening the API bulk endpoint already has (Idempotency-Key), which
+    # the dashboard twin was missing.
+    ok, _batch_key = _claim_payout_form(merchant_id, "bulk")
+    if not ok:
+        return render_template(
+            "bulk_payout.html", merchant=merchant, available=available,
+            error="This batch was already submitted — check Transactions before retrying.",
+        )
 
     f = request.files.get("csv")
     if not f or not f.filename:

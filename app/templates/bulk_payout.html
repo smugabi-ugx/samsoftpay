@@ -18,6 +18,7 @@ Mary Apio,256750555666,75000</pre>
 <p>Save this in Excel as "CSV UTF-8 (Comma delimited)" or in Google Sheets via File → Download → CSV.</p>
 
 <form method="post" enctype="multipart/form-data" style="max-width:480px; margin-top:1.5rem;">
+  <input type="hidden" name="form_token" value="{{ dash_form_token }}">
   <div style="margin-bottom: 1.5rem;">
     <label style="display:block; font-weight:600; margin-bottom:0.5rem;">CSV file</label>
     <input type="file" name="csv" accept=".csv" required style="font-size:1rem;">

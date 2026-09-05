@@ -9,6 +9,7 @@
 </div>
 
 <form method="post" style="max-width: 480px;">
+  <input type="hidden" name="form_token" value="{{ dash_form_token }}">
   <div style="margin-bottom: 1rem;">
     <label style="display:block; font-weight:600; margin-bottom:0.3rem;">Recipient name (optional)</label>
     <input type="text" name="recipient_name" placeholder="Jane Doe"
