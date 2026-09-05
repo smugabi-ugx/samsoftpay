@@ -13,13 +13,56 @@ from email.mime.text import MIMEText
 from flask import current_app
 
 
+def _from_address() -> str:
+    """The sender address, formatted for both Resend and SMTP.
+
+    Resend requires the `from` to be on a domain you've verified in Resend; set
+    MAIL_FROM to e.g. `no-reply@samsoftpay.com` once the domain is connected.
+    A bare address is wrapped with the Samsoftpay display name; an address that
+    already carries a display name (`Name <addr>`) is used as-is."""
+    raw = (current_app.config.get("MAIL_FROM", "")
+           or current_app.config.get("MAIL_USERNAME", "")).strip()
+    if not raw:
+        # Resend's shared sandbox sender — works before a domain is verified, but
+        # only delivers to the account owner's own address. Replace via MAIL_FROM.
+        return "Samsoftpay <onboarding@resend.dev>"
+    return raw if "<" in raw else f"Samsoftpay <{raw}>"
+
+
+def _send_via_resend(to_email: str, subject: str, html: str, plain: str | None) -> None:
+    """Deliver one email through Resend's HTTP API. Raises on a non-2xx response.
+
+    Preferred over SMTP on Render, whose network egress commonly blocks outbound
+    SMTP ports (25/465/587) — the HTTP API is unaffected. Enabled by setting
+    RESEND_API_KEY; the sender comes from MAIL_FROM (a Resend-verified domain)."""
+    import requests
+    key = current_app.config.get("RESEND_API_KEY", "")
+    resp = requests.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={
+            "from": _from_address(),
+            "to": [to_email],
+            "subject": subject,
+            "html": html,
+            "text": plain or "",
+        },
+        timeout=15,
+    )
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Resend API {resp.status_code}: {resp.text[:300]}")
+
+
 def send_email(to_email: str, subject: str, html: str, plain: str | None = None) -> None:
     """Send a general HTML email over the same SMTP config the OTP mailer uses.
 
-    Raises on SMTP failure (callers that must not be disrupted — e.g. alerts —
-    wrap this). No-op with a console print when MAIL_HOST is unset (dev/local),
-    matching send_otp's fallback behaviour.
+    Raises on delivery failure (callers that must not be disrupted — e.g. alerts —
+    wrap this). Prefers Resend (RESEND_API_KEY) over SMTP (MAIL_HOST); no-op with
+    a console print when neither is configured (dev/local), matching send_otp.
     """
+    if current_app.config.get("RESEND_API_KEY", ""):
+        _send_via_resend(to_email, subject, html, plain)
+        return
     host = current_app.config.get("MAIL_HOST", "")
     if not host:
         print(f"\n[DEV EMAIL] To: {to_email} | Subject: {subject}\n{plain or ''}\n", flush=True)
@@ -99,9 +142,10 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
 """
     plain = f"Your Samsoftpay code: {otp}\n\nExpires in 10 minutes. Do not share it."
 
+    resend_key = current_app.config.get("RESEND_API_KEY", "")
     host = current_app.config.get("MAIL_HOST", "")
-    if not host:
-        # Dev mode — no SMTP configured
+    if not resend_key and not host:
+        # Dev mode — no email provider configured (Resend or SMTP)
         print(f"\n{'='*55}", flush=True)
         print(f"  [DEV OTP]  To: {to_email}", flush=True)
         print(f"  [DEV OTP]  Code: {otp}", flush=True)
@@ -110,36 +154,34 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
         sys.stdout.flush()
         return
 
-    port      = int(current_app.config.get("MAIL_PORT", 587))
-    username  = current_app.config.get("MAIL_USERNAME", "")
-    password  = current_app.config.get("MAIL_PASSWORD", "").replace(" ", "")  # strip spaces
-    from_addr = current_app.config.get("MAIL_FROM", username)
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = f"Samsoftpay <{from_addr}>"
-    msg["To"]      = to_email
-    msg.attach(MIMEText(plain, "plain"))
-    msg.attach(MIMEText(html,  "html"))
-
-    print(f"[SMTP] Connecting to {host}:{port} as {username}...", flush=True)
-    sys.stdout.flush()
-
     try:
-        if port == 465:
-            server = smtplib.SMTP_SSL(host, port, timeout=15)
+        if resend_key:
+            # Preferred: Resend HTTP API (unaffected by Render's SMTP egress block).
+            _send_via_resend(to_email, subject, html, plain)
         else:
-            server = smtplib.SMTP(host, port, timeout=15)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-
-        if username and password:
-            server.login(username, password)
-
-        server.sendmail(from_addr, to_email, msg.as_string())
-        server.quit()
-        print(f"[SMTP] Email sent successfully to {to_email}", flush=True)
+            port      = int(current_app.config.get("MAIL_PORT", 587))
+            username  = current_app.config.get("MAIL_USERNAME", "")
+            password  = current_app.config.get("MAIL_PASSWORD", "").replace(" ", "")
+            from_addr = current_app.config.get("MAIL_FROM", username)
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"]    = f"Samsoftpay <{from_addr}>"
+            msg["To"]      = to_email
+            msg.attach(MIMEText(plain, "plain"))
+            msg.attach(MIMEText(html,  "html"))
+            if port == 465:
+                server = smtplib.SMTP_SSL(host, port, timeout=15)
+            else:
+                server = smtplib.SMTP(host, port, timeout=15)
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+            if username and password:
+                server.login(username, password)
+            server.sendmail(from_addr, to_email, msg.as_string())
+            server.quit()
+        print(f"[MAIL] OTP sent to {to_email} via "
+              f"{'resend' if resend_key else 'smtp'}", flush=True)
         sys.stdout.flush()
 
     except Exception as exc:
@@ -152,8 +194,8 @@ def send_otp(to_email: str, otp: str, purpose: str = "verification") -> None:
         hint = ""
         if isinstance(exc, smtplib.SMTPAuthenticationError):
             hint = (" — auth failed: check MAIL_USERNAME/MAIL_PASSWORD "
-                    "(Gmail needs an App Password; Resend username is 'resend')")
-        print(f"[SMTP ERROR] delivery to {to_email} failed: {exc}{hint}", flush=True)
+                    "(Gmail needs an App Password; Resend SMTP username is 'resend')")
+        print(f"[MAIL ERROR] OTP delivery to {to_email} failed: {exc}{hint}", flush=True)
         if current_app.config.get("OTP_LOG_ON_FAILURE", True):
             _log_otp_fallback(to_email, otp, purpose)
         sys.stdout.flush()

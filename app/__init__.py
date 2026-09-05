@@ -231,6 +231,11 @@ def create_app(config: dict | None = None) -> Flask:
         MAIL_USERNAME=os.environ.get("MAIL_USERNAME", ""),
         MAIL_PASSWORD=os.environ.get("MAIL_PASSWORD", ""),
         MAIL_FROM=os.environ.get("MAIL_FROM", "noreply@samsoftpay.com"),
+        # Resend (transactional email HTTP API). When set, it is used in
+        # preference to SMTP — Render commonly blocks outbound SMTP ports, and
+        # Resend's HTTP API is unaffected. Verify your domain in Resend and set
+        # MAIL_FROM to a sender on it. See app/services/email_service.py.
+        RESEND_API_KEY=os.environ.get("RESEND_API_KEY", ""),
         # ---- Visa / Card (Flutterwave) ----
         FLUTTERWAVE_SECRET_KEY=os.environ.get("FLUTTERWAVE_SECRET_KEY", ""),
         BASE_URL=os.environ.get("BASE_URL", "http://localhost:5000"),
